@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Alertas - Portfolio Tracker</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulse { animation: pulse 2s infinite; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="/" class="text-2xl font-bold text-white flex items-center gap-2">
+                <span class="text-3xl">📊</span> Portfolio Tracker
+            </a>
+            <div class="flex items-center gap-3">
+                <a href="/" class="text-gray-400 hover:text-white transition flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                    </svg>
+                    Dashboard
+                </a>
+                <a href="/explorar" class="text-gray-400 hover:text-white transition flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    Explorar
+                </a>
+                <span class="bg-orange-600 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                    </svg>
+                    Alertas
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Alertas cumplidas -->
+        <div id="alertas-cumplidas" class="hidden mb-6">
+            <div class="bg-green-900/30 border border-green-500 rounded-xl p-6">
+                <h2 class="text-xl font-bold text-green-400 mb-4 flex items-center gap-2">
+                    <span class="text-2xl pulse">🎯</span> ¡Alertas Cumplidas!
+                </h2>
+                <div id="alertas-cumplidas-list" class="space-y-3"></div>
+            </div>
+        </div>
+
+        <!-- Crear nueva alerta -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <span>➕</span> Crear Nueva Alerta
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <!-- Buscar activo -->
+                <div class="lg:col-span-2">
+                    <label class="text-sm text-gray-400 block mb-1">ISIN o Ticker *</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="nuevo-isin" 
+                            placeholder="IE00BKM4GZ66 o AAPL"
+                            class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition"
+                            onkeypress="if(event.key === 'Enter') buscarActivo()">
+                        <button id="btn-buscar" onclick="buscarActivo()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition min-w-[50px] flex items-center justify-center">
+                            <span id="buscar-icon">🔍</span>
+                            <span id="buscar-loading" class="hidden">
+                                <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                    <div id="activo-buscando" class="hidden mt-2 p-2 bg-orange-900/30 border border-orange-700/50 rounded text-sm text-orange-300 flex items-center gap-2">
+                        <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Buscando activo...
+                    </div>
+                    <div id="activo-info" class="hidden mt-2 p-3 bg-green-900/30 border border-green-700/50 rounded-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <div id="activo-nombre" class="font-semibold text-green-300"></div>
+                                <div id="activo-identificador" class="text-xs text-gray-400 mt-0.5"></div>
+                            </div>
+                            <div class="text-right">
+                                <span id="activo-precio" class="text-xl font-bold text-green-400"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="activo-error" class="hidden mt-2 p-2 bg-red-900/30 border border-red-700/50 rounded text-sm text-red-300">
+                        ❌ <span id="error-mensaje">No se encontró el activo</span>
+                    </div>
+                </div>
+                
+                <!-- Tipo de alerta -->
+                <div>
+                    <label class="text-sm text-gray-400 block mb-1">Tipo</label>
+                    <select id="nuevo-tipo" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                        <option value="baja">📉 Si baja</option>
+                        <option value="sube">📈 Si sube</option>
+                    </select>
+                </div>
+                
+                <!-- Porcentaje objetivo -->
+                <div>
+                    <label class="text-sm text-gray-400 block mb-1">Porcentaje</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="nuevo-pct" value="8" min="1" max="50" step="1"
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-orange-500 outline-none">
+                        <span class="text-gray-400">%</span>
+                    </div>
+                </div>
+                
+                <!-- Botón crear -->
+                <div class="flex items-end">
+                    <button onclick="crearAlerta()" id="btn-crear"
+                        class="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition flex items-center justify-center gap-2"
+                        disabled>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Crear Alerta
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Preview de la alerta -->
+            <div id="alerta-preview" class="hidden mt-4 p-4 bg-orange-900/20 border border-orange-700/50 rounded-lg">
+                <p class="text-sm text-orange-300">
+                    <span class="font-medium">Vista previa:</span>
+                    <span id="preview-text"></span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Lista de alertas -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <div class="p-6 border-b border-gray-700 flex items-center justify-between">
+                <h2 class="text-xl font-bold flex items-center gap-2">
+                    <span>🔔</span> Mis Alertas
+                </h2>
+                <button onclick="cargarAlertas()" class="text-gray-400 hover:text-white transition p-2 rounded-lg hover:bg-gray-700" title="Actualizar">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="alertas-loading" class="p-8 text-center">
+                <div class="loader mx-auto mb-4"></div>
+                <p class="text-gray-400">Cargando alertas...</p>
+            </div>
+            
+            <div id="alertas-empty" class="hidden p-8 text-center text-gray-500">
+                <div class="text-5xl mb-4">🔕</div>
+                <p>No tienes alertas configuradas</p>
+                <p class="text-sm mt-2">Crea una alerta arriba para recibir avisos cuando un activo alcance tu precio objetivo</p>
+            </div>
+            
+            <div id="alertas-list" class="hidden divide-y divide-gray-700">
+                <!-- Se llena dinámicamente -->
+            </div>
+        </div>
+
+        <!-- Leyenda -->
+        <div class="mt-6 p-4 bg-gray-800/50 rounded-lg text-sm text-gray-400">
+            <h4 class="font-medium text-gray-300 mb-2">💡 Cómo funcionan las alertas:</h4>
+            <ul class="list-disc list-inside space-y-1">
+                <li><strong>Precio de referencia:</strong> El precio del activo cuando creaste la alerta</li>
+                <li><strong>Alerta "Si baja":</strong> Se activa cuando el precio cae el % indicado desde la referencia</li>
+                <li><strong>Alerta "Si sube":</strong> Se activa cuando el precio sube el % indicado desde la referencia</li>
+                <li>Las alertas se verifican cada vez que abres esta página o el dashboard</li>
+                <li>Una vez cumplida, la alerta se marca pero sigue activa para futuras comprobaciones</li>
+            </ul>
+        </div>
+    </main>
+
+    <script>
+        let activoSeleccionado = null;
+        
+        // Cargar alertas al iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            cargarAlertas();
+            verificarAlertasCumplidas();
+        });
+        
+        // Actualizar preview cuando cambian los inputs
+        document.getElementById('nuevo-tipo').addEventListener('change', actualizarPreview);
+        document.getElementById('nuevo-pct').addEventListener('input', actualizarPreview);
+        
+        async function buscarActivo() {
+            const input = document.getElementById('nuevo-isin').value.trim().toUpperCase();
+            if (!input) return;
+            
+            // Ocultar estados anteriores
+            document.getElementById('activo-info').classList.add('hidden');
+            document.getElementById('activo-error').classList.add('hidden');
+            document.getElementById('btn-crear').disabled = true;
+            activoSeleccionado = null;
+            
+            // Mostrar loading
+            document.getElementById('buscar-icon').classList.add('hidden');
+            document.getElementById('buscar-loading').classList.remove('hidden');
+            document.getElementById('activo-buscando').classList.remove('hidden');
+            document.getElementById('btn-buscar').disabled = true;
+            
+            try {
+                // Determinar si es ISIN o ticker
+                const esISIN = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(input);
+                let ticker = input;
+                let isin = esISIN ? input : '';
+                
+                if (esISIN) {
+                    // Buscar ticker para el ISIN
+                    const searchResponse = await fetch(`/api/ticker/search/${input}`);
+                    const searchResult = await searchResponse.json();
+                    if (searchResult.success && searchResult.ticker) {
+                        ticker = searchResult.ticker;
+                    }
+                }
+                
+                // Obtener datos del activo
+                const response = await fetch(`/api/historical/${encodeURIComponent(ticker)}?periodo=1mo&isin=${encodeURIComponent(isin)}`);
+                const result = await response.json();
+                
+                // Ocultar loading
+                document.getElementById('buscar-icon').classList.remove('hidden');
+                document.getElementById('buscar-loading').classList.add('hidden');
+                document.getElementById('activo-buscando').classList.add('hidden');
+                document.getElementById('btn-buscar').disabled = false;
+                
+                if (result.success && result.data.precios && result.data.precios.length > 0) {
+                    const precio = result.data.precios[result.data.precios.length - 1];
+                    const nombre = result.data.nombre || ticker;
+                    
+                    activoSeleccionado = {
+                        nombre: nombre,
+                        ticker: ticker,
+                        isin: isin,
+                        precio: precio
+                    };
+                    
+                    document.getElementById('activo-nombre').textContent = nombre;
+                    // Mostrar identificador (ISIN y/o Ticker)
+                    let identificador = [];
+                    if (isin) identificador.push('ISIN: ' + isin);
+                    if (ticker && ticker !== isin) identificador.push('Ticker: ' + ticker);
+                    document.getElementById('activo-identificador').textContent = identificador.join(' • ');
+                    document.getElementById('activo-precio').textContent = precio.toFixed(2) + '€';
+                    document.getElementById('activo-info').classList.remove('hidden');
+                    document.getElementById('btn-crear').disabled = false;
+                    
+                    actualizarPreview();
+                } else {
+                    document.getElementById('error-mensaje').textContent = 'No se encontró el activo. Verifica el ISIN o ticker.';
+                    document.getElementById('activo-error').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                // Ocultar loading
+                document.getElementById('buscar-icon').classList.remove('hidden');
+                document.getElementById('buscar-loading').classList.add('hidden');
+                document.getElementById('activo-buscando').classList.add('hidden');
+                document.getElementById('btn-buscar').disabled = false;
+                // Mostrar error
+                document.getElementById('error-mensaje').textContent = 'Error al buscar el activo';
+                document.getElementById('activo-error').classList.remove('hidden');
+            }
+        }
+        
+        function actualizarPreview() {
+            if (!activoSeleccionado) {
+                document.getElementById('alerta-preview').classList.add('hidden');
+                return;
+            }
+            
+            const tipo = document.getElementById('nuevo-tipo').value;
+            const pct = parseFloat(document.getElementById('nuevo-pct').value) || 5;
+            
+            const precioObjetivo = tipo === 'baja' 
+                ? activoSeleccionado.precio * (1 - pct / 100)
+                : activoSeleccionado.precio * (1 + pct / 100);
+            
+            const texto = tipo === 'baja'
+                ? `Te avisaré cuando <strong>${activoSeleccionado.nombre}</strong> baje un ${pct}% (llegue a <strong>${precioObjetivo.toFixed(2)}€</strong> desde ${activoSeleccionado.precio.toFixed(2)}€)`
+                : `Te avisaré cuando <strong>${activoSeleccionado.nombre}</strong> suba un ${pct}% (llegue a <strong>${precioObjetivo.toFixed(2)}€</strong> desde ${activoSeleccionado.precio.toFixed(2)}€)`;
+            
+            document.getElementById('preview-text').innerHTML = texto;
+            document.getElementById('alerta-preview').classList.remove('hidden');
+        }
+        
+        async function crearAlerta() {
+            if (!activoSeleccionado) return;
+            
+            const tipo = document.getElementById('nuevo-tipo').value;
+            const pct = parseFloat(document.getElementById('nuevo-pct').value) || 5;
+            
+            try {
+                const response = await fetch('/api/alertas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nombre: activoSeleccionado.nombre,
+                        ticker: activoSeleccionado.ticker,
+                        isin: activoSeleccionado.isin,
+                        tipo: tipo,
+                        objetivo_pct: pct
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Limpiar formulario
+                    document.getElementById('nuevo-isin').value = '';
+                    document.getElementById('activo-info').classList.add('hidden');
+                    document.getElementById('alerta-preview').classList.add('hidden');
+                    document.getElementById('btn-crear').disabled = true;
+                    activoSeleccionado = null;
+                    
+                    // Recargar lista
+                    cargarAlertas();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al crear la alerta');
+            }
+        }
+        
+        async function cargarAlertas() {
+            document.getElementById('alertas-loading').classList.remove('hidden');
+            document.getElementById('alertas-empty').classList.add('hidden');
+            document.getElementById('alertas-list').classList.add('hidden');
+            
+            try {
+                const response = await fetch('/api/alertas');
+                const result = await response.json();
+                
+                document.getElementById('alertas-loading').classList.add('hidden');
+                
+                if (result.success && result.data.length > 0) {
+                    mostrarAlertas(result.data);
+                } else {
+                    document.getElementById('alertas-empty').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('alertas-loading').classList.add('hidden');
+                document.getElementById('alertas-empty').classList.remove('hidden');
+            }
+        }
+        
+        function mostrarAlertas(alertas) {
+            const container = document.getElementById('alertas-list');
+            
+            container.innerHTML = alertas.map(alerta => {
+                const cumplida = alerta.cumplida;
+                const activa = alerta.activa !== false;
+                const cambio = alerta.cambio_pct || 0;
+                const tipoIcon = alerta.tipo === 'baja' ? '📉' : '📈';
+                const tipoTexto = alerta.tipo === 'baja' ? 'baje' : 'suba';
+                
+                let estadoClass = activa ? 'bg-gray-800' : 'bg-gray-800/50 opacity-60';
+                let estadoBadge = '';
+                
+                if (cumplida) {
+                    estadoClass = 'bg-green-900/30 border border-green-700/50';
+                    estadoBadge = '<span class="ml-2 px-2 py-0.5 bg-green-500 text-white text-xs rounded-full animate-pulse">🎯 ¡CUMPLIDA!</span>';
+                }
+                
+                // Determinar nombre a mostrar - priorizamos nombre comercial
+                let nombreMostrar = alerta.nombre;
+                let esISINcomoNombre = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(nombreMostrar) || /^[A-Z0-9]+\.[A-Z]+$/.test(nombreMostrar);
+                
+                // Si el nombre es un ISIN o ticker, intentamos mostrar algo más descriptivo
+                let subtitulo = '';
+                if (alerta.isin) subtitulo += alerta.isin;
+                if (alerta.ticker && alerta.ticker !== alerta.isin) {
+                    subtitulo += (subtitulo ? ' • ' : '') + alerta.ticker;
+                }
+                
+                return `
+                    <div class="${estadoClass} p-4 rounded-lg mx-2 my-2">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center flex-wrap gap-2 mb-2">
+                                    <span class="text-xl font-bold ${!activa ? 'line-through text-gray-500' : 'text-white'} truncate">${nombreMostrar}</span>
+                                    ${estadoBadge}
+                                </div>
+                                ${subtitulo && subtitulo !== nombreMostrar ? `<div class="text-xs text-gray-500 mb-2 font-mono">${subtitulo}</div>` : ''}
+                                <div class="flex flex-wrap items-center gap-2 text-sm">
+                                    <span class="px-2 py-1 ${alerta.tipo === 'baja' ? 'bg-red-900/40 text-red-300' : 'bg-green-900/40 text-green-300'} rounded">
+                                        ${tipoIcon} Si ${tipoTexto} <strong>${alerta.objetivo_pct}%</strong>
+                                    </span>
+                                    <span class="text-gray-400">
+                                        Ref: ${alerta.precio_referencia?.toFixed(2) || '-'}€
+                                    </span>
+                                    <span class="text-gray-400">→</span>
+                                    <span class="font-semibold ${alerta.tipo === 'baja' ? 'text-red-400' : 'text-green-400'}">
+                                        Objetivo: ${alerta.precio_objetivo?.toFixed(2) || '-'}€
+                                    </span>
+                                </div>
+                                <div class="text-xs text-gray-600 mt-2">
+                                    📅 Creada: ${new Date(alerta.fecha_creacion).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="text-right min-w-[80px]">
+                                    <div class="text-2xl font-bold">${alerta.precio_actual?.toFixed(2) || '-'}€</div>
+                                    <div class="text-sm font-medium ${cambio >= 0 ? 'text-green-400' : 'text-red-400'}">
+                                        ${cambio >= 0 ? '▲' : '▼'} ${cambio >= 0 ? '+' : ''}${cambio.toFixed(2)}%
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-1">
+                                    <button onclick="toggleAlerta('${alerta.id}')" 
+                                        class="p-2 rounded-lg ${activa ? 'bg-green-900/30 text-green-400 hover:bg-green-900/50' : 'bg-gray-700 text-gray-500 hover:bg-gray-600'} transition"
+                                        title="${activa ? 'Desactivar alerta' : 'Activar alerta'}">
+                                        ${activa ? '🔔' : '🔕'}
+                                    </button>
+                                    <button onclick="eliminarAlerta('${alerta.id}')" 
+                                        class="p-2 rounded-lg bg-red-900/30 text-red-400 hover:bg-red-900/50 transition"
+                                        title="Eliminar alerta">
+                                        🗑️
+                                    </button>
+                                    <a href="/add?nombre=${encodeURIComponent(alerta.nombre)}&ticker=${encodeURIComponent(alerta.ticker || '')}&isin=${encodeURIComponent(alerta.isin || '')}" 
+                                        class="p-2 rounded-lg bg-blue-900/30 text-blue-400 hover:bg-blue-900/50 transition"
+                                        title="Añadir a mi cartera">
+                                        ➕
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.classList.remove('hidden');
+        }
+        
+        async function toggleAlerta(id) {
+            try {
+                await fetch(`/api/alertas/${id}/toggle`, { method: 'POST' });
+                cargarAlertas();
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        
+        async function eliminarAlerta(id) {
+            if (!confirm('¿Eliminar esta alerta?')) return;
+            
+            try {
+                await fetch(`/api/alertas/${id}`, { method: 'DELETE' });
+                cargarAlertas();
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        
+        async function verificarAlertasCumplidas() {
+            try {
+                const response = await fetch('/api/alertas/check');
+                const result = await response.json();
+                
+                if (result.success && result.data.length > 0) {
+                    mostrarAlertasCumplidas(result.data);
+                }
+            } catch (error) {
+                console.error('Error verificando alertas:', error);
+            }
+        }
+        
+        function mostrarAlertasCumplidas(alertas) {
+            const container = document.getElementById('alertas-cumplidas');
+            const list = document.getElementById('alertas-cumplidas-list');
+            
+            list.innerHTML = alertas.map(alerta => `
+                <div class="flex items-center justify-between p-3 bg-green-800/30 rounded-lg">
+                    <div>
+                        <span class="font-semibold">${alerta.nombre}</span>
+                        <span class="text-green-300 ml-2">ha ${alerta.tipo === 'baja' ? 'bajado' : 'subido'} a ${alerta.precio_actual?.toFixed(2)}€</span>
+                        <span class="text-green-400 ml-2">(${alerta.cambio_pct?.toFixed(2)}%)</span>
+                    </div>
+                    <a href="/add?nombre=${encodeURIComponent(alerta.nombre)}&ticker=${encodeURIComponent(alerta.ticker || '')}&isin=${encodeURIComponent(alerta.isin || '')}" 
+                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition">
+                        ¡Comprar ahora!
+                    </a>
+                </div>
+            `).join('');
+            
+            container.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

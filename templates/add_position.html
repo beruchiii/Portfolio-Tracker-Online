@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Añadir - Portfolio Tracker</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
+            <a href="/" class="text-gray-400 hover:text-white transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </a>
+            <h1 class="text-xl font-bold">Añadir Posición</h1>
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-8">
+        <form id="add-form" class="space-y-6">
+            <!-- Step 1: Search -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span class="bg-blue-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm">1</span>
+                    Buscar Activo
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">ISIN *</label>
+                        <input type="text" id="isin" required
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                            placeholder="Ej: IE00B3WJKG14">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Ticker Yahoo Finance (opcional)</label>
+                        <input type="text" id="ticker"
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                            placeholder="Ej: QDVE.DE">
+                    </div>
+                </div>
+
+                <button type="button" onclick="searchAsset()" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    Buscar
+                    <div id="search-loader" class="loader hidden"></div>
+                </button>
+
+                <!-- Search Result -->
+                <div id="search-result" class="mt-4 hidden">
+                    <div id="result-success" class="bg-green-900/30 border border-green-700 rounded-lg p-4 hidden">
+                        <div class="flex items-start gap-3">
+                            <span class="text-green-400 text-xl">✓</span>
+                            <div>
+                                <div class="font-medium" id="result-nombre"></div>
+                                <div class="text-sm text-gray-400 mt-1">
+                                    <span id="result-precio"></span> · 
+                                    <span id="result-fuente"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="result-existing" class="bg-blue-900/30 border border-blue-700 rounded-lg p-4 hidden">
+                        <div class="flex items-start gap-3">
+                            <span class="text-blue-400 text-xl">📋</span>
+                            <div class="flex-1">
+                                <div class="font-medium">Ya tienes este activo en cartera</div>
+                                <div class="text-sm text-gray-400 mt-1" id="existing-info"></div>
+                                <div class="mt-2 text-sm text-blue-300">
+                                    ✓ Al guardar se añadirá como nueva aportación
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="result-error" class="bg-red-900/30 border border-red-700 rounded-lg p-4 hidden">
+                        <div class="flex items-start gap-3">
+                            <span class="text-red-400 text-xl">✗</span>
+                            <div>
+                                <div class="font-medium">No se encontró el activo</div>
+                                <div class="text-sm text-gray-400 mt-1">Puedes continuar introduciendo los datos manualmente</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Asset Details -->
+            <div id="step2" class="bg-gray-800 rounded-xl p-6 border border-gray-700 opacity-50 pointer-events-none transition">
+                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span class="bg-gray-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm" id="step2-badge">2</span>
+                    Datos del Activo
+                </h2>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Nombre *</label>
+                        <input type="text" id="nombre" required
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                            placeholder="Nombre del activo">
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Cantidad *</label>
+                            <input type="number" id="cantidad" required step="any" min="0"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                                placeholder="Ej: 10">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Precio de Compra (€) *</label>
+                            <input type="number" id="precio_compra" required step="any" min="0"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                                placeholder="Ej: 35.50">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Fecha de Compra *</label>
+                            <input type="date" id="fecha_compra" required
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Broker (opcional)</label>
+                            <input type="text" id="broker"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                                placeholder="Ej: MyInvestor">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary and Submit -->
+            <div id="step3" class="bg-gray-800 rounded-xl p-6 border border-gray-700 opacity-50 pointer-events-none transition">
+                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span class="bg-gray-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-sm" id="step3-badge">3</span>
+                    Confirmar
+                </h2>
+
+                <!-- Summary -->
+                <div id="summary" class="bg-gray-700/50 rounded-lg p-4 mb-6 hidden">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                            <span class="text-gray-400">Coste Total:</span>
+                            <span class="font-medium ml-2" id="summary-coste">0 €</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-400">Precio Actual:</span>
+                            <span class="font-medium ml-2" id="summary-precio-actual">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit"
+                    class="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-4 rounded-lg font-medium transition flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Añadir Posición
+                    <div id="submit-loader" class="loader hidden"></div>
+                </button>
+            </div>
+        </form>
+    </main>
+
+    <!-- Success Modal -->
+    <div id="success-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-8 max-w-md mx-4 border border-gray-700 text-center">
+            <div class="text-6xl mb-4">✅</div>
+            <h3 class="text-xl font-semibold mb-2" id="success-title">¡Guardado!</h3>
+            <p class="text-gray-400 mb-6" id="success-message">La operación se ha completado correctamente.</p>
+            <div class="flex gap-4">
+                <a href="/add" class="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition text-center">
+                    Añadir Otra
+                </a>
+                <a href="/" class="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition text-center">
+                    Ver Cartera
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let assetData = null;
+        let existingPosition = null;
+
+        // Set today's date as default
+        document.getElementById('fecha_compra').value = new Date().toISOString().split('T')[0];
+
+        // Leer parámetros de URL (desde página Explorar)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('nombre')) {
+            document.getElementById('nombre').value = urlParams.get('nombre');
+        }
+        if (urlParams.has('ticker')) {
+            document.getElementById('ticker').value = urlParams.get('ticker');
+        }
+        if (urlParams.has('isin')) {
+            document.getElementById('isin').value = urlParams.get('isin');
+        }
+        
+        // Si vienen datos de Explorar, buscar automáticamente
+        if (urlParams.has('ticker') || urlParams.has('isin')) {
+            setTimeout(() => {
+                searchAsset();
+            }, 500);
+        }
+
+        // Search asset
+        async function searchAsset() {
+            const isin = document.getElementById('isin').value.trim().toUpperCase();
+            const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+
+            if (!isin) {
+                alert('Introduce un ISIN');
+                return;
+            }
+
+            // Show loader
+            document.getElementById('search-loader').classList.remove('hidden');
+            document.getElementById('search-result').classList.add('hidden');
+            document.getElementById('result-existing').classList.add('hidden');
+
+            try {
+                // Primero verificar si ya existe en cartera
+                const checkResponse = await fetch(`/api/position/check/${isin}`);
+                const checkResult = await checkResponse.json();
+                
+                if (checkResult.success && checkResult.exists) {
+                    existingPosition = checkResult.data;
+                    document.getElementById('search-result').classList.remove('hidden');
+                    document.getElementById('result-existing').classList.remove('hidden');
+                    document.getElementById('result-success').classList.add('hidden');
+                    document.getElementById('result-error').classList.add('hidden');
+                    
+                    document.getElementById('existing-info').innerHTML = `
+                        <strong>${checkResult.data.nombre}</strong><br>
+                        ${checkResult.data.num_aportaciones} aportación(es) · 
+                        ${checkResult.data.cantidad.toFixed(4)} uds · 
+                        Invertido: ${checkResult.data.coste_total.toFixed(2)} €
+                    `;
+                    
+                    // Auto-fill nombre
+                    document.getElementById('nombre').value = checkResult.data.nombre;
+                    assetData = { nombre: checkResult.data.nombre, precio: 0 };
+                    
+                    document.getElementById('search-loader').classList.add('hidden');
+                    enableStep2();
+                    return;
+                }
+                
+                existingPosition = null;
+                
+                // Buscar información del activo
+                const response = await fetch('/api/position/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ isin, ticker })
+                });
+                const result = await response.json();
+
+                document.getElementById('search-loader').classList.add('hidden');
+                document.getElementById('search-result').classList.remove('hidden');
+
+                if (result.success && result.data.precio > 0) {
+                    // Found with price
+                    assetData = result.data;
+                    document.getElementById('result-success').classList.remove('hidden');
+                    document.getElementById('result-error').classList.add('hidden');
+                    document.getElementById('result-existing').classList.add('hidden');
+                    document.getElementById('result-nombre').textContent = result.data.nombre;
+                    document.getElementById('result-precio').textContent = `${result.data.precio.toFixed(2)} ${result.data.moneda}`;
+                    document.getElementById('result-fuente').textContent = `Fuente: ${result.data.fuente}`;
+                    
+                    // Auto-fill name
+                    document.getElementById('nombre').value = result.data.nombre;
+                } else if (result.success) {
+                    // Found without price
+                    assetData = result.data;
+                    document.getElementById('result-success').classList.remove('hidden');
+                    document.getElementById('result-error').classList.add('hidden');
+                    document.getElementById('result-existing').classList.add('hidden');
+                    document.getElementById('result-nombre').textContent = result.data.nombre;
+                    document.getElementById('result-precio').textContent = 'Precio no disponible';
+                    document.getElementById('result-fuente').textContent = `Fuente: ${result.data.fuente}`;
+                    
+                    document.getElementById('nombre').value = result.data.nombre;
+                } else {
+                    // Not found
+                    assetData = null;
+                    document.getElementById('result-success').classList.add('hidden');
+                    document.getElementById('result-error').classList.remove('hidden');
+                    document.getElementById('result-existing').classList.add('hidden');
+                }
+
+                // Enable step 2
+                enableStep2();
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('search-loader').classList.add('hidden');
+            }
+        }
+
+        // Enable step 2
+        function enableStep2() {
+            const step2 = document.getElementById('step2');
+            step2.classList.remove('opacity-50', 'pointer-events-none');
+            document.getElementById('step2-badge').classList.remove('bg-gray-600');
+            document.getElementById('step2-badge').classList.add('bg-blue-600');
+
+            // Add listeners for step 3
+            document.getElementById('cantidad').addEventListener('input', updateSummary);
+            document.getElementById('precio_compra').addEventListener('input', updateSummary);
+        }
+
+        // Update summary and enable step 3
+        function updateSummary() {
+            const cantidad = parseFloat(document.getElementById('cantidad').value) || 0;
+            const precioCompra = parseFloat(document.getElementById('precio_compra').value) || 0;
+            const nombre = document.getElementById('nombre').value;
+
+            if (cantidad > 0 && precioCompra > 0 && nombre) {
+                const step3 = document.getElementById('step3');
+                step3.classList.remove('opacity-50', 'pointer-events-none');
+                document.getElementById('step3-badge').classList.remove('bg-gray-600');
+                document.getElementById('step3-badge').classList.add('bg-blue-600');
+
+                document.getElementById('summary').classList.remove('hidden');
+                document.getElementById('summary-coste').textContent = (cantidad * precioCompra).toFixed(2) + ' €';
+                
+                if (assetData && assetData.precio > 0) {
+                    document.getElementById('summary-precio-actual').textContent = assetData.precio.toFixed(2) + ' €';
+                } else {
+                    document.getElementById('summary-precio-actual').textContent = '-';
+                }
+            }
+        }
+
+        // Also update when name changes
+        document.getElementById('nombre').addEventListener('input', updateSummary);
+
+        // Form submit
+        document.getElementById('add-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const data = {
+                isin: document.getElementById('isin').value.trim().toUpperCase(),
+                ticker: document.getElementById('ticker').value.trim().toUpperCase(),
+                nombre: document.getElementById('nombre').value.trim(),
+                cantidad: parseFloat(document.getElementById('cantidad').value),
+                precio_compra: parseFloat(document.getElementById('precio_compra').value),
+                fecha_compra: document.getElementById('fecha_compra').value,
+                broker: document.getElementById('broker').value.trim()
+            };
+
+            document.getElementById('submit-loader').classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/position/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+
+                document.getElementById('submit-loader').classList.add('hidden');
+
+                if (result.success) {
+                    // Mostrar modal con mensaje apropiado
+                    if (result.is_new === false) {
+                        document.getElementById('success-title').textContent = '¡Aportación Añadida!';
+                        document.getElementById('success-message').textContent = 
+                            `Se ha añadido la aportación. Ahora tienes ${result.num_aportaciones} aportaciones en esta posición.`;
+                    } else {
+                        document.getElementById('success-title').textContent = '¡Posición Añadida!';
+                        let msg = 'La posición se ha guardado correctamente.';
+                        if (result.categoria) {
+                            msg += ` Categoría detectada: ${result.categoria}`;
+                        }
+                        document.getElementById('success-message').textContent = msg;
+                    }
+                    document.getElementById('success-modal').classList.remove('hidden');
+                    document.getElementById('success-modal').classList.add('flex');
+                } else {
+                    alert('Error: ' + result.error);
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('submit-loader').classList.add('hidden');
+            }
+        });
+
+        // Allow enter to search
+        document.getElementById('isin').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchAsset();
+            }
+        });
+        document.getElementById('ticker').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchAsset();
+            }
+        });
+    </script>
+</body>
+</html>

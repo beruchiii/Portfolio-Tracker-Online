@@ -1,0 +1,3387 @@
+#!/usr/bin/env python3
+"""
+Portfolio Tracker - Versión Web
+Dashboard interactivo para seguimiento de cartera
+"""
+import os
+import sys
+import json
+from pathlib import Path
+from datetime import datetime, timedelta
+from flask import Flask, render_template, jsonify, request, redirect, url_for
+from flask_cors import CORS
+
+# Añadir src al path
+sys.path.insert(0, str(Path(__file__).parent))
+
+from src.models import Portfolio, Position
+from src.reports import PortfolioAnalyzer
+from src.price_fetcher import price_fetcher
+
+# Configuración
+app = Flask(__name__, template_folder='templates', static_folder='static')
+CORS(app)
+
+DATA_DIR = Path(__file__).parent / "data"
+PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
+CACHE_FILE = DATA_DIR / "price_cache.json"
+ALERTS_FILE = DATA_DIR / "alerts.json"
+
+# Duración del caché en minutos
+CACHE_DURATION_MINUTES = 15
+
+
+# =============================================================================
+# SISTEMA DE ALERTAS
+# =============================================================================
+
+def cargar_alertas():
+    """Carga las alertas desde archivo"""
+    if ALERTS_FILE.exists():
+        try:
+            with open(ALERTS_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return []
+
+def guardar_alertas(alertas):
+    """Guarda las alertas en archivo"""
+    DATA_DIR.mkdir(exist_ok=True)
+    with open(ALERTS_FILE, 'w') as f:
+        json.dump(alertas, f, indent=2)
+
+def verificar_alertas():
+    """Verifica si alguna alerta se ha disparado"""
+    alertas = cargar_alertas()
+    alertas_disparadas = []
+    
+    for alerta in alertas:
+        if alerta.get('estado') == 'disparada' or not alerta.get('activa', True):
+            continue
+            
+        try:
+            # Obtener precio actual
+            ticker = alerta.get('ticker') or alerta.get('isin')
+            resultado_precio = price_fetcher.obtener_precio(ticker, alerta.get('isin'))
+            
+            if not resultado_precio or not resultado_precio.get('precio'):
+                continue
+            
+            precio_actual = float(resultado_precio['precio'])
+            alerta['precio_actual'] = precio_actual
+            precio_referencia = alerta.get('precio_referencia', 0)
+            
+            if precio_referencia <= 0:
+                continue
+            
+            disparada = False
+            tipo = alerta.get('tipo', 'baja')
+            objetivo_pct = alerta.get('objetivo_pct', 0)
+            
+            # Calcular cambio porcentual
+            cambio_pct = ((precio_actual - precio_referencia) / precio_referencia) * 100
+            
+            if tipo == 'baja':
+                # Alerta cuando baja X% desde precio referencia
+                if cambio_pct <= -abs(objetivo_pct):
+                    disparada = True
+            elif tipo == 'sube':
+                # Alerta cuando sube X% desde precio referencia
+                if cambio_pct >= abs(objetivo_pct):
+                    disparada = True
+            
+            if disparada:
+                alerta['estado'] = 'disparada'
+                alerta['fecha_disparada'] = datetime.now().isoformat()
+                alerta['cambio_pct'] = cambio_pct
+                alertas_disparadas.append(alerta)
+                
+        except Exception as e:
+            print(f"Error verificando alerta: {e}")
+            continue
+    
+    # Guardar estado actualizado
+    guardar_alertas(alertas)
+    
+    return alertas_disparadas
+
+
+# =============================================================================
+# SISTEMA DE CACHÉ DE PRECIOS
+# =============================================================================
+
+def cargar_cache():
+    """Carga el caché de precios desde archivo"""
+    if CACHE_FILE.exists():
+        try:
+            with open(CACHE_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return {'prices': {}, 'last_update': None}
+
+def guardar_cache(cache):
+    """Guarda el caché de precios en archivo"""
+    DATA_DIR.mkdir(exist_ok=True)
+    with open(CACHE_FILE, 'w') as f:
+        json.dump(cache, f, indent=2)
+
+def obtener_precio_con_cache(isin, ticker=None, force_refresh=False):
+    """Obtiene precio usando caché si está disponible y no ha expirado"""
+    cache = cargar_cache()
+    ahora = datetime.now()
+    
+    # Verificar si hay precio en caché y no ha expirado
+    if not force_refresh and isin in cache['prices']:
+        cached = cache['prices'][isin]
+        cached_time = datetime.fromisoformat(cached['timestamp'])
+        
+        if (ahora - cached_time) < timedelta(minutes=CACHE_DURATION_MINUTES):
+            return cached['data']
+    
+    # Obtener precio fresco
+    if ticker:
+        precio_data = price_fetcher.obtener_precio(ticker, isin)
+    else:
+        precio_data = price_fetcher.obtener_precio_por_isin(isin)
+    
+    if precio_data:
+        # Guardar en caché
+        cache['prices'][isin] = {
+            'data': precio_data,
+            'timestamp': ahora.isoformat()
+        }
+        cache['last_update'] = ahora.isoformat()
+        guardar_cache(cache)
+    
+    return precio_data
+
+def invalidar_cache():
+    """Invalida todo el caché de precios"""
+    cache = {'prices': {}, 'last_update': None}
+    guardar_cache(cache)
+    return cache
+
+
+def cargar_portfolio() -> Portfolio:
+    """Carga el portfolio desde el archivo"""
+    DATA_DIR.mkdir(exist_ok=True)
+    if PORTFOLIO_FILE.exists():
+        return Portfolio.cargar(str(PORTFOLIO_FILE))
+    return Portfolio()
+
+
+def guardar_portfolio(portfolio: Portfolio):
+    """Guarda el portfolio en el archivo"""
+    DATA_DIR.mkdir(exist_ok=True)
+    portfolio.guardar(str(PORTFOLIO_FILE))
+
+
+# =============================================================================
+# RUTAS WEB (HTML)
+# =============================================================================
+
+@app.route('/')
+def index():
+    """Página principal - Dashboard"""
+    return render_template('index.html')
+
+
+@app.route('/add')
+def add_position_page():
+    """Página para añadir posición"""
+    return render_template('add_position.html')
+
+
+@app.route('/explorar')
+def explorar_page():
+    """Página para explorar y analizar activos sin añadirlos a la cartera"""
+    return render_template('explorar.html')
+
+
+@app.route('/alertas')
+def alertas_page():
+    """Página para gestionar alertas de precio"""
+    return render_template('alertas.html')
+
+
+# =============================================================================
+# API DE ALERTAS
+# =============================================================================
+
+@app.route('/api/alertas')
+def api_get_alertas():
+    """Obtiene todas las alertas"""
+    alertas = cargar_alertas()
+    
+    # Actualizar precios actuales
+    for alerta in alertas:
+        try:
+            resultado_precio = price_fetcher.obtener_precio(alerta.get('ticker'), alerta.get('isin'))
+            if resultado_precio and resultado_precio.get('precio'):
+                precio_actual = float(resultado_precio['precio'])
+                alerta['precio_actual'] = precio_actual
+                
+                # Calcular % de cambio desde precio de referencia
+                precio_ref = alerta.get('precio_referencia', 0)
+                if precio_ref > 0:
+                    cambio_pct = ((precio_actual - precio_ref) / precio_ref) * 100
+                    alerta['cambio_pct'] = cambio_pct
+                    
+                    # Verificar si se cumple la condición
+                    tipo = alerta.get('tipo', 'baja')
+                    objetivo_pct = alerta.get('objetivo_pct', 0)
+                    
+                    if tipo == 'baja':
+                        alerta['cumplida'] = cambio_pct <= -abs(objetivo_pct)
+                    else:  # sube
+                        alerta['cumplida'] = cambio_pct >= abs(objetivo_pct)
+                else:
+                    alerta['cambio_pct'] = 0
+                    alerta['cumplida'] = False
+            else:
+                alerta['precio_actual'] = None
+                alerta['cumplida'] = False
+        except Exception as e:
+            alerta['precio_actual'] = None
+            alerta['cumplida'] = False
+    
+    return jsonify({'success': True, 'data': alertas})
+
+
+@app.route('/api/alertas', methods=['POST'])
+def api_crear_alerta():
+    """Crea una nueva alerta"""
+    try:
+        data = request.json
+        
+        # Validar datos requeridos
+        if not data.get('nombre'):
+            return jsonify({'success': False, 'error': 'Nombre requerido'})
+        if not data.get('isin') and not data.get('ticker'):
+            return jsonify({'success': False, 'error': 'ISIN o Ticker requerido'})
+        
+        # Obtener precio actual como referencia
+        isin = data.get('isin', '')
+        ticker = data.get('ticker', '')
+        resultado_precio = price_fetcher.obtener_precio(ticker, isin)
+        
+        if not resultado_precio or not resultado_precio.get('precio'):
+            return jsonify({'success': False, 'error': 'No se pudo obtener el precio actual'})
+        
+        precio_actual = float(resultado_precio['precio'])
+        objetivo_pct = float(data.get('objetivo_pct', 5))
+        tipo = data.get('tipo', 'baja')
+        
+        # Calcular precio objetivo
+        if tipo == 'baja':
+            precio_objetivo = precio_actual * (1 - objetivo_pct / 100)
+        else:
+            precio_objetivo = precio_actual * (1 + objetivo_pct / 100)
+        
+        # Crear alerta
+        import uuid
+        alerta = {
+            'id': str(uuid.uuid4())[:8],
+            'nombre': data['nombre'],
+            'isin': isin,
+            'ticker': ticker,
+            'tipo': tipo,
+            'objetivo_pct': objetivo_pct,
+            'precio_referencia': precio_actual,
+            'precio_objetivo': precio_objetivo,
+            'fecha_creacion': datetime.now().isoformat(),
+            'activa': True,
+            'notificada': False
+        }
+        
+        alertas = cargar_alertas()
+        alertas.append(alerta)
+        guardar_alertas(alertas)
+        
+        return jsonify({'success': True, 'data': alerta})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/alertas/<alerta_id>', methods=['DELETE'])
+def api_eliminar_alerta(alerta_id):
+    """Elimina una alerta"""
+    try:
+        alertas = cargar_alertas()
+        alertas = [a for a in alertas if a.get('id') != alerta_id]
+        guardar_alertas(alertas)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/alertas/<alerta_id>/toggle', methods=['POST'])
+def api_toggle_alerta(alerta_id):
+    """Activa/desactiva una alerta"""
+    try:
+        alertas = cargar_alertas()
+        for alerta in alertas:
+            if alerta.get('id') == alerta_id:
+                alerta['activa'] = not alerta.get('activa', True)
+                break
+        guardar_alertas(alertas)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/alertas/check')
+def api_check_alertas():
+    """Verifica qué alertas se han cumplido"""
+    alertas = cargar_alertas()
+    cumplidas = []
+    
+    for alerta in alertas:
+        if not alerta.get('activa', True):
+            continue
+            
+        try:
+            resultado_precio = price_fetcher.obtener_precio(alerta.get('ticker'), alerta.get('isin'))
+            if resultado_precio and resultado_precio.get('precio'):
+                precio_actual = float(resultado_precio['precio'])
+                precio_ref = alerta.get('precio_referencia', 0)
+                if precio_ref > 0:
+                    cambio_pct = ((precio_actual - precio_ref) / precio_ref) * 100
+                    tipo = alerta.get('tipo', 'baja')
+                    objetivo_pct = alerta.get('objetivo_pct', 0)
+                    
+                    cumplida = False
+                    if tipo == 'baja' and cambio_pct <= -abs(objetivo_pct):
+                        cumplida = True
+                    elif tipo == 'sube' and cambio_pct >= abs(objetivo_pct):
+                        cumplida = True
+                    
+                    if cumplida and not alerta.get('notificada', False):
+                        cumplidas.append({
+                            **alerta,
+                            'precio_actual': precio_actual,
+                            'cambio_pct': cambio_pct
+                        })
+        except:
+            pass
+    
+    return jsonify({'success': True, 'data': cumplidas})
+
+
+# =============================================================================
+# API REST (JSON)
+# =============================================================================
+
+@app.route('/api/portfolio')
+def api_portfolio():
+    """Obtiene el resumen completo de la cartera"""
+    force_refresh = request.args.get('refresh', 'false') == 'true'
+    
+    if force_refresh:
+        invalidar_cache()
+    
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({
+            'success': True,
+            'data': {
+                'resumen': {
+                    'total_invertido': 0,
+                    'valor_actual': 0,
+                    'beneficio_total': 0,
+                    'rentabilidad_pct': 0,
+                    'num_posiciones': 0,
+                    'posiciones_ganadoras': 0,
+                    'posiciones_perdedoras': 0
+                },
+                'posiciones': [],
+                'last_update': None
+            }
+        })
+    
+    analyzer = PortfolioAnalyzer(portfolio)
+    posiciones = analyzer.actualizar_precios()
+    resumen = analyzer.resumen_cartera()
+    
+    # Obtener última actualización del caché
+    cache = cargar_cache()
+    last_update = cache.get('last_update')
+    
+    # Convertir posiciones a dict
+    posiciones_data = []
+    for pos in posiciones:
+        # Convertir aportaciones
+        aportaciones_data = []
+        for ap in pos.aportaciones:
+            aportaciones_data.append({
+                'id': ap.id,
+                'cantidad': ap.cantidad,
+                'precio_compra': ap.precio_compra,
+                'fecha_compra': ap.fecha_compra,
+                'broker': ap.broker,
+                'coste_total': ap.coste_total
+            })
+        
+        posiciones_data.append({
+            'id': pos.id,
+            'isin': pos.isin,
+            'ticker': pos.ticker,
+            'nombre': pos.nombre,
+            'cantidad': pos.cantidad,
+            'precio_compra': pos.precio_medio,  # precio medio
+            'precio_medio': pos.precio_medio,
+            'precio_actual': pos.precio_actual,
+            'coste_total': pos.coste_total,
+            'valor_actual': pos.valor_actual,
+            'beneficio': pos.beneficio,
+            'rentabilidad_pct': pos.rentabilidad_pct,
+            'fecha_compra': pos.fecha_primera_compra,
+            'fecha_primera_compra': pos.fecha_primera_compra,
+            'fecha_ultima_compra': pos.fecha_ultima_compra,
+            'broker': pos.broker,
+            'moneda': pos.moneda,
+            'num_aportaciones': pos.num_aportaciones,
+            'categoria': pos.categoria,
+            'sector': pos.sector,
+            'aportaciones': aportaciones_data
+        })
+    
+    return jsonify({
+        'success': True,
+        'data': {
+            'resumen': resumen,
+            'posiciones': posiciones_data,
+            'last_update': last_update
+        }
+    })
+
+
+@app.route('/api/cache/status')
+def api_cache_status():
+    """Obtiene el estado del caché de precios"""
+    cache = cargar_cache()
+    
+    ahora = datetime.now()
+    last_update = cache.get('last_update')
+    
+    if last_update:
+        last_update_dt = datetime.fromisoformat(last_update)
+        age_minutes = (ahora - last_update_dt).total_seconds() / 60
+        expired = age_minutes > CACHE_DURATION_MINUTES
+    else:
+        age_minutes = None
+        expired = True
+    
+    return jsonify({
+        'success': True,
+        'data': {
+            'last_update': last_update,
+            'age_minutes': round(age_minutes, 1) if age_minutes else None,
+            'expired': expired,
+            'cache_duration': CACHE_DURATION_MINUTES,
+            'num_cached': len(cache.get('prices', {}))
+        }
+    })
+
+
+@app.route('/api/cache/refresh', methods=['POST'])
+def api_refresh_cache():
+    """Fuerza actualización de todos los precios"""
+    try:
+        invalidar_cache()
+        
+        portfolio = cargar_portfolio()
+        if portfolio.posiciones:
+            analyzer = PortfolioAnalyzer(portfolio)
+            analyzer.actualizar_precios()
+        
+        cache = cargar_cache()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Precios actualizados',
+            'last_update': cache.get('last_update')
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/portfolio/comparison')
+def api_comparison():
+    """Obtiene datos para comparar posiciones"""
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': True, 'data': []})
+    
+    analyzer = PortfolioAnalyzer(portfolio)
+    posiciones = analyzer.actualizar_precios()
+    
+    # Datos para gráficos comparativos
+    comparison_data = {
+        'nombres': [],
+        'rentabilidades': [],
+        'valores': [],
+        'pesos': [],
+        'beneficios': [],
+        'colores': []
+    }
+    
+    valor_total = sum(p.valor_actual for p in posiciones)
+    
+    for pos in posiciones:
+        comparison_data['nombres'].append(pos.nombre[:30])  # Truncar nombre
+        comparison_data['rentabilidades'].append(round(pos.rentabilidad_pct, 2))
+        comparison_data['valores'].append(round(pos.valor_actual, 2))
+        comparison_data['beneficios'].append(round(pos.beneficio, 2))
+        
+        peso = (pos.valor_actual / valor_total * 100) if valor_total > 0 else 0
+        comparison_data['pesos'].append(round(peso, 2))
+        
+        # Color según rentabilidad
+        if pos.rentabilidad_pct >= 0:
+            comparison_data['colores'].append('#10b981')  # Verde
+        else:
+            comparison_data['colores'].append('#ef4444')  # Rojo
+    
+    return jsonify({
+        'success': True,
+        'data': comparison_data
+    })
+
+
+@app.route('/api/position/search', methods=['POST'])
+def api_search_position():
+    """Busca información de un activo por ISIN"""
+    data = request.get_json()
+    isin = data.get('isin', '').upper().strip()
+    ticker = data.get('ticker', '').upper().strip()
+    
+    if not isin:
+        return jsonify({'success': False, 'error': 'ISIN requerido'})
+    
+    # Buscar información
+    if ticker:
+        precio_data = price_fetcher.obtener_precio(ticker, isin)
+    else:
+        precio_data = price_fetcher.obtener_precio_por_isin(isin)
+    
+    if precio_data:
+        return jsonify({
+            'success': True,
+            'data': {
+                'nombre': precio_data.get('nombre', isin),
+                'precio': precio_data.get('precio', 0),
+                'moneda': precio_data.get('moneda', 'EUR'),
+                'fuente': precio_data.get('fuente', 'N/A'),
+                'tipo': precio_data.get('tipo', 'N/A')
+            }
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'error': 'No se encontró el activo'
+        })
+
+
+@app.route('/api/position/add', methods=['POST'])
+def api_add_position():
+    """Añade una nueva posición o aportación"""
+    data = request.get_json()
+    
+    # Validar campos requeridos
+    required = ['isin', 'nombre', 'cantidad', 'precio_compra', 'fecha_compra']
+    for field in required:
+        if not data.get(field):
+            return jsonify({'success': False, 'error': f'Campo {field} requerido'})
+    
+    # Validar que la fecha no sea futura
+    try:
+        fecha_compra = datetime.strptime(data['fecha_compra'], '%Y-%m-%d')
+        if fecha_compra > datetime.now():
+            return jsonify({'success': False, 'error': 'La fecha de compra no puede ser futura'})
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Formato de fecha inválido (usar YYYY-MM-DD)'})
+    
+    # Validar cantidad y precio positivos
+    try:
+        cantidad = float(data['cantidad'])
+        precio = float(data['precio_compra'])
+        if cantidad <= 0:
+            return jsonify({'success': False, 'error': 'La cantidad debe ser mayor que 0'})
+        if precio <= 0:
+            return jsonify({'success': False, 'error': 'El precio debe ser mayor que 0'})
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Cantidad o precio inválidos'})
+    
+    try:
+        portfolio = cargar_portfolio()
+        isin = data['isin'].upper().strip()
+        ticker = data.get('ticker', '').upper().strip()
+        nombre = data['nombre']
+        
+        # Buscar si ya existe una posición con este ISIN
+        existente = portfolio.buscar_por_isin(isin)
+        
+        if existente:
+            # Añadir aportación a posición existente
+            existente.agregar_aportacion(
+                cantidad=cantidad,
+                precio_compra=precio,
+                fecha_compra=data['fecha_compra'],
+                broker=data.get('broker', ''),
+                notas=data.get('notas', '')
+            )
+            # Actualizar ticker si se proporcionó y no estaba
+            if not existente.ticker and ticker:
+                existente.ticker = ticker
+            
+            # Detectar categoría si no tiene
+            if not existente.categoria:
+                existente.categoria = detectar_categoria(existente.ticker or ticker, nombre, isin)
+                
+            guardar_portfolio(portfolio)
+            return jsonify({
+                'success': True, 
+                'message': f'Aportación añadida a {existente.nombre}',
+                'is_new': False,
+                'num_aportaciones': existente.num_aportaciones,
+                'categoria': existente.categoria
+            })
+        else:
+            # Detectar categoría automáticamente
+            categoria = detectar_categoria(ticker, nombre, isin)
+            
+            # Crear nueva posición
+            posicion = Position(
+                isin=isin,
+                ticker=ticker,
+                nombre=nombre,
+                categoria=categoria
+            )
+            posicion.agregar_aportacion(
+                cantidad=cantidad,
+                precio_compra=precio,
+                fecha_compra=data['fecha_compra'],
+                broker=data.get('broker', ''),
+                notas=data.get('notas', '')
+            )
+            
+            portfolio.agregar_posicion(posicion)
+            guardar_portfolio(portfolio)
+            
+            return jsonify({
+                'success': True, 
+                'message': 'Posición añadida correctamente',
+                'is_new': True,
+                'num_aportaciones': 1,
+                'categoria': categoria,
+                'categoria_auto': bool(categoria)
+            })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/position/check/<isin>')
+def api_check_position(isin):
+    """Verifica si ya existe una posición con este ISIN"""
+    portfolio = cargar_portfolio()
+    existente = portfolio.buscar_por_isin(isin.upper())
+    
+    if existente:
+        return jsonify({
+            'success': True,
+            'exists': True,
+            'data': {
+                'id': existente.id,
+                'isin': existente.isin,
+                'ticker': existente.ticker,
+                'nombre': existente.nombre,
+                'cantidad': existente.cantidad,
+                'precio_medio': existente.precio_medio,
+                'num_aportaciones': existente.num_aportaciones,
+                'coste_total': existente.coste_total
+            }
+        })
+    else:
+        return jsonify({
+            'success': True,
+            'exists': False
+        })
+
+
+@app.route('/api/aportacion/delete', methods=['POST'])
+def api_delete_aportacion():
+    """Elimina una aportación específica"""
+    data = request.get_json()
+    isin = data.get('isin', '').upper()
+    aportacion_id = data.get('aportacion_id', '')
+    
+    if not isin or not aportacion_id:
+        return jsonify({'success': False, 'error': 'ISIN y aportacion_id requeridos'})
+    
+    try:
+        portfolio = cargar_portfolio()
+        result = portfolio.eliminar_aportacion(isin, aportacion_id)
+        
+        if result:
+            guardar_portfolio(portfolio)
+            return jsonify({'success': True, 'message': 'Aportación eliminada'})
+        else:
+            return jsonify({'success': False, 'error': 'Aportación no encontrada'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/export')
+def api_export():
+    """Exporta la cartera, alertas y targets como JSON descargable"""
+    try:
+        portfolio = cargar_portfolio()
+        alertas = cargar_alertas()
+        targets_positions = cargar_targets_positions()
+        targets_categorias = cargar_targets()
+        
+        # Cargar activos nuevos planificados
+        nuevos_file = os.path.join(DATA_DIR, 'nuevos_activos.json')
+        nuevos_activos = {}
+        if os.path.exists(nuevos_file):
+            with open(nuevos_file, 'r') as f:
+                nuevos_activos = json.load(f)
+        
+        data = portfolio.to_dict()
+        
+        # Añadir alertas
+        data['alertas'] = alertas
+        
+        # Añadir targets
+        data['targets_positions'] = targets_positions
+        data['targets_categorias'] = targets_categorias
+        data['nuevos_activos'] = nuevos_activos
+        
+        # Añadir metadatos
+        data['export_date'] = datetime.now().isoformat()
+        data['export_version'] = '4.0'  # Nueva versión con targets
+        
+        response = app.response_class(
+            response=json.dumps(data, indent=2, ensure_ascii=False),
+            status=200,
+            mimetype='application/json'
+        )
+        response.headers['Content-Disposition'] = f'attachment; filename=portfolio_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        return response
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/import', methods=['POST'])
+def api_import():
+    """Importa una cartera desde JSON"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No se ha enviado ningún archivo'})
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No se ha seleccionado ningún archivo'})
+        
+        if not file.filename.endswith('.json'):
+            return jsonify({'success': False, 'error': 'El archivo debe ser .json'})
+        
+        # Leer y parsear JSON
+        content = file.read().decode('utf-8')
+        data = json.loads(content)
+        
+        # Validar estructura básica
+        if 'posiciones' not in data:
+            return jsonify({'success': False, 'error': 'Formato de archivo inválido'})
+        
+        # Crear portfolio desde datos importados
+        portfolio = Portfolio.from_dict(data)
+        
+        # Guardar portfolio
+        guardar_portfolio(portfolio)
+        
+        # Importar alertas si existen
+        alertas_importadas = 0
+        if 'alertas' in data and isinstance(data['alertas'], list):
+            guardar_alertas(data['alertas'])
+            alertas_importadas = len(data['alertas'])
+        
+        # Importar targets por posición si existen
+        targets_importados = 0
+        if 'targets_positions' in data and isinstance(data['targets_positions'], dict):
+            targets_file = os.path.join(DATA_DIR, 'targets_positions.json')
+            with open(targets_file, 'w') as f:
+                json.dump(data['targets_positions'], f, indent=2)
+            targets_importados = len(data['targets_positions'])
+        
+        # Importar targets por categoría si existen
+        if 'targets_categorias' in data and isinstance(data['targets_categorias'], dict):
+            guardar_targets(data['targets_categorias'])
+        
+        # Importar activos nuevos planificados si existen
+        nuevos_importados = 0
+        if 'nuevos_activos' in data and isinstance(data['nuevos_activos'], dict):
+            nuevos_file = os.path.join(DATA_DIR, 'nuevos_activos.json')
+            with open(nuevos_file, 'w') as f:
+                json.dump(data['nuevos_activos'], f, indent=2)
+            nuevos_importados = len(data['nuevos_activos'])
+        
+        mensaje = f'Cartera importada correctamente ({len(portfolio.posiciones)} posiciones'
+        if alertas_importadas > 0:
+            mensaje += f', {alertas_importadas} alertas'
+        if targets_importados > 0:
+            mensaje += f', {targets_importados} targets'
+        if nuevos_importados > 0:
+            mensaje += f', {nuevos_importados} activos planificados'
+        mensaje += ')'
+        
+        return jsonify({
+            'success': True, 
+            'message': mensaje
+        })
+        
+    except json.JSONDecodeError:
+        return jsonify({'success': False, 'error': 'El archivo no es un JSON válido'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/import/merge', methods=['POST'])
+def api_import_merge():
+    """Importa y fusiona con la cartera existente"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No se ha enviado ningún archivo'})
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No se ha seleccionado ningún archivo'})
+        
+        # Leer y parsear JSON
+        content = file.read().decode('utf-8')
+        data = json.loads(content)
+        
+        if 'posiciones' not in data:
+            return jsonify({'success': False, 'error': 'Formato de archivo inválido'})
+        
+        # Cargar cartera actual
+        portfolio_actual = cargar_portfolio()
+        portfolio_importado = Portfolio.from_dict(data)
+        
+        # Fusionar: añadir posiciones del importado al actual
+        posiciones_nuevas = 0
+        aportaciones_nuevas = 0
+        
+        for pos_import in portfolio_importado.posiciones:
+            existente = portfolio_actual.buscar_por_isin(pos_import.isin)
+            if existente:
+                # Añadir aportaciones que no existan
+                for ap in pos_import.aportaciones:
+                    existente.aportaciones.append(ap)
+                    aportaciones_nuevas += 1
+            else:
+                portfolio_actual.posiciones.append(pos_import)
+                posiciones_nuevas += 1
+        
+        guardar_portfolio(portfolio_actual)
+        
+        # Fusionar alertas si existen
+        alertas_nuevas = 0
+        if 'alertas' in data and isinstance(data['alertas'], list):
+            alertas_actuales = cargar_alertas()
+            ids_existentes = {a.get('id') for a in alertas_actuales}
+            
+            for alerta_import in data['alertas']:
+                # Solo añadir si no existe ya (por ID)
+                if alerta_import.get('id') not in ids_existentes:
+                    alertas_actuales.append(alerta_import)
+                    alertas_nuevas += 1
+            
+            guardar_alertas(alertas_actuales)
+        
+        # Fusionar targets por posición si existen
+        targets_nuevos = 0
+        if 'targets_positions' in data and isinstance(data['targets_positions'], dict):
+            targets_actuales = cargar_targets_positions()
+            for isin, target in data['targets_positions'].items():
+                if isin not in targets_actuales:
+                    targets_actuales[isin] = target
+                    targets_nuevos += 1
+            targets_file = os.path.join(DATA_DIR, 'targets_positions.json')
+            with open(targets_file, 'w') as f:
+                json.dump(targets_actuales, f, indent=2)
+        
+        # Fusionar activos nuevos planificados si existen
+        nuevos_importados = 0
+        if 'nuevos_activos' in data and isinstance(data['nuevos_activos'], dict):
+            nuevos_file = os.path.join(DATA_DIR, 'nuevos_activos.json')
+            nuevos_actuales = {}
+            if os.path.exists(nuevos_file):
+                with open(nuevos_file, 'r') as f:
+                    nuevos_actuales = json.load(f)
+            
+            for isin, info in data['nuevos_activos'].items():
+                if isin not in nuevos_actuales:
+                    nuevos_actuales[isin] = info
+                    nuevos_importados += 1
+            
+            with open(nuevos_file, 'w') as f:
+                json.dump(nuevos_actuales, f, indent=2)
+        
+        mensaje = f'Fusión completada: {posiciones_nuevas} posiciones nuevas, {aportaciones_nuevas} aportaciones añadidas'
+        if alertas_nuevas > 0:
+            mensaje += f', {alertas_nuevas} alertas'
+        if targets_nuevos > 0:
+            mensaje += f', {targets_nuevos} targets'
+        if nuevos_importados > 0:
+            mensaje += f', {nuevos_importados} activos planificados'
+        
+        return jsonify({
+            'success': True, 
+            'message': mensaje
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/settings')
+def settings_page():
+    """Página de configuración"""
+    return render_template('settings.html')
+
+
+@app.route('/api/benchmarks')
+def api_benchmarks():
+    """Obtiene rendimiento de benchmarks para comparar"""
+    periodo = request.args.get('periodo', '1y')
+    
+    benchmarks = {
+        'SP500': {'ticker': '^GSPC', 'nombre': 'S&P 500'},
+        'MSCI_WORLD': {'ticker': 'URTH', 'nombre': 'MSCI World'},  # ETF que replica MSCI World
+        'IBEX35': {'ticker': '^IBEX', 'nombre': 'IBEX 35'},
+        'NASDAQ': {'ticker': '^IXIC', 'nombre': 'NASDAQ'},
+    }
+    
+    resultados = {}
+    
+    for key, info in benchmarks.items():
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker(info['ticker'])
+            hist = ticker.history(period=periodo)
+            
+            if not hist.empty:
+                precio_inicio = hist['Close'].iloc[0]
+                precio_fin = hist['Close'].iloc[-1]
+                rentabilidad = ((precio_fin - precio_inicio) / precio_inicio) * 100
+                
+                resultados[key] = {
+                    'nombre': info['nombre'],
+                    'rentabilidad': round(rentabilidad, 2),
+                    'precio_actual': round(precio_fin, 2)
+                }
+        except Exception as e:
+            pass
+    
+    # Calcular rentabilidad de la cartera usando el MISMO método que evolution
+    mi_rentabilidad = calcular_rentabilidad_cartera(periodo)
+    
+    return jsonify({
+        'success': True, 
+        'data': resultados,
+        'mi_cartera': {
+            'rentabilidad': round(mi_rentabilidad, 2),
+            'periodo': periodo
+        }
+    })
+
+
+def calcular_rentabilidad_cartera(periodo: str) -> float:
+    """
+    Calcula la rentabilidad de la cartera para un período dado.
+    Usa el MISMO método que api_portfolio_evolution para consistencia.
+    """
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return 0
+    
+    try:
+        import yfinance as yf
+        from datetime import datetime, timedelta
+        from src.scrapers import JustETFScraper
+        
+        justetf = JustETFScraper()
+        
+        # Calcular fecha de inicio según período
+        if periodo == 'ytd':
+            fecha_inicio = datetime(datetime.now().year, 1, 1)
+            periodo_api = '1y'  # YTD usa período de 1 año en API
+        else:
+            dias_map = {'1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825}
+            dias = dias_map.get(periodo, 365)
+            fecha_inicio = datetime.now() - timedelta(days=dias)
+            periodo_api = periodo
+        
+        # Encontrar fecha de primera compra
+        fecha_primera_compra = None
+        for pos in portfolio.posiciones:
+            for ap in pos.aportaciones:
+                if ap.fecha_compra:
+                    try:
+                        fecha_ap = datetime.strptime(ap.fecha_compra, '%Y-%m-%d')
+                        if fecha_primera_compra is None or fecha_ap < fecha_primera_compra:
+                            fecha_primera_compra = fecha_ap
+                    except:
+                        pass
+        
+        # Si la fecha de primera compra es después del inicio del período, usar esa
+        if fecha_primera_compra and fecha_primera_compra > fecha_inicio:
+            fecha_inicio = fecha_primera_compra
+        
+        fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
+        
+        # Obtener histórico de cada posición
+        all_data = {}
+        
+        for pos in portfolio.posiciones:
+            hist_data = None
+            
+            # 1. Intentar con Yahoo Finance si hay ticker
+            if pos.ticker:
+                try:
+                    ticker = yf.Ticker(pos.ticker)
+                    hist = ticker.history(period=periodo_api)
+                    if not hist.empty:
+                        hist_data = {
+                            'fechas': {d.strftime('%Y-%m-%d'): hist.loc[d, 'Close'] for d in hist.index},
+                            'cantidad': pos.cantidad
+                        }
+                except:
+                    pass
+            
+            # 2. Si no hay datos de Yahoo, intentar con justETF
+            if not hist_data and pos.isin:
+                try:
+                    historico = justetf.obtener_historico(pos.isin, periodo_api)
+                    if historico and historico.get('precios'):
+                        hist_data = {
+                            'fechas': dict(zip(historico['fechas'], historico['precios'])),
+                            'cantidad': pos.cantidad
+                        }
+                except:
+                    pass
+            
+            if hist_data:
+                all_data[pos.id] = hist_data
+        
+        if not all_data:
+            return 0
+        
+        # Encontrar todas las fechas únicas después del inicio
+        all_fechas = set()
+        for data in all_data.values():
+            all_fechas.update(data['fechas'].keys())
+        
+        fechas_filtradas = [f for f in all_fechas if f >= fecha_inicio_str]
+        fechas_ordenadas = sorted(fechas_filtradas)
+        
+        if not fechas_ordenadas:
+            return 0
+        
+        # Calcular valor con interpolación
+        ultimo_precio = {pos_id: None for pos_id in all_data.keys()}
+        
+        # Valor al inicio del período
+        valor_inicio = 0
+        for pos_id, data in all_data.items():
+            for fecha in fechas_ordenadas:
+                if fecha in data['fechas']:
+                    precio = data['fechas'][fecha]
+                    valor_inicio += precio * data['cantidad']
+                    ultimo_precio[pos_id] = precio
+                    break
+                elif ultimo_precio[pos_id]:
+                    valor_inicio += ultimo_precio[pos_id] * data['cantidad']
+                    break
+        
+        # Valor actual (usar precio real actualizado)
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones_actualizadas = analyzer.actualizar_precios()
+        valor_actual = sum(p.valor_actual for p in posiciones_actualizadas)
+        
+        # Calcular rentabilidad
+        if valor_inicio > 0:
+            return ((valor_actual - valor_inicio) / valor_inicio) * 100
+        
+        return 0
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return 0
+
+
+@app.route('/api/portfolio/evolution')
+def api_portfolio_evolution():
+    """Calcula la evolución histórica de la cartera desde la fecha de primera compra"""
+    periodo = request.args.get('periodo', '1y')
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    try:
+        import yfinance as yf
+        from datetime import datetime, timedelta
+        from src.scrapers import JustETFScraper
+        
+        justetf = JustETFScraper()
+        
+        # Encontrar la fecha más antigua de todas las aportaciones
+        fecha_primera_compra = None
+        for pos in portfolio.posiciones:
+            for ap in pos.aportaciones:
+                if ap.fecha_compra:
+                    try:
+                        fecha_ap = datetime.strptime(ap.fecha_compra, '%Y-%m-%d')
+                        if fecha_primera_compra is None or fecha_ap < fecha_primera_compra:
+                            fecha_primera_compra = fecha_ap
+                    except:
+                        pass
+        
+        if not fecha_primera_compra:
+            fecha_primera_compra = datetime.now() - timedelta(days=365)
+        
+        # Si el período es "max", usar desde la primera compra
+        # Para otros períodos, calcular la fecha de inicio
+        fecha_inicio_filtro = None
+        if periodo == 'max':
+            fecha_inicio_filtro = fecha_primera_compra
+            # Calcular período equivalente para API
+            dias = (datetime.now() - fecha_primera_compra).days
+            if dias <= 30:
+                periodo_api = '1mo'
+            elif dias <= 90:
+                periodo_api = '3mo'
+            elif dias <= 180:
+                periodo_api = '6mo'
+            elif dias <= 365:
+                periodo_api = '1y'
+            elif dias <= 730:
+                periodo_api = '2y'
+            else:
+                periodo_api = '5y'
+        else:
+            periodo_api = periodo
+            # Calcular fecha de inicio según período seleccionado
+            dias_map = {'1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825}
+            dias = dias_map.get(periodo, 365)
+            fecha_inicio_filtro = datetime.now() - timedelta(days=dias)
+            
+            # Si la fecha de primera compra es después, usar esa
+            if fecha_primera_compra > fecha_inicio_filtro:
+                fecha_inicio_filtro = fecha_primera_compra
+        
+        # Obtener histórico de cada posición
+        all_data = {}
+        
+        for pos in portfolio.posiciones:
+            hist_data = None
+            
+            # 1. Intentar con Yahoo Finance si hay ticker
+            if pos.ticker:
+                try:
+                    ticker = yf.Ticker(pos.ticker)
+                    hist = ticker.history(period=periodo_api)
+                    if not hist.empty:
+                        hist_data = {
+                            'fechas': {d.strftime('%Y-%m-%d'): hist.loc[d, 'Close'] for d in hist.index},
+                            'cantidad': pos.cantidad,
+                            'nombre': pos.nombre
+                        }
+                except:
+                    pass
+            
+            # 2. Si no hay datos de Yahoo, intentar con justETF
+            if not hist_data and pos.isin:
+                try:
+                    historico = justetf.obtener_historico(pos.isin, periodo_api)
+                    if historico and historico.get('precios'):
+                        hist_data = {
+                            'fechas': dict(zip(historico['fechas'], historico['precios'])),
+                            'cantidad': pos.cantidad,
+                            'nombre': pos.nombre
+                        }
+                except:
+                    pass
+            
+            if hist_data:
+                all_data[pos.id] = hist_data
+        
+        if not all_data:
+            return jsonify({'success': False, 'error': 'No hay datos históricos. Verifica que tus posiciones tienen ISIN válido.'})
+        
+        # Encontrar todas las fechas únicas
+        all_fechas = set()
+        for data in all_data.values():
+            all_fechas.update(data['fechas'].keys())
+        
+        # Filtrar fechas: solo desde la fecha de inicio (primera compra o período seleccionado)
+        fecha_inicio_str = fecha_inicio_filtro.strftime('%Y-%m-%d')
+        fechas_filtradas = [f for f in all_fechas if f >= fecha_inicio_str]
+        fechas_ordenadas = sorted(fechas_filtradas)
+        
+        if not fechas_ordenadas:
+            return jsonify({'success': False, 'error': 'No hay datos para el período seleccionado'})
+        
+        # Calcular valor de cartera para cada fecha
+        # IMPORTANTE: Solo usar fechas donde TODAS las posiciones tienen datos
+        # para evitar inconsistencias
+        valores_cartera = []
+        fechas_str = []
+        
+        # Guardar el último precio conocido de cada posición para interpolar
+        ultimo_precio_conocido = {pos_id: None for pos_id in all_data.keys()}
+        
+        for fecha in fechas_ordenadas:
+            valor_total = 0
+            posiciones_con_valor = 0
+            
+            for pos_id, data in all_data.items():
+                if fecha in data['fechas']:
+                    precio = data['fechas'][fecha]
+                    ultimo_precio_conocido[pos_id] = precio
+                    valor_total += precio * data['cantidad']
+                    posiciones_con_valor += 1
+                elif ultimo_precio_conocido[pos_id] is not None:
+                    # Usar último precio conocido si no hay dato para esta fecha
+                    valor_total += ultimo_precio_conocido[pos_id] * data['cantidad']
+                    posiciones_con_valor += 1
+            
+            # Solo incluir si tenemos datos para TODAS las posiciones
+            if posiciones_con_valor == len(all_data):
+                valores_cartera.append(round(valor_total, 2))
+                fechas_str.append(fecha)
+        
+        if not valores_cartera:
+            return jsonify({
+                'success': False, 
+                'error': 'No hay suficientes datos históricos. Algunas posiciones no tienen histórico disponible.',
+                'posiciones_sin_datos': [pos.nombre for pos in portfolio.posiciones if pos.id not in all_data]
+            })
+        
+        # Obtener el valor ACTUAL REAL del portfolio (no del histórico)
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones_actualizadas = analyzer.actualizar_precios()
+        valor_actual_real = sum(p.valor_actual for p in posiciones_actualizadas)
+        coste_total_real = sum(pos.coste_total for pos in portfolio.posiciones)
+        
+        # Usar el valor actual real, no el último del histórico
+        # (el histórico puede estar desactualizado)
+        valor_inicio_periodo = valores_cartera[0] if valores_cartera else 0
+        valor_final_historico = valores_cartera[-1] if valores_cartera else 0
+        
+        # Añadir el punto actual si es diferente del último histórico
+        # para que el gráfico llegue hasta el valor real
+        if abs(valor_actual_real - valor_final_historico) > 1:
+            from datetime import datetime
+            hoy = datetime.now().strftime('%Y-%m-%d')
+            if hoy not in fechas_str:
+                fechas_str.append(hoy)
+                valores_cartera.append(round(valor_actual_real, 2))
+        
+        # Rentabilidad del período seleccionado
+        if valor_inicio_periodo > 0:
+            rentabilidad_periodo = ((valor_actual_real - valor_inicio_periodo) / valor_inicio_periodo) * 100
+        else:
+            rentabilidad_periodo = 0
+        
+        # Rentabilidad total (vs lo invertido)
+        if coste_total_real > 0:
+            rentabilidad_total = ((valor_actual_real - coste_total_real) / coste_total_real) * 100
+        else:
+            rentabilidad_total = 0
+        
+        # Verificar si hay posiciones sin datos históricos
+        posiciones_sin_historico = [pos.nombre for pos in portfolio.posiciones if pos.id not in all_data]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'fechas': fechas_str,
+                'valores': valores_cartera,
+                'rentabilidad': round(rentabilidad_periodo, 2),  # Del período seleccionado
+                'rentabilidad_total': round(rentabilidad_total, 2),  # Total vs invertido
+                'valor_inicial': round(valor_inicio_periodo, 2),  # Valor al inicio del período
+                'valor_final': round(valor_actual_real, 2),  # Valor ACTUAL real
+                'coste_invertido': round(coste_total_real, 2),
+                'periodo_usado': periodo_api,
+                'fecha_primera_compra': fecha_primera_compra.strftime('%Y-%m-%d'),
+                'num_activos_con_datos': len(all_data),
+                'num_activos_total': len(portfolio.posiciones),
+                'posiciones_sin_historico': posiciones_sin_historico
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/portfolio/positions-evolution')
+def api_positions_evolution():
+    """Obtiene la evolución de cada posición individual para comparar"""
+    periodo = request.args.get('periodo', '6mo')
+    normalized = request.args.get('normalized', 'false') == 'true'
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    try:
+        import yfinance as yf
+        from datetime import datetime
+        from src.scrapers import JustETFScraper
+        
+        justetf = JustETFScraper()
+        
+        # Si el período es "max", calcular desde la primera fecha de compra
+        if periodo == 'max':
+            fecha_inicio = None
+            for pos in portfolio.posiciones:
+                for ap in pos.aportaciones:
+                    if ap.fecha_compra:
+                        try:
+                            fecha_ap = datetime.strptime(ap.fecha_compra, '%Y-%m-%d')
+                            if fecha_inicio is None or fecha_ap < fecha_inicio:
+                                fecha_inicio = fecha_ap
+                        except:
+                            pass
+            
+            if fecha_inicio:
+                dias = (datetime.now() - fecha_inicio).days
+                if dias <= 30:
+                    periodo = '1mo'
+                elif dias <= 90:
+                    periodo = '3mo'
+                elif dias <= 180:
+                    periodo = '6mo'
+                elif dias <= 365:
+                    periodo = '1y'
+                elif dias <= 730:
+                    periodo = '2y'
+                elif dias <= 1825:
+                    periodo = '5y'
+                else:
+                    periodo = '10y'
+        
+        posiciones_data = []
+        sin_datos = []
+        fechas_comunes = None
+        
+        for pos in portfolio.posiciones:
+            fechas = None
+            precios = None
+            fuente = None
+            
+            # 1. Intentar con Yahoo Finance si hay ticker
+            if pos.ticker:
+                try:
+                    ticker = yf.Ticker(pos.ticker)
+                    hist = ticker.history(period=periodo)
+                    
+                    if not hist.empty:
+                        fechas = [d.strftime('%Y-%m-%d') for d in hist.index]
+                        precios = hist['Close'].tolist()
+                        fuente = 'Yahoo Finance'
+                except:
+                    pass
+            
+            # 2. Si no hay datos de Yahoo, intentar con justETF usando ISIN
+            if not precios and pos.isin:
+                try:
+                    historico = justetf.obtener_historico(pos.isin, periodo)
+                    if historico and historico.get('precios'):
+                        fechas = historico['fechas']
+                        precios = historico['precios']
+                        fuente = 'justETF'
+                except:
+                    pass
+            
+            # 3. Si aún no hay datos, añadir a la lista de sin datos
+            if not precios:
+                sin_datos.append({
+                    'nombre': pos.nombre,
+                    'isin': pos.isin,
+                    'ticker': pos.ticker or 'Sin ticker'
+                })
+                continue
+            
+            # Normalizar a base 100 si se pide
+            if normalized and precios:
+                precio_base = precios[0]
+                precios = [(p / precio_base) * 100 for p in precios]
+            
+            # Calcular rentabilidad del período
+            if len(precios) >= 2:
+                rent = ((precios[-1] - precios[0]) / precios[0]) * 100 if not normalized else precios[-1] - 100
+            else:
+                rent = 0
+            
+            posiciones_data.append({
+                'id': pos.id,
+                'nombre': pos.nombre[:25] + '...' if len(pos.nombre) > 25 else pos.nombre,
+                'nombre_completo': pos.nombre,
+                'ticker': pos.ticker,
+                'isin': pos.isin,
+                'fechas': fechas,
+                'precios': [round(p, 2) for p in precios],
+                'rentabilidad': round(rent, 2),
+                'categoria': pos.categoria,
+                'fuente': fuente
+            })
+            
+            # Guardar fechas comunes (usar las del primer activo válido)
+            if fechas_comunes is None:
+                fechas_comunes = fechas
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'posiciones': posiciones_data,
+                'fechas': fechas_comunes,
+                'normalized': normalized,
+                'sin_datos': sin_datos,
+                'total_posiciones': len(portfolio.posiciones),
+                'posiciones_con_datos': len(posiciones_data)
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/portfolio/categories')
+def api_portfolio_categories():
+    """Obtiene distribución por categorías"""
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': True, 'data': {'categorias': {}, 'sin_categoria': 0}})
+    
+    analyzer = PortfolioAnalyzer(portfolio)
+    posiciones = analyzer.actualizar_precios()
+    
+    # Agrupar por categoría
+    categorias = {}
+    sin_categoria = 0
+    
+    for pos in posiciones:
+        cat = pos.categoria if pos.categoria else 'Sin categoría'
+        if cat not in categorias:
+            categorias[cat] = {
+                'valor': 0,
+                'coste': 0,
+                'posiciones': []
+            }
+        categorias[cat]['valor'] += pos.valor_actual
+        categorias[cat]['coste'] += pos.coste_total
+        categorias[cat]['posiciones'].append({
+            'nombre': pos.nombre,
+            'valor': pos.valor_actual,
+            'rentabilidad': pos.rentabilidad_pct
+        })
+    
+    # Calcular porcentajes y rentabilidad por categoría
+    valor_total = sum(c['valor'] for c in categorias.values())
+    
+    resultado = {}
+    for cat, data in categorias.items():
+        peso = (data['valor'] / valor_total * 100) if valor_total > 0 else 0
+        rentabilidad = ((data['valor'] - data['coste']) / data['coste'] * 100) if data['coste'] > 0 else 0
+        
+        resultado[cat] = {
+            'valor': round(data['valor'], 2),
+            'coste': round(data['coste'], 2),
+            'peso': round(peso, 2),
+            'rentabilidad': round(rentabilidad, 2),
+            'num_posiciones': len(data['posiciones']),
+            'posiciones': data['posiciones']
+        }
+    
+    return jsonify({'success': True, 'data': resultado})
+
+
+@app.route('/api/position/update/<position_id>', methods=['POST'])
+def api_update_position(position_id):
+    """Actualiza datos de una posición (categoría, ticker, etc)"""
+    data = request.get_json()
+    
+    try:
+        portfolio = cargar_portfolio()
+        pos = portfolio.obtener_posicion(position_id)
+        
+        if not pos:
+            return jsonify({'success': False, 'error': 'Posición no encontrada'})
+        
+        # Actualizar campos permitidos
+        if 'categoria' in data:
+            pos.categoria = data['categoria']
+        if 'sector' in data:
+            pos.sector = data['sector']
+        if 'ticker' in data:
+            pos.ticker = data['ticker'].upper().strip()
+        if 'nombre' in data:
+            pos.nombre = data['nombre']
+        
+        guardar_portfolio(portfolio)
+        
+        return jsonify({'success': True, 'message': 'Posición actualizada'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# Lista de categorías predefinidas
+CATEGORIAS = [
+    'Tecnología',
+    'Salud',
+    'Finanzas',
+    'Energía',
+    'Consumo',
+    'Industrial',
+    'Materiales',
+    'Inmobiliario',
+    'Comunicaciones',
+    'Utilities',
+    'Renta Fija',
+    'Mercados Emergentes',
+    'Global/Diversificado',
+    'Oro/Materias Primas',
+    'Crypto',
+    'Small Caps',
+    'Otros'
+]
+
+# Archivo para categorías personalizadas
+CUSTOM_CATEGORIES_FILE = os.path.join(DATA_DIR, 'custom_categories.json')
+
+def cargar_categorias_custom():
+    """Carga las categorías personalizadas"""
+    if os.path.exists(CUSTOM_CATEGORIES_FILE):
+        try:
+            with open(CUSTOM_CATEGORIES_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return {'categories': [], 'keywords': {}}
+
+def guardar_categorias_custom(data):
+    """Guarda las categorías personalizadas"""
+    DATA_DIR.mkdir(exist_ok=True)
+    with open(CUSTOM_CATEGORIES_FILE, 'w') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+def obtener_todas_categorias():
+    """Obtiene todas las categorías (predefinidas + custom)"""
+    custom = cargar_categorias_custom()
+    todas = CATEGORIAS.copy()
+    for cat in custom.get('categories', []):
+        if cat not in todas:
+            todas.insert(-1, cat)  # Insertar antes de "Otros"
+    return todas
+
+# Mapeo de sectores de Yahoo Finance a nuestras categorías
+SECTOR_MAPPING = {
+    # Sectores de Yahoo Finance (acciones)
+    'Technology': 'Tecnología',
+    'Healthcare': 'Salud',
+    'Financial Services': 'Finanzas',
+    'Financial': 'Finanzas',
+    'Energy': 'Energía',
+    'Consumer Cyclical': 'Consumo',
+    'Consumer Defensive': 'Consumo',
+    'Consumer Goods': 'Consumo',
+    'Industrials': 'Industrial',
+    'Basic Materials': 'Materiales',
+    'Real Estate': 'Inmobiliario',
+    'Communication Services': 'Comunicaciones',
+    'Utilities': 'Utilities',
+    
+    # Categorías de ETFs
+    'Large Blend': 'Global/Diversificado',
+    'Large Growth': 'Tecnología',
+    'Large Value': 'Global/Diversificado',
+    'Mid-Cap Blend': 'Global/Diversificado',
+    'Small Blend': 'Global/Diversificado',
+    'Foreign Large Blend': 'Global/Diversificado',
+    'Diversified Emerging Mkts': 'Mercados Emergentes',
+    'Emerging Markets': 'Mercados Emergentes',
+    'Europe Stock': 'Global/Diversificado',
+    'World Stock': 'Global/Diversificado',
+    'Technology': 'Tecnología',
+    'Health': 'Salud',
+    'Equity Precious Metals': 'Oro/Materias Primas',
+    'Commodities Broad Basket': 'Oro/Materias Primas',
+    'Natural Resources': 'Oro/Materias Primas',
+    'Corporate Bond': 'Renta Fija',
+    'Government Bond': 'Renta Fija',
+    'High Yield Bond': 'Renta Fija',
+    'Inflation-Protected Bond': 'Renta Fija',
+    'Intermediate Core Bond': 'Renta Fija',
+    'Intermediate Government': 'Renta Fija',
+    'Long Government': 'Renta Fija',
+    'Long-Term Bond': 'Renta Fija',
+    'Short Government': 'Renta Fija',
+    'Short-Term Bond': 'Renta Fija',
+    'Ultrashort Bond': 'Renta Fija',
+    'World Bond': 'Renta Fija',
+}
+
+# Palabras clave en el nombre para detectar categoría
+KEYWORD_MAPPING = {
+    'Tecnología': ['tech', 'technology', 'software', 'semiconductor', 'cloud', 'digital', 'nasdaq', 'information'],
+    'Salud': ['health', 'healthcare', 'medical', 'pharma', 'biotech', 'salud'],
+    'Finanzas': ['financial', 'bank', 'finance', 'insurance', 'finanzas'],
+    'Energía': ['energy', 'oil', 'gas', 'petrol', 'energía', 'clean energy', 'solar', 'wind'],
+    'Consumo': ['consumer', 'retail', 'consumo', 'food', 'beverage'],
+    'Industrial': ['industrial', 'aerospace', 'defense', 'manufacturing'],
+    'Materiales': ['materials', 'mining', 'steel', 'chemical', 'materiales'],
+    'Inmobiliario': ['real estate', 'reit', 'property', 'inmobiliario'],
+    'Comunicaciones': ['communication', 'media', 'telecom', 'comunicaciones'],
+    'Utilities': ['utilities', 'electric', 'water', 'servicios'],
+    'Renta Fija': ['bond', 'treasury', 'fixed income', 'renta fija', 'government', 'corporate bond', 'aggregate'],
+    'Mercados Emergentes': ['emerging', 'emergentes', 'em ', 'china', 'india', 'brazil', 'asia'],
+    'Global/Diversificado': ['world', 'global', 'msci', 'all-world', 'developed', 'acwi', 's&p 500', 'total market', 'diversified'],
+    'Oro/Materias Primas': ['gold', 'oro', 'silver', 'plata', 'commodity', 'commodities', 'precious', 'materias primas'],
+    'Crypto': ['bitcoin', 'btc', 'ethereum', 'eth', 'crypto', 'blockchain', 'digital asset', 'cryptocurrency'],
+    'Small Caps': ['russell 2000', 'russell2000', 'small cap', 'small-cap', 'smallcap', 'mid cap', 'mid-cap', 'midcap', 'small companies', 'micro cap'],
+}
+
+
+def detectar_categoria(ticker: str = None, nombre: str = None, isin: str = None) -> str:
+    """Detecta automáticamente la categoría de un activo"""
+    import yfinance as yf
+    
+    categoria = ''
+    
+    # Obtener keywords personalizadas
+    custom = cargar_categorias_custom()
+    custom_keywords = custom.get('keywords', {})
+    
+    # 1. Intentar obtener sector/categoría de Yahoo Finance
+    if ticker:
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            
+            # Para acciones: usar 'sector'
+            sector = info.get('sector', '')
+            if sector and sector in SECTOR_MAPPING:
+                return SECTOR_MAPPING[sector]
+            
+            # Para ETFs/fondos: usar 'category'
+            category = info.get('category', '')
+            if category:
+                # Buscar coincidencia en el mapeo
+                for key, value in SECTOR_MAPPING.items():
+                    if key.lower() in category.lower():
+                        return value
+                        
+            # Usar quoteType para algunos casos
+            quote_type = info.get('quoteType', '')
+            if quote_type == 'MUTUALFUND' or quote_type == 'ETF':
+                # Analizar el nombre del fondo
+                fund_name = info.get('longName', '') or info.get('shortName', '')
+                if fund_name:
+                    nombre = fund_name
+                    
+        except Exception as e:
+            pass
+    
+    # 2. Analizar el nombre por palabras clave (incluyendo custom)
+    if nombre:
+        nombre_lower = nombre.lower()
+        
+        # Primero buscar en keywords personalizadas
+        for cat, keywords in custom_keywords.items():
+            for keyword in keywords:
+                if keyword.lower() in nombre_lower:
+                    return cat
+        
+        # Luego en las predefinidas
+        for cat, keywords in KEYWORD_MAPPING.items():
+            for keyword in keywords:
+                if keyword.lower() in nombre_lower:
+                    return cat
+    
+    # 3. Si no se detecta, devolver vacío (el usuario puede asignarla)
+    return categoria
+
+
+@app.route('/api/categories/list')
+def api_categories_list():
+    """Devuelve lista de categorías disponibles (predefinidas + custom)"""
+    todas = obtener_todas_categorias()
+    return jsonify({'success': True, 'data': todas})
+
+
+@app.route('/api/categories/custom', methods=['GET'])
+def api_get_custom_categories():
+    """Obtiene las categorías personalizadas"""
+    custom = cargar_categorias_custom()
+    return jsonify({'success': True, 'data': custom})
+
+
+@app.route('/api/categories/custom', methods=['POST'])
+def api_add_custom_category():
+    """Añade una nueva categoría personalizada"""
+    data = request.get_json()
+    nombre = data.get('nombre', '').strip()
+    keywords = data.get('keywords', [])
+    
+    if not nombre:
+        return jsonify({'success': False, 'error': 'Nombre de categoría requerido'})
+    
+    # Verificar que no existe
+    todas = obtener_todas_categorias()
+    if nombre in todas:
+        return jsonify({'success': False, 'error': 'La categoría ya existe'})
+    
+    custom = cargar_categorias_custom()
+    
+    if nombre not in custom['categories']:
+        custom['categories'].append(nombre)
+    
+    if keywords:
+        custom['keywords'][nombre] = [k.lower().strip() for k in keywords if k.strip()]
+    
+    guardar_categorias_custom(custom)
+    
+    return jsonify({'success': True, 'message': f'Categoría "{nombre}" creada'})
+
+
+@app.route('/api/categories/custom/<nombre>', methods=['DELETE'])
+def api_delete_custom_category(nombre):
+    """Elimina una categoría personalizada"""
+    custom = cargar_categorias_custom()
+    
+    if nombre in custom['categories']:
+        custom['categories'].remove(nombre)
+    
+    if nombre in custom['keywords']:
+        del custom['keywords'][nombre]
+    
+    guardar_categorias_custom(custom)
+    
+    return jsonify({'success': True, 'message': f'Categoría "{nombre}" eliminada'})
+
+
+@app.route('/api/categories/custom/<nombre>/keywords', methods=['PUT'])
+def api_update_category_keywords(nombre):
+    """Actualiza las palabras clave de una categoría"""
+    data = request.get_json()
+    keywords = data.get('keywords', [])
+    
+    custom = cargar_categorias_custom()
+    
+    # Puede ser una categoría predefinida o custom
+    if keywords:
+        custom['keywords'][nombre] = [k.lower().strip() for k in keywords if k.strip()]
+    elif nombre in custom['keywords']:
+        del custom['keywords'][nombre]
+    
+    guardar_categorias_custom(custom)
+    
+    return jsonify({'success': True, 'message': f'Keywords actualizadas para "{nombre}"'})
+
+
+@app.route('/api/portfolio/returns')
+def api_portfolio_returns():
+    """Calcula rentabilidad por diferentes períodos"""
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    try:
+        import yfinance as yf
+        from datetime import datetime, timedelta
+        from src.scrapers import JustETFScraper
+        
+        justetf = JustETFScraper()
+        
+        # Calcular coste total real (lo que invirtió el usuario)
+        coste_total = sum(pos.coste_total for pos in portfolio.posiciones)
+        
+        # Obtener valor actual
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones = analyzer.actualizar_precios()
+        valor_actual = sum(p.valor_actual for p in posiciones)
+        
+        # Rentabilidad total desde inicio
+        rent_total = ((valor_actual - coste_total) / coste_total * 100) if coste_total > 0 else 0
+        
+        # Para calcular rentabilidades por período, necesitamos histórico
+        # Obtener histórico de 1 año para calcular todos los períodos
+        all_data = {}
+        for pos in portfolio.posiciones:
+            hist_data = None
+            
+            if pos.ticker:
+                try:
+                    ticker = yf.Ticker(pos.ticker)
+                    hist = ticker.history(period='1y')
+                    if not hist.empty:
+                        hist_data = {d.strftime('%Y-%m-%d'): hist.loc[d, 'Close'] for d in hist.index}
+                except:
+                    pass
+            
+            if not hist_data and pos.isin:
+                try:
+                    historico = justetf.obtener_historico(pos.isin, '1y')
+                    if historico and historico.get('precios'):
+                        hist_data = dict(zip(historico['fechas'], historico['precios']))
+                except:
+                    pass
+            
+            if hist_data:
+                all_data[pos.id] = {
+                    'hist': hist_data,
+                    'cantidad': pos.cantidad
+                }
+        
+        # Calcular valor de cartera para fechas específicas
+        def calcular_valor_en_fecha(fecha_str):
+            valor = 0
+            for pos_id, data in all_data.items():
+                # Buscar precio más cercano a la fecha
+                fechas_ordenadas = sorted(data['hist'].keys())
+                precio = None
+                for f in fechas_ordenadas:
+                    if f <= fecha_str:
+                        precio = data['hist'][f]
+                    else:
+                        break
+                if precio:
+                    valor += precio * data['cantidad']
+            return valor
+        
+        hoy = datetime.now()
+        
+        # Calcular rentabilidades
+        periodos = {}
+        
+        # Hoy vs Ayer
+        ayer = (hoy - timedelta(days=1)).strftime('%Y-%m-%d')
+        valor_ayer = calcular_valor_en_fecha(ayer)
+        if valor_ayer > 0:
+            periodos['diaria'] = {
+                'label': 'Hoy',
+                'rentabilidad': round(((valor_actual - valor_ayer) / valor_ayer) * 100, 2),
+                'cambio': round(valor_actual - valor_ayer, 2)
+            }
+        
+        # Esta semana (desde el lunes)
+        dias_desde_lunes = hoy.weekday()
+        inicio_semana = (hoy - timedelta(days=dias_desde_lunes)).strftime('%Y-%m-%d')
+        valor_inicio_semana = calcular_valor_en_fecha(inicio_semana)
+        if valor_inicio_semana > 0:
+            periodos['semanal'] = {
+                'label': 'Esta semana',
+                'rentabilidad': round(((valor_actual - valor_inicio_semana) / valor_inicio_semana) * 100, 2),
+                'cambio': round(valor_actual - valor_inicio_semana, 2)
+            }
+        
+        # Este mes
+        inicio_mes = hoy.replace(day=1).strftime('%Y-%m-%d')
+        valor_inicio_mes = calcular_valor_en_fecha(inicio_mes)
+        if valor_inicio_mes > 0:
+            periodos['mensual'] = {
+                'label': 'Este mes',
+                'rentabilidad': round(((valor_actual - valor_inicio_mes) / valor_inicio_mes) * 100, 2),
+                'cambio': round(valor_actual - valor_inicio_mes, 2)
+            }
+        
+        # YTD (Year to Date)
+        inicio_ano = hoy.replace(month=1, day=1).strftime('%Y-%m-%d')
+        valor_inicio_ano = calcular_valor_en_fecha(inicio_ano)
+        if valor_inicio_ano > 0:
+            periodos['ytd'] = {
+                'label': 'Este año (YTD)',
+                'rentabilidad': round(((valor_actual - valor_inicio_ano) / valor_inicio_ano) * 100, 2),
+                'cambio': round(valor_actual - valor_inicio_ano, 2)
+            }
+        
+        # Último mes (30 días)
+        hace_30_dias = (hoy - timedelta(days=30)).strftime('%Y-%m-%d')
+        valor_hace_30 = calcular_valor_en_fecha(hace_30_dias)
+        if valor_hace_30 > 0:
+            periodos['30d'] = {
+                'label': 'Últimos 30 días',
+                'rentabilidad': round(((valor_actual - valor_hace_30) / valor_hace_30) * 100, 2),
+                'cambio': round(valor_actual - valor_hace_30, 2)
+            }
+        
+        # Últimos 3 meses
+        hace_90_dias = (hoy - timedelta(days=90)).strftime('%Y-%m-%d')
+        valor_hace_90 = calcular_valor_en_fecha(hace_90_dias)
+        if valor_hace_90 > 0:
+            periodos['90d'] = {
+                'label': 'Últimos 3 meses',
+                'rentabilidad': round(((valor_actual - valor_hace_90) / valor_hace_90) * 100, 2),
+                'cambio': round(valor_actual - valor_hace_90, 2)
+            }
+        
+        # Desde inicio (rentabilidad real)
+        periodos['total'] = {
+            'label': 'Desde inicio',
+            'rentabilidad': round(rent_total, 2),
+            'cambio': round(valor_actual - coste_total, 2)
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'periodos': periodos,
+                'valor_actual': round(valor_actual, 2),
+                'coste_total': round(coste_total, 2)
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/categories/detect', methods=['POST'])
+def api_detect_category():
+    """Detecta la categoría de un activo automáticamente"""
+    data = request.get_json()
+    ticker = data.get('ticker', '')
+    nombre = data.get('nombre', '')
+    isin = data.get('isin', '')
+    
+    categoria = detectar_categoria(ticker, nombre, isin)
+    
+    return jsonify({
+        'success': True,
+        'data': {
+            'categoria': categoria,
+            'auto_detected': bool(categoria)
+        }
+    })
+
+
+# Archivo para guardar los objetivos de asignación
+TARGETS_FILE = os.path.join(DATA_DIR, 'targets.json')
+
+def cargar_targets():
+    """Carga los objetivos de asignación por categoría"""
+    if os.path.exists(TARGETS_FILE):
+        with open(TARGETS_FILE, 'r') as f:
+            return json.load(f)
+    return {}
+
+def cargar_targets_positions():
+    """Carga los objetivos de asignación por posición (ISIN)"""
+    targets_file = os.path.join(DATA_DIR, 'targets_positions.json')
+    if os.path.exists(targets_file):
+        with open(targets_file, 'r') as f:
+            return json.load(f)
+    return {}
+
+def guardar_targets(targets):
+    """Guarda los objetivos de asignación"""
+    with open(TARGETS_FILE, 'w') as f:
+        json.dump(targets, f, indent=2)
+
+
+@app.route('/api/targets', methods=['GET'])
+def api_get_targets():
+    """Obtiene los objetivos de asignación"""
+    targets = cargar_targets()
+    return jsonify({'success': True, 'data': targets})
+
+
+@app.route('/api/targets', methods=['POST'])
+def api_set_targets():
+    """Guarda los objetivos de asignación"""
+    data = request.get_json()
+    
+    # Validar que los porcentajes suman 100 (o menos)
+    total = sum(data.values())
+    if total > 100:
+        return jsonify({'success': False, 'error': f'Los porcentajes suman {total}%, deben ser máximo 100%'})
+    
+    guardar_targets(data)
+    return jsonify({'success': True, 'message': 'Objetivos guardados'})
+
+
+@app.route('/api/portfolio/allocation')
+def api_portfolio_allocation():
+    """Compara asignación actual vs objetivos (por posición o categoría)"""
+    portfolio = cargar_portfolio()
+    
+    # Primero intentar cargar targets por posición
+    targets_pos = cargar_targets_positions()
+    usar_por_posicion = len(targets_pos) > 0
+    
+    # Si no hay por posición, usar por categoría
+    targets_cat = cargar_targets() if not usar_por_posicion else {}
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    try:
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones = analyzer.actualizar_precios()
+        
+        # Calcular valor total
+        valor_total = sum(p.valor_actual for p in posiciones)
+        
+        allocation = []
+        
+        if usar_por_posicion:
+            # Modo por posición: mostrar cada activo con su target
+            for pos in posiciones:
+                key = pos.isin or pos.id
+                peso_objetivo = targets_pos.get(key, 0)
+                
+                if peso_objetivo == 0:
+                    continue  # Saltar activos sin target
+                
+                peso_actual = (pos.valor_actual / valor_total * 100) if valor_total > 0 else 0
+                diferencia = peso_actual - peso_objetivo
+                
+                valor_objetivo = (peso_objetivo / 100) * valor_total
+                ajuste = valor_objetivo - pos.valor_actual
+                
+                if abs(diferencia) <= 2:
+                    estado = 'ok'
+                elif diferencia > 0:
+                    estado = 'sobreponderado'
+                else:
+                    estado = 'infraponderado'
+                
+                allocation.append({
+                    'categoria': pos.nombre[:30] + '...' if len(pos.nombre) > 30 else pos.nombre,
+                    'valor': round(pos.valor_actual, 2),
+                    'peso_actual': round(peso_actual, 2),
+                    'peso_objetivo': peso_objetivo,
+                    'diferencia': round(diferencia, 2),
+                    'ajuste': round(ajuste, 2),
+                    'estado': estado,
+                    'isin': pos.isin
+                })
+        else:
+            # Modo por categoría (legacy)
+            por_categoria = {}
+            for pos in posiciones:
+                cat = pos.categoria if pos.categoria else 'Sin categoría'
+                if cat not in por_categoria:
+                    por_categoria[cat] = {'valor': 0, 'posiciones': []}
+                por_categoria[cat]['valor'] += pos.valor_actual
+                por_categoria[cat]['posiciones'].append({
+                    'nombre': pos.nombre,
+                    'valor': pos.valor_actual
+                })
+            
+            for cat in set(list(por_categoria.keys()) + list(targets_cat.keys())):
+                valor = por_categoria.get(cat, {}).get('valor', 0)
+                peso_actual = (valor / valor_total * 100) if valor_total > 0 else 0
+                peso_objetivo = targets_cat.get(cat, 0)
+                diferencia = peso_actual - peso_objetivo
+                
+                valor_objetivo = (peso_objetivo / 100) * valor_total
+                ajuste = valor_objetivo - valor
+                
+                if peso_objetivo == 0:
+                    estado = 'sin_objetivo'
+                elif abs(diferencia) <= 2:
+                    estado = 'ok'
+                elif diferencia > 0:
+                    estado = 'sobreponderado'
+                else:
+                    estado = 'infraponderado'
+                
+                allocation.append({
+                    'categoria': cat,
+                    'valor': round(valor, 2),
+                    'peso_actual': round(peso_actual, 2),
+                    'peso_objetivo': peso_objetivo,
+                    'diferencia': round(diferencia, 2),
+                    'ajuste': round(ajuste, 2),
+                    'estado': estado,
+                    'posiciones': por_categoria.get(cat, {}).get('posiciones', [])
+                })
+        
+        # Ordenar por diferencia (más desviados primero)
+        allocation.sort(key=lambda x: abs(x['diferencia']), reverse=True)
+        
+        tiene_objetivos = len(targets_pos) > 0 or len(targets_cat) > 0
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'allocation': allocation,
+                'valor_total': round(valor_total, 2),
+                'tiene_objetivos': tiene_objetivos,
+                'modo': 'posicion' if usar_por_posicion else 'categoria'
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/portfolio/positions/weights')
+def api_positions_weights():
+    """Devuelve las posiciones con su peso actual en la cartera"""
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': True, 'data': {'positions': [], 'valor_total': 0}})
+    
+    try:
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones = analyzer.actualizar_precios()
+        
+        valor_total = sum(p.valor_actual for p in posiciones)
+        
+        positions = []
+        for pos in posiciones:
+            peso = (pos.valor_actual / valor_total * 100) if valor_total > 0 else 0
+            positions.append({
+                'id': pos.id,
+                'isin': pos.isin,
+                'ticker': pos.ticker,
+                'nombre': pos.nombre,
+                'categoria': pos.categoria or 'Sin categoría',
+                'valor': round(pos.valor_actual, 2),
+                'peso_actual': round(peso, 2)
+            })
+        
+        # Ordenar por peso (mayor a menor)
+        positions.sort(key=lambda x: x['peso_actual'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'positions': positions,
+                'valor_total': round(valor_total, 2)
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/targets/positions', methods=['GET', 'POST'])
+def api_targets_positions():
+    """Gestiona los targets por posición individual (ISIN) incluyendo activos nuevos"""
+    targets_file = os.path.join(DATA_DIR, 'targets_positions.json')
+    nuevos_file = os.path.join(DATA_DIR, 'nuevos_activos.json')
+    
+    if request.method == 'GET':
+        try:
+            targets = {}
+            nuevos = {}
+            
+            if os.path.exists(targets_file):
+                with open(targets_file, 'r') as f:
+                    targets = json.load(f)
+            
+            if os.path.exists(nuevos_file):
+                with open(nuevos_file, 'r') as f:
+                    nuevos = json.load(f)
+            
+            return jsonify({'success': True, 'data': targets, 'nuevosActivos': nuevos})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+    
+    else:  # POST
+        try:
+            data = request.get_json()
+            
+            # Soportar tanto formato antiguo (solo targets) como nuevo (targets + nuevosActivos)
+            if isinstance(data, dict) and 'targets' in data:
+                targets = data.get('targets', {})
+                nuevos = data.get('nuevosActivos', {})
+            else:
+                # Formato antiguo: solo targets
+                targets = data
+                nuevos = {}
+            
+            with open(targets_file, 'w') as f:
+                json.dump(targets, f, indent=2)
+            
+            # Guardar nuevos activos si existen
+            if nuevos:
+                # Cargar existentes y actualizar
+                existentes = {}
+                if os.path.exists(nuevos_file):
+                    with open(nuevos_file, 'r') as f:
+                        existentes = json.load(f)
+                existentes.update(nuevos)
+                
+                # Limpiar activos que ya no tienen target
+                existentes = {k: v for k, v in existentes.items() if k in targets}
+                
+                with open(nuevos_file, 'w') as f:
+                    json.dump(existentes, f, indent=2)
+            
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/portfolio/metrics')
+def api_portfolio_metrics():
+    """Calcula métricas avanzadas: Volatilidad, Max Drawdown, Sharpe Ratio"""
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    try:
+        import yfinance as yf
+        import numpy as np
+        from datetime import datetime, timedelta
+        from src.scrapers import JustETFScraper
+        
+        justetf = JustETFScraper()
+        
+        # Obtener histórico de 1 año para calcular métricas
+        all_data = {}
+        for pos in portfolio.posiciones:
+            hist_data = None
+            
+            if pos.ticker:
+                try:
+                    ticker = yf.Ticker(pos.ticker)
+                    hist = ticker.history(period='1y')
+                    if not hist.empty:
+                        hist_data = {d.strftime('%Y-%m-%d'): hist.loc[d, 'Close'] for d in hist.index}
+                except:
+                    pass
+            
+            if not hist_data and pos.isin:
+                try:
+                    historico = justetf.obtener_historico(pos.isin, '1y')
+                    if historico and historico.get('precios'):
+                        hist_data = dict(zip(historico['fechas'], historico['precios']))
+                except:
+                    pass
+            
+            if hist_data:
+                all_data[pos.id] = {
+                    'hist': hist_data,
+                    'cantidad': pos.cantidad
+                }
+        
+        if not all_data:
+            return jsonify({'success': False, 'error': 'No hay datos históricos'})
+        
+        # Calcular valor diario de la cartera
+        all_fechas = set()
+        for data in all_data.values():
+            all_fechas.update(data['hist'].keys())
+        
+        fechas_ordenadas = sorted(list(all_fechas))
+        valores_diarios = []
+        
+        for fecha in fechas_ordenadas:
+            valor_total = 0
+            posiciones_con_valor = 0
+            for pos_id, data in all_data.items():
+                if fecha in data['hist']:
+                    valor_total += data['hist'][fecha] * data['cantidad']
+                    posiciones_con_valor += 1
+            
+            if posiciones_con_valor >= len(all_data) / 2:
+                valores_diarios.append(valor_total)
+        
+        if len(valores_diarios) < 20:
+            return jsonify({'success': False, 'error': 'Datos insuficientes para calcular métricas'})
+        
+        valores = np.array(valores_diarios)
+        
+        # Calcular retornos diarios
+        retornos = np.diff(valores) / valores[:-1]
+        
+        # 1. VOLATILIDAD (desviación estándar anualizada)
+        volatilidad_diaria = np.std(retornos)
+        volatilidad_anual = volatilidad_diaria * np.sqrt(252)  # 252 días de trading
+        
+        # 2. MAX DRAWDOWN
+        peak = valores[0]
+        max_drawdown = 0
+        for valor in valores:
+            if valor > peak:
+                peak = valor
+            drawdown = (peak - valor) / peak
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+        
+        # 3. SHARPE RATIO (asumiendo tasa libre de riesgo del 3% anual)
+        risk_free_rate = 0.03
+        retorno_medio_diario = np.mean(retornos)
+        retorno_anual = retorno_medio_diario * 252
+        
+        if volatilidad_anual > 0:
+            sharpe_ratio = (retorno_anual - risk_free_rate) / volatilidad_anual
+        else:
+            sharpe_ratio = 0
+        
+        # 4. Retorno total
+        retorno_total = (valores[-1] - valores[0]) / valores[0]
+        
+        # 5. Mejor y peor día
+        mejor_dia = np.max(retornos) * 100
+        peor_dia = np.min(retornos) * 100
+        
+        # 6. Días positivos vs negativos
+        dias_positivos = np.sum(retornos > 0)
+        dias_negativos = np.sum(retornos < 0)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'volatilidad': {
+                    'valor': round(volatilidad_anual * 100, 2),
+                    'descripcion': 'Volatilidad anualizada',
+                    'interpretacion': 'Baja' if volatilidad_anual < 0.15 else 'Media' if volatilidad_anual < 0.25 else 'Alta'
+                },
+                'max_drawdown': {
+                    'valor': round(max_drawdown * 100, 2),
+                    'descripcion': 'Máxima caída desde máximo',
+                    'interpretacion': 'Bajo' if max_drawdown < 0.10 else 'Moderado' if max_drawdown < 0.20 else 'Alto'
+                },
+                'sharpe_ratio': {
+                    'valor': round(sharpe_ratio, 2),
+                    'descripcion': 'Retorno ajustado por riesgo',
+                    'interpretacion': 'Excelente' if sharpe_ratio > 1 else 'Bueno' if sharpe_ratio > 0.5 else 'Bajo' if sharpe_ratio > 0 else 'Negativo'
+                },
+                'retorno_total': {
+                    'valor': round(retorno_total * 100, 2),
+                    'descripcion': 'Retorno en el período'
+                },
+                'mejor_dia': round(mejor_dia, 2),
+                'peor_dia': round(peor_dia, 2),
+                'dias_positivos': int(dias_positivos),
+                'dias_negativos': int(dias_negativos),
+                'ratio_dias': round(dias_positivos / (dias_positivos + dias_negativos) * 100, 1) if (dias_positivos + dias_negativos) > 0 else 0
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# Datos de exposición geográfica por tipo de ETF/Fondo
+EXPOSICION_GEOGRAFICA = {
+    # Por palabras clave en el nombre
+    'global': {'USA': 60, 'Europa': 15, 'Japón': 6, 'UK': 4, 'Otros': 15},
+    'world': {'USA': 60, 'Europa': 15, 'Japón': 6, 'UK': 4, 'Otros': 15},
+    'msci world': {'USA': 68, 'Europa': 12, 'Japón': 6, 'UK': 4, 'Otros': 10},
+    'msci acwi': {'USA': 58, 'Europa': 12, 'Emergentes': 12, 'Japón': 5, 'Otros': 13},
+    's&p 500': {'USA': 100},
+    'sp500': {'USA': 100},
+    'nasdaq': {'USA': 100},
+    'russell': {'USA': 100},
+    'euro stoxx': {'Europa': 100},
+    'stoxx 600': {'Europa': 100},
+    'stoxx europe': {'Europa': 100},
+    'europe': {'Europa': 100},
+    'emerging': {'China': 30, 'Taiwán': 15, 'India': 12, 'Corea': 12, 'Brasil': 8, 'Otros EM': 23},
+    'emergentes': {'China': 30, 'Taiwán': 15, 'India': 12, 'Corea': 12, 'Brasil': 8, 'Otros EM': 23},
+    'china': {'China': 100},
+    'india': {'India': 100},
+    'japan': {'Japón': 100},
+    'japon': {'Japón': 100},
+    'uk': {'UK': 100},
+    'ftse 100': {'UK': 100},
+    'dax': {'Alemania': 100},
+    'ibex': {'España': 100},
+    'spain': {'España': 100},
+    'gold': {'Global': 100},
+    'oro': {'Global': 100},
+    'silver': {'Global': 100},
+    'plata': {'Global': 100},
+    'bitcoin': {'Global': 100},
+    'crypto': {'Global': 100},
+    'bond': {'Según emisor': 100},
+    'treasury': {'USA': 100},
+    'aggregate': {'USA': 40, 'Europa': 30, 'Otros': 30},
+}
+
+
+@app.route('/api/portfolio/geography')
+def api_portfolio_geography():
+    """Calcula la exposición geográfica de la cartera"""
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    try:
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones = analyzer.actualizar_precios()
+        
+        valor_total = sum(p.valor_actual for p in posiciones)
+        
+        # Calcular exposición por país
+        exposicion = {}
+        detalles = []
+        
+        for pos in posiciones:
+            nombre_lower = pos.nombre.lower()
+            peso_posicion = pos.valor_actual / valor_total if valor_total > 0 else 0
+            
+            # Encontrar la exposición geográfica de este activo
+            geo_activo = None
+            for keyword, geo in EXPOSICION_GEOGRAFICA.items():
+                if keyword in nombre_lower:
+                    geo_activo = geo
+                    break
+            
+            # Si no encontramos, asumir Global
+            if not geo_activo:
+                geo_activo = {'Global/Otros': 100}
+            
+            # Añadir a la exposición total
+            for pais, pct in geo_activo.items():
+                contribucion = peso_posicion * (pct / 100)
+                if pais not in exposicion:
+                    exposicion[pais] = 0
+                exposicion[pais] += contribucion
+            
+            detalles.append({
+                'nombre': pos.nombre,
+                'valor': pos.valor_actual,
+                'peso': round(peso_posicion * 100, 2),
+                'geografia': geo_activo
+            })
+        
+        # Convertir a porcentajes y ordenar
+        exposicion_list = []
+        for pais, valor in exposicion.items():
+            exposicion_list.append({
+                'pais': pais,
+                'porcentaje': round(valor * 100, 2),
+                'valor': round(valor * valor_total, 2)
+            })
+        
+        exposicion_list.sort(key=lambda x: x['porcentaje'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'exposicion': exposicion_list,
+                'detalles': detalles,
+                'valor_total': round(valor_total, 2)
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/portfolio/rebalance')
+def api_portfolio_rebalance():
+    """Genera sugerencias de rebalanceo basadas en los objetivos"""
+    portfolio = cargar_portfolio()
+    targets = cargar_targets()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    if not targets:
+        return jsonify({'success': False, 'error': 'No hay objetivos configurados'})
+    
+    try:
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones = analyzer.actualizar_precios()
+        
+        valor_total = sum(p.valor_actual for p in posiciones)
+        
+        # Agrupar por categoría
+        por_categoria = {}
+        for pos in posiciones:
+            cat = pos.categoria if pos.categoria else 'Sin categoría'
+            if cat not in por_categoria:
+                por_categoria[cat] = {
+                    'valor': 0,
+                    'posiciones': []
+                }
+            por_categoria[cat]['valor'] += pos.valor_actual
+            por_categoria[cat]['posiciones'].append({
+                'id': pos.id,
+                'nombre': pos.nombre,
+                'valor': pos.valor_actual,
+                'cantidad': pos.cantidad,
+                'precio': pos.precio_actual
+            })
+        
+        # Calcular ajustes necesarios
+        sugerencias = []
+        resumen = {
+            'comprar': [],
+            'vender': [],
+            'ok': []
+        }
+        
+        for cat, target_pct in targets.items():
+            valor_actual = por_categoria.get(cat, {}).get('valor', 0)
+            valor_objetivo = (target_pct / 100) * valor_total
+            diferencia = valor_objetivo - valor_actual
+            pct_actual = (valor_actual / valor_total * 100) if valor_total > 0 else 0
+            
+            if abs(diferencia) < 50:  # Tolerancia de 50€
+                resumen['ok'].append({
+                    'categoria': cat,
+                    'mensaje': f'{cat} está equilibrado'
+                })
+                continue
+            
+            if diferencia > 0:
+                # Necesita comprar
+                posiciones_cat = por_categoria.get(cat, {}).get('posiciones', [])
+                
+                if posiciones_cat:
+                    # Sugerir comprar más del activo existente
+                    pos = posiciones_cat[0]  # El primero de la categoría
+                    unidades = diferencia / pos['precio'] if pos['precio'] > 0 else 0
+                    
+                    sugerencia = {
+                        'tipo': 'comprar',
+                        'categoria': cat,
+                        'activo': pos['nombre'],
+                        'cantidad': round(unidades, 4),
+                        'importe': round(diferencia, 2),
+                        'razon': f'Infraponderado: {pct_actual:.1f}% vs objetivo {target_pct}%',
+                        'icono': '🟢'
+                    }
+                else:
+                    sugerencia = {
+                        'tipo': 'comprar',
+                        'categoria': cat,
+                        'activo': f'Nuevo activo de {cat}',
+                        'cantidad': None,
+                        'importe': round(diferencia, 2),
+                        'razon': f'No tienes exposición a {cat} (objetivo: {target_pct}%)',
+                        'icono': '🟢'
+                    }
+                
+                sugerencias.append(sugerencia)
+                resumen['comprar'].append(sugerencia)
+            
+            else:
+                # Necesita vender (sobreponderado)
+                posiciones_cat = por_categoria.get(cat, {}).get('posiciones', [])
+                
+                if posiciones_cat:
+                    pos = posiciones_cat[0]
+                    unidades = abs(diferencia) / pos['precio'] if pos['precio'] > 0 else 0
+                    
+                    sugerencia = {
+                        'tipo': 'vender',
+                        'categoria': cat,
+                        'activo': pos['nombre'],
+                        'cantidad': round(unidades, 4),
+                        'importe': round(abs(diferencia), 2),
+                        'razon': f'Sobreponderado: {pct_actual:.1f}% vs objetivo {target_pct}%',
+                        'icono': '🔴'
+                    }
+                    
+                    sugerencias.append(sugerencia)
+                    resumen['vender'].append(sugerencia)
+        
+        # Ordenar por importe (mayor primero)
+        sugerencias.sort(key=lambda x: x['importe'], reverse=True)
+        
+        # Calcular aportación sugerida (opcional)
+        total_comprar = sum(s['importe'] for s in resumen['comprar'])
+        total_vender = sum(s['importe'] for s in resumen['vender'])
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'sugerencias': sugerencias,
+                'resumen': {
+                    'total_comprar': round(total_comprar, 2),
+                    'total_vender': round(total_vender, 2),
+                    'neto': round(total_comprar - total_vender, 2),
+                    'categorias_ok': len(resumen['ok']),
+                    'categorias_ajustar': len(resumen['comprar']) + len(resumen['vender'])
+                },
+                'valor_cartera': round(valor_total, 2)
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/portfolio/rebalance/calculate', methods=['POST'])
+def api_rebalance_calculate():
+    """Calcula exactamente qué comprar/vender para rebalancear por activo"""
+    data = request.get_json()
+    aportacion = float(data.get('aportacion', 0))
+    solo_compras = data.get('solo_compras', True)  # False = modo puro con ventas
+    
+    portfolio = cargar_portfolio()
+    
+    # Intentar cargar targets por posición primero, si no hay, usar por categoría
+    targets = cargar_targets_positions()
+    usar_por_posicion = len(targets) > 0
+    
+    # Cargar activos nuevos (que no están en cartera pero tienen target)
+    nuevos_file = os.path.join(DATA_DIR, 'nuevos_activos.json')
+    nuevos_activos = {}
+    if os.path.exists(nuevos_file):
+        with open(nuevos_file, 'r') as f:
+            nuevos_activos = json.load(f)
+    
+    if not usar_por_posicion:
+        targets = cargar_targets()
+    
+    if not portfolio.posiciones and not nuevos_activos:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    if not targets:
+        return jsonify({'success': False, 'error': 'Configura primero tus objetivos en Target Allocation'})
+    
+    try:
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones = analyzer.actualizar_precios() if portfolio.posiciones else []
+        
+        valor_actual = sum(p.valor_actual for p in posiciones)
+        valor_futuro = valor_actual + aportacion
+        
+        # ISINs de posiciones actuales
+        isins_en_cartera = set(p.isin or p.id for p in posiciones)
+        
+        # Calcular distribución por activo (usando ISIN como clave)
+        distribucion = []
+        compras = []
+        ventas = []
+        total_a_comprar = 0
+        total_a_vender = 0
+        
+        # Procesar posiciones existentes
+        for pos in posiciones:
+            # Determinar el target para esta posición
+            if usar_por_posicion:
+                key = pos.isin or pos.id
+                target_pct = targets.get(key, 0)
+            else:
+                # Usar target por categoría
+                target_pct = targets.get(pos.categoria, 0)
+            
+            if target_pct == 0:
+                continue  # Saltar activos sin target configurado
+            
+            pct_actual = (pos.valor_actual / valor_actual * 100) if valor_actual > 0 else 0
+            
+            # Valor objetivo después de la aportación
+            valor_objetivo = (target_pct / 100) * valor_futuro
+            diferencia = valor_objetivo - pos.valor_actual
+            
+            dist_item = {
+                'activo': pos.nombre,
+                'isin': pos.isin,
+                'categoria': pos.categoria,
+                'pct_actual': round(pct_actual, 2),
+                'pct_objetivo': target_pct,
+                'valor_actual': round(pos.valor_actual, 2),
+                'valor_objetivo': round(valor_objetivo, 2),
+                'diferencia': round(diferencia, 2)
+            }
+            distribucion.append(dist_item)
+            
+            # Si necesita comprar (infraponderado)
+            if diferencia > 0:
+                compra = {
+                    'categoria': pos.categoria or 'Sin categoría',
+                    'nombre': pos.nombre,
+                    'isin': pos.isin,
+                    'ticker': pos.ticker,
+                    'precio_actual': pos.precio_actual,
+                    'importe_ideal': round(diferencia, 2),
+                    'unidades_ideal': round(diferencia / pos.precio_actual, 4) if pos.precio_actual > 0 else 0,
+                    'prioridad': diferencia
+                }
+                compras.append(compra)
+                total_a_comprar += diferencia
+            
+            # Si necesita vender (sobreponderado) - solo en modo puro
+            elif diferencia < 0 and not solo_compras:
+                importe_venta = abs(diferencia)
+                unidades_venta = importe_venta / pos.precio_actual if pos.precio_actual > 0 else 0
+                # No vender más de lo que tenemos
+                unidades_venta = min(unidades_venta, pos.cantidad)
+                importe_venta = unidades_venta * pos.precio_actual
+                
+                if unidades_venta > 0:
+                    venta = {
+                        'categoria': pos.categoria or 'Sin categoría',
+                        'nombre': pos.nombre,
+                        'isin': pos.isin,
+                        'ticker': pos.ticker,
+                        'precio_actual': pos.precio_actual,
+                        'importe_ideal': round(importe_venta, 2),
+                        'unidades_ideal': round(unidades_venta, 4),
+                        'prioridad': importe_venta
+                    }
+                    ventas.append(venta)
+                    total_a_vender += importe_venta
+        
+        # Procesar activos nuevos (que no están en cartera pero tienen target)
+        if usar_por_posicion:
+            for isin, target_pct in targets.items():
+                if isin in isins_en_cartera:
+                    continue  # Ya procesado arriba
+                
+                if isin not in nuevos_activos:
+                    continue  # No tenemos info de este activo
+                
+                activo_info = nuevos_activos[isin]
+                precio = activo_info.get('precio', 0)
+                
+                if precio <= 0:
+                    continue  # No podemos calcular sin precio
+                
+                # Valor objetivo (el activo no existe, así que valor actual = 0)
+                valor_objetivo = (target_pct / 100) * valor_futuro
+                diferencia = valor_objetivo  # Todo es compra
+                
+                dist_item = {
+                    'activo': activo_info.get('nombre', isin),
+                    'isin': isin,
+                    'categoria': activo_info.get('categoria', 'Otros'),
+                    'pct_actual': 0,
+                    'pct_objetivo': target_pct,
+                    'valor_actual': 0,
+                    'valor_objetivo': round(valor_objetivo, 2),
+                    'diferencia': round(diferencia, 2),
+                    'es_nuevo': True
+                }
+                distribucion.append(dist_item)
+                
+                # Este activo siempre necesita compra (no está en cartera)
+                compra = {
+                    'categoria': activo_info.get('categoria', 'Otros'),
+                    'nombre': activo_info.get('nombre', isin),
+                    'isin': isin,
+                    'ticker': None,
+                    'precio_actual': precio,
+                    'importe_ideal': round(diferencia, 2),
+                    'unidades_ideal': round(diferencia / precio, 4),
+                    'prioridad': diferencia,
+                    'es_nuevo': True
+                }
+                compras.append(compra)
+                total_a_comprar += diferencia
+        
+        # En modo puro, las ventas financian las compras
+        if not solo_compras:
+            dinero_disponible = total_a_vender
+        else:
+            dinero_disponible = aportacion
+        
+        # Distribuir compras según el dinero disponible
+        if dinero_disponible > 0 and total_a_comprar > 0:
+            factor = min(1, dinero_disponible / total_a_comprar)
+            
+            for compra in compras:
+                compra['importe_asignado'] = round(compra['importe_ideal'] * factor, 2)
+                compra['unidades_comprar'] = round(compra['importe_asignado'] / compra['precio_actual'], 4) if compra['precio_actual'] > 0 else 0
+                if compra['precio_actual'] > 10:
+                    compra['unidades_redondeadas'] = max(1, round(compra['unidades_comprar']))
+                    compra['importe_redondeado'] = round(compra['unidades_redondeadas'] * compra['precio_actual'], 2)
+                else:
+                    compra['unidades_redondeadas'] = round(compra['unidades_comprar'], 2)
+                    compra['importe_redondeado'] = round(compra['unidades_redondeadas'] * compra['precio_actual'], 2)
+        
+        # Redondear ventas
+        for venta in ventas:
+            if venta['precio_actual'] > 10:
+                venta['unidades_redondeadas'] = max(1, round(venta['unidades_ideal']))
+            else:
+                venta['unidades_redondeadas'] = round(venta['unidades_ideal'], 2)
+            venta['importe_redondeado'] = round(venta['unidades_redondeadas'] * venta['precio_actual'], 2)
+        
+        # Ordenar por prioridad
+        compras.sort(key=lambda x: x.get('prioridad', 0), reverse=True)
+        ventas.sort(key=lambda x: x.get('prioridad', 0), reverse=True)
+        
+        # Calcular totales
+        total_compras_redondeado = sum(c.get('importe_redondeado', 0) for c in compras)
+        total_ventas_redondeado = sum(v.get('importe_redondeado', 0) for v in ventas)
+        
+        if solo_compras:
+            sobrante = round(aportacion - total_compras_redondeado, 2)
+        else:
+            sobrante = round(total_ventas_redondeado - total_compras_redondeado, 2)
+        
+        # Calcular nueva distribución después de operaciones
+        nueva_distribucion = []
+        for dist in distribucion:
+            compra_item = next((c for c in compras if c['isin'] == dist['isin']), None)
+            venta_item = next((v for v in ventas if v['isin'] == dist['isin']), None)
+            
+            importe_compra = compra_item.get('importe_redondeado', 0) if compra_item else 0
+            importe_venta = venta_item.get('importe_redondeado', 0) if venta_item else 0
+            
+            nuevo_valor = dist['valor_actual'] + importe_compra - importe_venta
+            nuevo_pct = (nuevo_valor / valor_futuro * 100) if valor_futuro > 0 else 0
+            
+            nueva_distribucion.append({
+                'categoria': dist.get('activo', dist.get('categoria', '')),  # Usar nombre del activo
+                'pct_antes': dist['pct_actual'],
+                'pct_despues': round(nuevo_pct, 2),
+                'pct_objetivo': dist['pct_objetivo'],
+                'mejora': round(abs(nuevo_pct - dist['pct_objetivo']) - abs(dist['pct_actual'] - dist['pct_objetivo']), 2)
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'aportacion': aportacion,
+                'valor_actual': round(valor_actual, 2),
+                'valor_futuro': round(valor_futuro, 2),
+                'compras': compras,
+                'ventas': ventas,
+                'total_a_comprar': round(total_compras_redondeado, 2),
+                'total_a_vender': round(total_ventas_redondeado, 2),
+                'total_a_invertir': round(total_compras_redondeado, 2),
+                'sobrante': max(0, sobrante),
+                'distribucion_actual': distribucion,
+                'nueva_distribucion': nueva_distribucion
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/portfolio/desviaciones')
+def api_portfolio_desviaciones():
+    """Verifica si hay categorías desviadas del objetivo"""
+    portfolio = cargar_portfolio()
+    targets = cargar_targets()
+    
+    if not portfolio.posiciones or not targets:
+        return jsonify({'success': True, 'data': {'alertas': []}})
+    
+    try:
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones = analyzer.actualizar_precios()
+        
+        valor_total = sum(p.valor_actual for p in posiciones)
+        if valor_total <= 0:
+            return jsonify({'success': True, 'data': {'alertas': []}})
+        
+        # Calcular distribución por categoría
+        por_categoria = {}
+        for pos in posiciones:
+            cat = pos.categoria if pos.categoria else 'Sin categoría'
+            por_categoria[cat] = por_categoria.get(cat, 0) + pos.valor_actual
+        
+        alertas = []
+        umbral_alerta = 5  # Alertar si desviación > 5%
+        
+        for cat, target_pct in targets.items():
+            valor_cat = por_categoria.get(cat, 0)
+            pct_actual = (valor_cat / valor_total * 100)
+            diferencia = pct_actual - target_pct
+            
+            if abs(diferencia) >= umbral_alerta:
+                alertas.append({
+                    'categoria': cat,
+                    'actual': round(pct_actual, 2),
+                    'objetivo': target_pct,
+                    'diferencia': round(diferencia, 2),
+                    'tipo': 'sobreponderado' if diferencia > 0 else 'infraponderado'
+                })
+        
+        # Ordenar por desviación absoluta
+        alertas.sort(key=lambda x: abs(x['diferencia']), reverse=True)
+        
+        return jsonify({'success': True, 'data': {'alertas': alertas}})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# =====================
+# SIMULADOR WHAT IF
+# =====================
+@app.route('/api/simulator/projection', methods=['POST'])
+def api_simulator_projection():
+    """Simula proyección de inversión con aportaciones periódicas"""
+    data = request.get_json()
+    
+    capital_inicial = float(data.get('capital_inicial', 0))
+    aportacion_mensual = float(data.get('aportacion_mensual', 0))
+    anos = int(data.get('anos', 10))
+    rentabilidad_anual = float(data.get('rentabilidad_anual', 7))  # % anual esperado
+    
+    try:
+        # Convertir rentabilidad anual a mensual
+        rent_mensual = (1 + rentabilidad_anual / 100) ** (1/12) - 1
+        
+        meses = anos * 12
+        
+        # Simular mes a mes
+        proyeccion = []
+        valor = capital_inicial
+        total_aportado = capital_inicial
+        
+        for mes in range(meses + 1):
+            ano = mes // 12
+            mes_del_ano = mes % 12
+            
+            proyeccion.append({
+                'mes': mes,
+                'ano': ano,
+                'valor': round(valor, 2),
+                'aportado': round(total_aportado, 2),
+                'beneficio': round(valor - total_aportado, 2),
+                'label': f'Año {ano}' if mes_del_ano == 0 else None
+            })
+            
+            # Aplicar rentabilidad y añadir aportación
+            if mes < meses:
+                valor = valor * (1 + rent_mensual) + aportacion_mensual
+                total_aportado += aportacion_mensual
+        
+        # Calcular escenarios: pesimista, esperado, optimista
+        def calcular_escenario(rent_anual):
+            r_mes = (1 + rent_anual / 100) ** (1/12) - 1
+            v = capital_inicial
+            for m in range(meses):
+                v = v * (1 + r_mes) + aportacion_mensual
+            return round(v, 2)
+        
+        escenarios = {
+            'pesimista': {
+                'rentabilidad': max(0, rentabilidad_anual - 4),
+                'valor_final': calcular_escenario(max(0, rentabilidad_anual - 4))
+            },
+            'esperado': {
+                'rentabilidad': rentabilidad_anual,
+                'valor_final': calcular_escenario(rentabilidad_anual)
+            },
+            'optimista': {
+                'rentabilidad': rentabilidad_anual + 4,
+                'valor_final': calcular_escenario(rentabilidad_anual + 4)
+            }
+        }
+        
+        # Resumen
+        valor_final = proyeccion[-1]['valor']
+        total_aportado_final = proyeccion[-1]['aportado']
+        beneficio_total = valor_final - total_aportado_final
+        rentabilidad_total = (beneficio_total / total_aportado_final * 100) if total_aportado_final > 0 else 0
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'proyeccion': proyeccion,
+                'resumen': {
+                    'valor_final': round(valor_final, 2),
+                    'total_aportado': round(total_aportado_final, 2),
+                    'beneficio': round(beneficio_total, 2),
+                    'rentabilidad_total': round(rentabilidad_total, 2),
+                    'anos': anos,
+                    'aportacion_mensual': aportacion_mensual,
+                    'rentabilidad_anual': rentabilidad_anual
+                },
+                'escenarios': escenarios
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# =====================
+# OBJETIVOS DE AHORRO
+# =====================
+GOALS_FILE = os.path.join(DATA_DIR, 'goals.json')
+
+def cargar_goals():
+    """Carga los objetivos de ahorro"""
+    if os.path.exists(GOALS_FILE):
+        with open(GOALS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def guardar_goals(goals):
+    """Guarda los objetivos de ahorro"""
+    with open(GOALS_FILE, 'w') as f:
+        json.dump(goals, f, indent=2)
+
+
+@app.route('/api/goals', methods=['GET'])
+def api_get_goals():
+    """Obtiene todos los objetivos de ahorro"""
+    goals = cargar_goals()
+    portfolio = cargar_portfolio()
+    
+    # Calcular valor actual de la cartera
+    valor_actual = 0
+    if portfolio.posiciones:
+        try:
+            analyzer = PortfolioAnalyzer(portfolio)
+            posiciones = analyzer.actualizar_precios()
+            valor_actual = sum(p.valor_actual for p in posiciones)
+        except:
+            valor_actual = sum(p.valor_actual for p in portfolio.posiciones)
+    
+    # Actualizar progreso de cada objetivo
+    from datetime import datetime
+    hoy = datetime.now()
+    
+    for goal in goals:
+        goal['valor_actual'] = round(valor_actual, 2)
+        goal['progreso'] = round((valor_actual / goal['objetivo']) * 100, 1) if goal['objetivo'] > 0 else 0
+        goal['restante'] = round(max(0, goal['objetivo'] - valor_actual), 2)
+        
+        # Calcular tiempo restante
+        if goal.get('fecha_objetivo'):
+            fecha_obj = datetime.strptime(goal['fecha_objetivo'], '%Y-%m-%d')
+            dias_restantes = (fecha_obj - hoy).days
+            goal['dias_restantes'] = max(0, dias_restantes)
+            goal['meses_restantes'] = max(0, dias_restantes // 30)
+            
+            # Calcular ahorro mensual necesario
+            if dias_restantes > 0 and goal['restante'] > 0:
+                meses = dias_restantes / 30
+                goal['ahorro_mensual_necesario'] = round(goal['restante'] / meses, 2) if meses > 0 else 0
+            else:
+                goal['ahorro_mensual_necesario'] = 0
+            
+            # Estado del objetivo
+            if valor_actual >= goal['objetivo']:
+                goal['estado'] = 'completado'
+            elif dias_restantes <= 0:
+                goal['estado'] = 'vencido'
+            elif goal['progreso'] >= (100 - (dias_restantes / 365 * 100)):
+                goal['estado'] = 'en_camino'
+            else:
+                goal['estado'] = 'retrasado'
+        else:
+            goal['dias_restantes'] = None
+            goal['meses_restantes'] = None
+            goal['ahorro_mensual_necesario'] = None
+            goal['estado'] = 'completado' if valor_actual >= goal['objetivo'] else 'en_progreso'
+    
+    return jsonify({'success': True, 'data': goals})
+
+
+@app.route('/api/goals', methods=['POST'])
+def api_add_goal():
+    """Añade un nuevo objetivo de ahorro"""
+    import uuid
+    data = request.get_json()
+    
+    goals = cargar_goals()
+    
+    new_goal = {
+        'id': str(uuid.uuid4())[:8],  # UUID corto para evitar duplicados
+        'nombre': data.get('nombre', 'Mi objetivo'),
+        'objetivo': float(data.get('objetivo', 0)),
+        'fecha_objetivo': data.get('fecha_objetivo'),  # YYYY-MM-DD o None
+        'icono': data.get('icono', '🎯'),
+        'color': data.get('color', '#3b82f6'),
+        'fecha_creacion': datetime.now().strftime('%Y-%m-%d')
+    }
+    
+    goals.append(new_goal)
+    guardar_goals(goals)
+    
+    return jsonify({'success': True, 'data': new_goal})
+
+
+@app.route('/api/goals/<goal_id>', methods=['DELETE'])
+def api_delete_goal(goal_id):
+    """Elimina un objetivo"""
+    goals = cargar_goals()
+    goals = [g for g in goals if g['id'] != goal_id]
+    guardar_goals(goals)
+    
+    return jsonify({'success': True})
+
+
+@app.route('/api/goals/<goal_id>', methods=['PUT'])
+def api_update_goal(goal_id):
+    """Actualiza un objetivo"""
+    data = request.get_json()
+    goals = cargar_goals()
+    
+    for goal in goals:
+        if goal['id'] == goal_id:
+            goal['nombre'] = data.get('nombre', goal['nombre'])
+            goal['objetivo'] = float(data.get('objetivo', goal['objetivo']))
+            goal['fecha_objetivo'] = data.get('fecha_objetivo', goal.get('fecha_objetivo'))
+            goal['icono'] = data.get('icono', goal.get('icono', '🎯'))
+            break
+    
+    guardar_goals(goals)
+    return jsonify({'success': True})
+
+
+@app.route('/api/categories/auto-assign', methods=['POST'])
+def api_auto_assign_categories():
+    """Auto-asigna categorías a todas las posiciones sin categoría"""
+    try:
+        portfolio = cargar_portfolio()
+        asignadas = 0
+        
+        for pos in portfolio.posiciones:
+            if not pos.categoria:
+                categoria = detectar_categoria(pos.ticker, pos.nombre, pos.isin)
+                if categoria:
+                    pos.categoria = categoria
+                    asignadas += 1
+        
+        if asignadas > 0:
+            guardar_portfolio(portfolio)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Se asignaron {asignadas} categorías automáticamente',
+            'asignadas': asignadas
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/position/delete/<position_id>', methods=['DELETE'])
+def api_delete_position(position_id):
+    """Elimina una posición"""
+    try:
+        portfolio = cargar_portfolio()
+        
+        if portfolio.eliminar_posicion(position_id):
+            guardar_portfolio(portfolio)
+            return jsonify({'success': True, 'message': 'Posición eliminada'})
+        else:
+            return jsonify({'success': False, 'error': 'Posición no encontrada'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/historical/<ticker>')
+def api_historical(ticker):
+    """Obtiene histórico de precios (Yahoo Finance o justETF como fallback)"""
+    periodo = request.args.get('periodo', '6mo')
+    isin = request.args.get('isin', '')  # ISIN opcional para fallback a justETF
+    
+    print(f"[Historical] Solicitando ticker={ticker}, isin={isin}, periodo={periodo}")
+    
+    historico = None
+    fuente = 'yahoo'
+    
+    # 1. Intentar con Yahoo Finance si hay ticker válido
+    if ticker and ticker not in ['null', 'undefined', 'none', '']:
+        print(f"[Historical] Intentando Yahoo Finance con ticker: {ticker}")
+        historico = price_fetcher.obtener_historico(ticker, periodo)
+        if historico is not None and not historico.empty:
+            print(f"[Historical] Yahoo Finance OK: {len(historico)} puntos")
+        else:
+            print(f"[Historical] Yahoo Finance sin datos")
+    
+    # 2. Si no hay datos de Yahoo, intentar con justETF usando el ISIN
+    if (historico is None or (hasattr(historico, 'empty') and historico.empty)) and isin:
+        print(f"[Historical] Intentando justETF con ISIN: {isin}")
+        try:
+            from src.scrapers import JustETFScraper
+            justetf = JustETFScraper()
+            
+            # Mapear período al formato de justETF
+            periodo_map = {
+                '1w': '1mo',  # justETF no tiene 1 semana, usar 1 mes
+                '1mo': '1mo',
+                '3mo': '3mo', 
+                '6mo': '6mo',
+                '1y': '1y',
+                '2y': '2y',
+                '5y': '5y',
+                'ytd': '1y',
+                'max': '5y'
+            }
+            periodo_justetf = periodo_map.get(periodo, '1y')
+            
+            resultado = justetf.obtener_historico(isin, periodo_justetf)
+            
+            if resultado and resultado.get('precios') and len(resultado['precios']) > 0:
+                print(f"[Historical] justETF OK: {len(resultado['precios'])} puntos")
+                # Obtener nombre del ETF
+                nombre_etf = resultado.get('nombre', isin)
+                if nombre_etf == isin:
+                    # Intentar obtener nombre desde la info del ETF
+                    try:
+                        info_etf = justetf.obtener_precio(isin)
+                        if info_etf and info_etf.get('nombre'):
+                            nombre_etf = info_etf['nombre']
+                    except:
+                        pass
+                
+                # Convertir formato justETF a formato esperado
+                return jsonify({
+                    'success': True, 
+                    'data': {
+                        'fechas': resultado['fechas'],
+                        'precios': [round(p, 2) for p in resultado['precios']],
+                        'nombre': nombre_etf
+                    },
+                    'fuente': 'justetf'
+                })
+            else:
+                print(f"[Historical] justETF sin datos")
+        except Exception as e:
+            print(f"[Historical] Error justETF: {e}")
+    
+    if historico is None or (hasattr(historico, 'empty') and historico.empty):
+        print(f"[Historical] No hay datos de ninguna fuente")
+        return jsonify({'success': False, 'error': 'No hay datos históricos disponibles'})
+    
+    # Convertir a formato para Chart.js
+    data = {
+        'fechas': [d.strftime('%Y-%m-%d') for d in historico.index],
+        'precios': [round(p, 2) for p in historico['Close'].tolist()]
+    }
+    
+    # Obtener nombre del activo
+    try:
+        import yfinance as yf
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        nombre = info.get('longName') or info.get('shortName') or ticker
+        data['nombre'] = nombre
+    except:
+        data['nombre'] = ticker
+    
+    print(f"[Historical] Devolviendo datos de {fuente}: {len(data['fechas'])} puntos, nombre: {data.get('nombre', 'N/A')}")
+    return jsonify({'success': True, 'data': data, 'fuente': fuente})
+
+
+@app.route('/details')
+def details_page():
+    """Página de detalles de una posición"""
+    return render_template('details.html')
+
+
+@app.route('/api/stats/<ticker>')
+def api_stats(ticker):
+    """Obtiene estadísticas clave del activo"""
+    try:
+        import yfinance as yf
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        # Calcular dividendo - Yahoo a veces devuelve valores incorrectos
+        raw_dividend = info.get('dividendYield') or 0
+        # Si viene como decimal (0.028 = 2.8%), multiplicar por 100
+        # Si viene como porcentaje (2.8), no multiplicar
+        # Si es mayor a 1, asumimos que ya viene en porcentaje
+        if raw_dividend > 0 and raw_dividend < 1:
+            dividend_yield = raw_dividend * 100
+        elif raw_dividend >= 1 and raw_dividend <= 25:
+            dividend_yield = raw_dividend  # Ya viene en %
+        else:
+            dividend_yield = None  # Valor sospechoso, ignorar
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'high52w': info.get('fiftyTwoWeekHigh'),
+                'low52w': info.get('fiftyTwoWeekLow'),
+                'avg50d': info.get('fiftyDayAverage'),
+                'avg200d': info.get('twoHundredDayAverage'),
+                'volume': info.get('volume') or info.get('averageVolume'),
+                'marketCap': info.get('marketCap'),
+                'per': info.get('trailingPE') or info.get('forwardPE'),
+                'dividendYield': dividend_yield
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/ticker/search/<isin>')
+def api_search_ticker(isin):
+    """Busca el ticker de Yahoo Finance para un ISIN"""
+    try:
+        ticker = price_fetcher.buscar_ticker_por_isin(isin)
+        
+        if ticker:
+            return jsonify({
+                'success': True,
+                'data': {
+                    'ticker': ticker,
+                    'isin': isin
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'No se encontró ticker para este ISIN'
+            })
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
+
+if __name__ == '__main__':
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Portfolio Tracker Web App')
+    parser.add_argument('--port', type=int, default=5000, help='Puerto del servidor (default: 5000)')
+    parser.add_argument('--host', type=str, default='0.0.0.0', help='Host del servidor (default: 0.0.0.0)')
+    args = parser.parse_args()
+    
+    print("\n" + "="*50)
+    print("📊 PORTFOLIO TRACKER - Web Dashboard")
+    print("="*50)
+    print(f"\n🌐 Abre tu navegador en: http://localhost:{args.port}")
+    print("\n💡 Pulsa Ctrl+C para detener el servidor\n")
+    
+    app.run(debug=True, host=args.host, port=args.port)

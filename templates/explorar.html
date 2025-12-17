@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Explorar - Portfolio Tracker</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+            <a href="/" class="text-2xl font-bold text-white flex items-center gap-2">
+                <span class="text-3xl">📊</span> Portfolio Tracker
+            </a>
+            <div class="flex items-center gap-3">
+                <a href="/" class="text-gray-400 hover:text-white transition flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                    </svg>
+                    Dashboard
+                </a>
+                <span class="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    Explorar
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Buscador -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+            <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                <span>🔍</span> Buscar Activo
+            </h2>
+            <p class="text-gray-400 text-sm mb-4">
+                Busca cualquier acción, ETF o fondo por nombre, ticker o ISIN para analizarlo sin añadirlo a tu cartera
+            </p>
+            
+            <div class="flex flex-col sm:flex-row gap-4">
+                <div class="flex-1">
+                    <input type="text" id="search-input" 
+                        placeholder="Ej: AAPL, Nestlé, IE00B4L5Y983, Bitcoin..."
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-lg focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition"
+                        onkeypress="if(event.key === 'Enter') buscarActivo()">
+                </div>
+                <button onclick="buscarActivo()" 
+                    class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    Analizar
+                </button>
+            </div>
+            
+            <!-- Ejemplos rápidos -->
+            <div class="mt-4 flex flex-wrap gap-2">
+                <span class="text-xs text-gray-500">Ejemplos:</span>
+                <button onclick="buscarRapido('AAPL')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">Apple (AAPL)</button>
+                <button onclick="buscarRapido('MSFT')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">Microsoft (MSFT)</button>
+                <button onclick="buscarRapido('NESN.SW')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">Nestlé</button>
+                <button onclick="buscarRapido('IBE.MC')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">Iberdrola</button>
+                <button onclick="buscarRapido('BTC-USD')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">Bitcoin</button>
+                <button onclick="buscarRapido('GC=F')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">Oro</button>
+                <button onclick="buscarRapido('IE00B4L5Y983')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">iShares MSCI World</button>
+            </div>
+        </div>
+
+        <!-- Resultado del análisis -->
+        <div id="resultado-container" class="hidden">
+            <!-- Info básica del activo -->
+            <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 id="activo-nombre" class="text-2xl font-bold">-</h2>
+                        <p id="activo-ticker" class="text-gray-400">-</p>
+                    </div>
+                    <div class="text-right">
+                        <div id="activo-precio" class="text-3xl font-bold">-</div>
+                        <div id="activo-cambio" class="text-sm">-</div>
+                    </div>
+                </div>
+                
+                <!-- Estadísticas clave -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 mt-6" id="stats-grid">
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <span class="text-gray-400 text-xs">Máx 52 sem</span>
+                        <div class="font-medium" id="stat-high52">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <span class="text-gray-400 text-xs">Mín 52 sem</span>
+                        <div class="font-medium" id="stat-low52">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <span class="text-gray-400 text-xs">Media 50d</span>
+                        <div class="font-medium" id="stat-avg50">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <span class="text-gray-400 text-xs">Media 200d</span>
+                        <div class="font-medium" id="stat-avg200">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <span class="text-gray-400 text-xs">Volumen</span>
+                        <div class="font-medium" id="stat-volume">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <span class="text-gray-400 text-xs">Cap. Mercado</span>
+                        <div class="font-medium" id="stat-marketcap">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <span class="text-gray-400 text-xs">PER</span>
+                        <div class="font-medium" id="stat-per">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <span class="text-gray-400 text-xs">Dividendo</span>
+                        <div class="font-medium" id="stat-dividend">-</div>
+                    </div>
+                </div>
+                
+                <!-- Botones de acción -->
+                <div class="mt-6 flex flex-wrap justify-center gap-4">
+                    <button onclick="anadirACartera()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Añadir a mi Cartera
+                    </button>
+                    <button onclick="mostrarModalAlerta()" class="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                        </svg>
+                        Crear Alerta de Precio
+                    </button>
+                </div>
+            </div>
+
+            <!-- Gráfico y análisis técnico -->
+            <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <span>📈</span> Histórico de Precios
+                    </h3>
+                    <div class="flex gap-2">
+                        <button onclick="loadChart('1mo')" class="period-btn px-3 py-1 rounded text-sm bg-gray-700 hover:bg-gray-600 transition" data-period="1mo">1M</button>
+                        <button onclick="loadChart('3mo')" class="period-btn px-3 py-1 rounded text-sm bg-gray-700 hover:bg-gray-600 transition" data-period="3mo">3M</button>
+                        <button onclick="loadChart('6mo')" class="period-btn px-3 py-1 rounded text-sm bg-gray-700 hover:bg-gray-600 transition" data-period="6mo">6M</button>
+                        <button onclick="loadChart('1y')" class="period-btn px-3 py-1 rounded text-sm bg-blue-600 transition" data-period="1y">1A</button>
+                        <button onclick="loadChart('5y')" class="period-btn px-3 py-1 rounded text-sm bg-gray-700 hover:bg-gray-600 transition" data-period="5y">5A</button>
+                        <button onclick="loadChart('10y')" class="period-btn px-3 py-1 rounded text-sm bg-gray-700 hover:bg-gray-600 transition" data-period="10y">10A</button>
+                        <button onclick="loadChart('max')" class="period-btn px-3 py-1 rounded text-sm bg-gray-700 hover:bg-gray-600 transition" data-period="max">Máx</button>
+                    </div>
+                </div>
+                
+                <!-- Controles de indicadores -->
+                <div class="flex flex-wrap items-center gap-4 mb-4 text-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-400">📊 Medias:</span>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="sma-20" class="sma-toggle rounded" data-period="20" data-color="#eab308">
+                            <span class="text-xs text-yellow-400">SMA20</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="sma-50" class="sma-toggle rounded" data-period="50" data-color="#3b82f6">
+                            <span class="text-xs text-blue-400">SMA50</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="sma-200" class="sma-toggle rounded" data-period="200" data-color="#a855f7">
+                            <span class="text-xs text-purple-400">SMA200</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="bollinger-toggle" class="rounded">
+                            <span class="text-xs text-pink-400">BB</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer">
+                            <input type="checkbox" id="rsi-toggle" class="rounded">
+                            <span class="text-xs text-cyan-400">RSI</span>
+                        </label>
+                    </div>
+                    
+                    <div class="w-px h-6 bg-gray-600"></div>
+                    
+                    <button onclick="toggleSoportesResistencias()" class="px-2 py-1 bg-blue-600/50 hover:bg-blue-600 text-blue-200 rounded text-xs transition">
+                        📏 S/R
+                    </button>
+                    <button onclick="toggleCorrelacion()" class="px-2 py-1 bg-green-600/50 hover:bg-green-600 text-green-200 rounded text-xs transition">
+                        🔗 Correlación
+                    </button>
+                    <button onclick="toggleDCASimulator()" class="px-2 py-1 bg-purple-600/50 hover:bg-purple-600 text-purple-200 rounded text-xs transition">
+                        💰 DCA
+                    </button>
+                </div>
+                
+                <!-- Gráfico -->
+                <div class="h-80 relative">
+                    <div id="chart-loader" class="absolute inset-0 flex items-center justify-center bg-gray-800">
+                        <div class="loader"></div>
+                    </div>
+                    <canvas id="price-chart"></canvas>
+                </div>
+                
+                <!-- Gráfico RSI -->
+                <div id="rsi-container" class="hidden mt-4">
+                    <div class="h-32 relative bg-gray-900/50 rounded-lg p-2">
+                        <canvas id="rsi-chart"></canvas>
+                    </div>
+                    <div class="flex items-center justify-between mt-1 text-xs text-gray-500">
+                        <span>RSI (14 días)</span>
+                        <div class="flex gap-4">
+                            <span class="text-red-400">Sobrecompra &gt;70</span>
+                            <span class="text-green-400">Sobreventa &lt;30</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Zona de Alertas -->
+                <div id="alerts-container" class="mt-3 space-y-2"></div>
+                
+                <!-- Indicadores rápidos -->
+                <div id="quick-indicators" class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <div class="text-xs text-gray-400 mb-1">📊 RSI Actual</div>
+                        <div class="text-xl font-bold" id="rsi-value">-</div>
+                        <div class="text-xs mt-1" id="rsi-signal">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <div class="text-xs text-gray-400 mb-1">🔥 Racha Actual</div>
+                        <div class="text-xl font-bold" id="streak-value">-</div>
+                        <div class="text-xs mt-1" id="streak-detail">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <div class="text-xs text-gray-400 mb-1">📈 Beta vs S&P500</div>
+                        <div class="text-xl font-bold" id="beta-value">-</div>
+                        <div class="text-xs mt-1" id="beta-signal">-</div>
+                    </div>
+                    <div class="p-3 bg-gray-700/30 rounded-lg text-center">
+                        <div class="text-xs text-gray-400 mb-1">📉 Volatilidad</div>
+                        <div class="text-xl font-bold" id="volatility-value">-</div>
+                        <div class="text-xs mt-1" id="volatility-signal">-</div>
+                    </div>
+                </div>
+                
+                <!-- Panel DCA -->
+                <div id="dca-simulator" class="hidden mt-4 p-4 bg-purple-900/20 border border-purple-700/50 rounded-lg">
+                    <h4 class="text-sm font-semibold text-purple-400 mb-3">💰 Simulador DCA</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="text-xs text-gray-400">Aportación mensual</label>
+                            <div class="flex items-center gap-1 mt-1">
+                                <input type="number" id="dca-amount" value="100" min="10" max="10000" step="10"
+                                    class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                                <span class="text-gray-400">€</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400">Desde hace</label>
+                            <select id="dca-period" class="w-full mt-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm">
+                                <option value="1y">1 año</option>
+                                <option value="2y">2 años</option>
+                                <option value="3y">3 años</option>
+                                <option value="5y" selected>5 años</option>
+                                <option value="10y">10 años</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="calcularDCA()" class="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition">
+                                Calcular
+                            </button>
+                        </div>
+                    </div>
+                    <div id="dca-results" class="hidden mt-4">
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div class="p-3 bg-gray-800/50 rounded-lg text-center">
+                                <div class="text-xs text-gray-400">Total invertido</div>
+                                <div class="text-lg font-bold text-white" id="dca-invested">0€</div>
+                            </div>
+                            <div class="p-3 bg-gray-800/50 rounded-lg text-center">
+                                <div class="text-xs text-gray-400">Valor actual</div>
+                                <div class="text-lg font-bold text-green-400" id="dca-current">0€</div>
+                            </div>
+                            <div class="p-3 bg-gray-800/50 rounded-lg text-center">
+                                <div class="text-xs text-gray-400">Beneficio</div>
+                                <div class="text-lg font-bold" id="dca-profit">0€</div>
+                            </div>
+                            <div class="p-3 bg-gray-800/50 rounded-lg text-center">
+                                <div class="text-xs text-gray-400">Rentabilidad</div>
+                                <div class="text-lg font-bold" id="dca-return">0%</div>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-500 text-center mt-3" id="dca-summary"></div>
+                    </div>
+                </div>
+                
+                <!-- Panel S/R -->
+                <div id="sr-panel" class="hidden mt-4 p-4 bg-blue-900/20 border border-blue-700/50 rounded-lg">
+                    <h4 class="text-sm font-semibold text-blue-400 mb-3 flex items-center gap-2">
+                        📏 Soportes y Resistencias
+                    </h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-xs text-green-400 mb-2 font-medium">🛡️ Soportes</div>
+                            <div id="soportes-list" class="space-y-1"></div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-red-400 mb-2 font-medium">🚧 Resistencias</div>
+                            <div id="resistencias-list" class="space-y-1"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Panel Correlación -->
+                <div id="correlacion-panel" class="hidden mt-4 p-4 bg-green-900/20 border border-green-700/50 rounded-lg">
+                    <h4 class="text-sm font-semibold text-green-400 mb-3 flex items-center gap-2">
+                        🔗 Correlación con tu Cartera
+                    </h4>
+                    <div id="correlacion-content">
+                        <div id="correlacion-loading" class="text-center py-4 text-gray-400">
+                            Calculando correlaciones...
+                        </div>
+                        <div id="correlacion-results" class="hidden">
+                            <div id="correlacion-list" class="space-y-2"></div>
+                            <div class="mt-3 p-2 bg-gray-800/50 rounded text-xs text-gray-400">
+                                <strong>Interpretación:</strong> 
+                                <span class="text-green-400">+1</span> = se mueven igual, 
+                                <span class="text-gray-400">0</span> = sin relación, 
+                                <span class="text-red-400">-1</span> = se mueven opuesto.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Heatmap y rentabilidad por año -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-gray-800 rounded-xl border border-gray-700 p-6">
+                    <h3 class="text-lg font-semibold mb-4">📅 Rentabilidad por Año</h3>
+                    <div id="yearly-returns"></div>
+                </div>
+                <div class="bg-gray-800 rounded-xl border border-gray-700 p-6">
+                    <h3 class="text-lg font-semibold mb-4">🗓️ Heatmap Mensual</h3>
+                    <div id="monthly-heatmap" class="overflow-x-auto"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estado inicial -->
+        <div id="estado-inicial" class="text-center py-20">
+            <div class="text-6xl mb-4">🔍</div>
+            <h2 class="text-2xl font-bold mb-2">Explora cualquier activo</h2>
+            <p class="text-gray-400 mb-6">Analiza acciones, ETFs, fondos y criptomonedas antes de invertir</p>
+            <div class="flex flex-wrap justify-center gap-3">
+                <button onclick="buscarRapido('AAPL')" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Apple</button>
+                <button onclick="buscarRapido('GOOGL')" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Google</button>
+                <button onclick="buscarRapido('AMZN')" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Amazon</button>
+                <button onclick="buscarRapido('TSLA')" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Tesla</button>
+                <button onclick="buscarRapido('BTC-USD')" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Bitcoin</button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden text-center py-20">
+            <div class="loader mx-auto mb-4"></div>
+            <p class="text-gray-400">Buscando activo...</p>
+        </div>
+
+        <!-- Error -->
+        <div id="error" class="hidden text-center py-20">
+            <div class="text-6xl mb-4">😕</div>
+            <h2 class="text-2xl font-bold mb-2">No se encontró el activo</h2>
+            <p class="text-gray-400 mb-6" id="error-message">Intenta con otro ticker o ISIN</p>
+        </div>
+    </main>
+
+    <script>
+        let priceChart = null;
+        let rsiChart = null;
+        let activoActual = null;
+        
+        function buscarRapido(ticker) {
+            document.getElementById('search-input').value = ticker;
+            buscarActivo();
+        }
+        
+        async function buscarActivo() {
+            const input = document.getElementById('search-input').value.trim();
+            if (!input) return;
+            
+            // Mostrar loading
+            document.getElementById('estado-inicial').classList.add('hidden');
+            document.getElementById('resultado-container').classList.add('hidden');
+            document.getElementById('error').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            
+            try {
+                // Determinar si es ISIN o ticker
+                const esISIN = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(input.toUpperCase());
+                let ticker = input;
+                let isin = '';
+                
+                if (esISIN) {
+                    isin = input.toUpperCase();
+                    // Buscar ticker para el ISIN
+                    const searchResponse = await fetch(`/api/ticker/search/${isin}`);
+                    const searchResult = await searchResponse.json();
+                    if (searchResult.success && searchResult.ticker) {
+                        ticker = searchResult.ticker;
+                    }
+                }
+                
+                // Obtener datos del activo
+                const response = await fetch(`/api/historical/${encodeURIComponent(ticker)}?periodo=1y&isin=${encodeURIComponent(isin)}`);
+                const result = await response.json();
+                
+                if (!result.success || !result.data.precios || result.data.precios.length === 0) {
+                    throw new Error('No se encontraron datos para este activo');
+                }
+                
+                // Guardar datos del activo
+                activoActual = {
+                    ticker: ticker,
+                    isin: isin,
+                    nombre: result.data.nombre || ticker,
+                    precios: result.data.precios,
+                    fechas: result.data.fechas
+                };
+                
+                // Mostrar resultado
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('resultado-container').classList.remove('hidden');
+                
+                // Actualizar info básica
+                document.getElementById('activo-nombre').textContent = activoActual.nombre;
+                document.getElementById('activo-ticker').textContent = `${ticker}${isin ? ' • ' + isin : ''}`;
+                
+                const precioActual = result.data.precios[result.data.precios.length - 1];
+                const precioAnterior = result.data.precios[result.data.precios.length - 2] || precioActual;
+                const cambio = ((precioActual - precioAnterior) / precioAnterior) * 100;
+                
+                document.getElementById('activo-precio').textContent = precioActual.toFixed(2) + '€';
+                document.getElementById('activo-cambio').innerHTML = `
+                    <span class="${cambio >= 0 ? 'text-green-400' : 'text-red-400'}">
+                        ${cambio >= 0 ? '+' : ''}${cambio.toFixed(2)}% hoy
+                    </span>
+                `;
+                
+                // Cargar gráfico primero (para tener datos para estadísticas)
+                await loadChart('1y');
+                
+                // Luego cargar estadísticas (con fallback a datos del gráfico)
+                cargarEstadisticas(ticker);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error').classList.remove('hidden');
+                document.getElementById('error-message').textContent = error.message;
+            }
+        }
+        
+        async function cargarEstadisticas(ticker) {
+            try {
+                const response = await fetch(`/api/stats/${encodeURIComponent(ticker)}`);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    const data = result.data;
+                    document.getElementById('stat-high52').textContent = data.high52w ? data.high52w.toFixed(2) + '€' : '-';
+                    document.getElementById('stat-low52').textContent = data.low52w ? data.low52w.toFixed(2) + '€' : '-';
+                    document.getElementById('stat-avg50').textContent = data.avg50d ? data.avg50d.toFixed(2) + '€' : '-';
+                    document.getElementById('stat-avg200').textContent = data.avg200d ? data.avg200d.toFixed(2) + '€' : '-';
+                    document.getElementById('stat-volume').textContent = data.volume ? formatNumber(data.volume) : '-';
+                    document.getElementById('stat-marketcap').textContent = data.marketCap ? formatNumber(data.marketCap) : '-';
+                    document.getElementById('stat-per').textContent = data.per ? data.per.toFixed(2) : '-';
+                    document.getElementById('stat-dividend').textContent = data.dividendYield ? data.dividendYield.toFixed(2) + '%' : '-';
+                    return; // Datos cargados correctamente
+                }
+            } catch (error) {
+                console.error('Error cargando estadísticas desde API:', error);
+            }
+            
+            // Fallback: calcular desde datos históricos
+            calcularEstadisticasDesdeHistorico();
+        }
+        
+        function calcularEstadisticasDesdeHistorico() {
+            if (!window.chartData || !window.chartData.precios || window.chartData.precios.length < 50) {
+                return;
+            }
+            
+            const precios = window.chartData.precios;
+            const n = precios.length;
+            
+            // Últimos 252 días de trading ~ 1 año
+            const diasAnio = Math.min(252, n);
+            const preciosAnio = precios.slice(-diasAnio);
+            
+            // Máx y Mín 52 semanas
+            const high52w = Math.max(...preciosAnio);
+            const low52w = Math.min(...preciosAnio);
+            
+            // Media 50 días
+            const precios50 = precios.slice(-50);
+            const avg50d = precios50.reduce((a, b) => a + b, 0) / precios50.length;
+            
+            // Media 200 días
+            let avg200d = null;
+            if (n >= 200) {
+                const precios200 = precios.slice(-200);
+                avg200d = precios200.reduce((a, b) => a + b, 0) / precios200.length;
+            }
+            
+            // Actualizar UI
+            document.getElementById('stat-high52').textContent = high52w.toFixed(2) + '€';
+            document.getElementById('stat-low52').textContent = low52w.toFixed(2) + '€';
+            document.getElementById('stat-avg50').textContent = avg50d.toFixed(2) + '€';
+            document.getElementById('stat-avg200').textContent = avg200d ? avg200d.toFixed(2) + '€' : '-';
+            document.getElementById('stat-volume').textContent = '-';
+            document.getElementById('stat-marketcap').textContent = '-';
+            document.getElementById('stat-per').textContent = '-';
+            document.getElementById('stat-dividend').textContent = '-';
+        }
+        
+        function formatNumber(num) {
+            if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+            return num.toFixed(0);
+        }
+        
+        async function loadChart(periodo) {
+            if (!activoActual) return;
+            
+            // Actualizar botones
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600');
+                btn.classList.add('bg-gray-700');
+            });
+            document.querySelector(`.period-btn[data-period="${periodo}"]`).classList.remove('bg-gray-700');
+            document.querySelector(`.period-btn[data-period="${periodo}"]`).classList.add('bg-blue-600');
+            
+            document.getElementById('chart-loader').classList.remove('hidden');
+            
+            try {
+                const response = await fetch(`/api/historical/${encodeURIComponent(activoActual.ticker)}?periodo=${periodo}&isin=${encodeURIComponent(activoActual.isin || '')}`);
+                const result = await response.json();
+                
+                if (result.success && result.data.precios) {
+                    window.chartData = {
+                        precios: result.data.precios,
+                        fechas: result.data.fechas
+                    };
+                    
+                    renderChart(result.data.fechas, result.data.precios);
+                    ejecutarAnalisisRendimiento();
+                }
+            } catch (error) {
+                console.error('Error cargando gráfico:', error);
+            }
+            
+            document.getElementById('chart-loader').classList.add('hidden');
+            
+            // Limpiar indicadores
+            document.querySelectorAll('.sma-toggle').forEach(cb => cb.checked = false);
+            document.getElementById('bollinger-toggle').checked = false;
+            document.getElementById('rsi-toggle').checked = false;
+            document.getElementById('rsi-container').classList.add('hidden');
+            document.getElementById('alerts-container').innerHTML = '';
+        }
+        
+        function renderChart(fechas, precios) {
+            const ctx = document.getElementById('price-chart').getContext('2d');
+            
+            if (priceChart) {
+                priceChart.destroy();
+            }
+            
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: fechas,
+                    datasets: [{
+                        label: 'Precio',
+                        data: precios,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.1,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#9ca3af', maxTicksLimit: 8 }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: {
+                                color: '#9ca3af',
+                                callback: value => value.toFixed(2) + '€'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Funciones de indicadores técnicos (copiadas de details.html)
+        function calcularSMA(precios, periodo) {
+            const sma = [];
+            for (let i = 0; i < precios.length; i++) {
+                if (i < periodo - 1) {
+                    sma.push(null);
+                } else {
+                    let sum = 0;
+                    for (let j = 0; j < periodo; j++) {
+                        sum += precios[i - j];
+                    }
+                    sma.push(sum / periodo);
+                }
+            }
+            return sma;
+        }
+        
+        function toggleSMA(periodo, color, enabled) {
+            if (!priceChart || !window.chartData) return;
+            
+            const label = `SMA${periodo}`;
+            priceChart.data.datasets = priceChart.data.datasets.filter(ds => ds.label !== label);
+            
+            if (enabled) {
+                const sma = calcularSMA(window.chartData.precios, periodo);
+                priceChart.data.datasets.push({
+                    label: label,
+                    data: sma,
+                    borderColor: color,
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.1
+                });
+            }
+            
+            priceChart.update();
+            detectarCruces();
+        }
+        
+        function detectarCruces() {
+            if (!window.chartData) return;
+            
+            const sma50Enabled = document.getElementById('sma-50').checked;
+            const sma200Enabled = document.getElementById('sma-200').checked;
+            
+            const existing = document.getElementById('cruce-badge');
+            if (existing) existing.remove();
+            
+            if (!sma50Enabled || !sma200Enabled) return;
+            
+            const sma50 = calcularSMA(window.chartData.precios, 50);
+            const sma200 = calcularSMA(window.chartData.precios, 200);
+            
+            let ultimoCruce = null;
+            for (let i = sma200.length - 1; i > 0; i--) {
+                if (sma50[i] !== null && sma200[i] !== null && sma50[i-1] !== null && sma200[i-1] !== null) {
+                    const cruzaArriba = sma50[i] > sma200[i] && sma50[i-1] <= sma200[i-1];
+                    const cruzaAbajo = sma50[i] < sma200[i] && sma50[i-1] >= sma200[i-1];
+                    
+                    if (cruzaArriba) {
+                        ultimoCruce = { tipo: 'dorado', fecha: window.chartData.fechas[i] };
+                        break;
+                    } else if (cruzaAbajo) {
+                        ultimoCruce = { tipo: 'mortal', fecha: window.chartData.fechas[i] };
+                        break;
+                    }
+                }
+            }
+            
+            if (ultimoCruce) {
+                const badge = document.createElement('div');
+                badge.id = 'cruce-badge';
+                
+                if (ultimoCruce.tipo === 'dorado') {
+                    badge.className = 'p-3 bg-yellow-900/30 border border-yellow-700/50 rounded-lg';
+                    badge.innerHTML = `
+                        <div class="flex items-start gap-2">
+                            <span class="text-xl">✨</span>
+                            <div>
+                                <div class="font-medium text-yellow-400">Cruce Dorado el ${ultimoCruce.fecha}</div>
+                                <div class="text-xs text-yellow-200/70 mt-1">Señal alcista: buen momento para comprar.</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    badge.className = 'p-3 bg-red-900/30 border border-red-700/50 rounded-lg';
+                    badge.innerHTML = `
+                        <div class="flex items-start gap-2">
+                            <span class="text-xl">💀</span>
+                            <div>
+                                <div class="font-medium text-red-400">Cruce Mortal el ${ultimoCruce.fecha}</div>
+                                <div class="text-xs text-red-200/70 mt-1">Señal bajista: momento de esperar.</div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('alerts-container').appendChild(badge);
+            }
+        }
+        
+        // Event listeners para SMAs
+        document.querySelectorAll('.sma-toggle').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const periodo = parseInt(this.dataset.period);
+                const color = this.dataset.color;
+                toggleSMA(periodo, color, this.checked);
+            });
+        });
+        
+        // RSI
+        function calcularRSI(precios, periodo = 14) {
+            const rsi = [];
+            for (let i = 0; i < precios.length; i++) {
+                if (i < periodo) {
+                    rsi.push(null);
+                } else {
+                    let ganancias = 0, perdidas = 0;
+                    for (let j = i - periodo + 1; j <= i; j++) {
+                        const cambio = precios[j] - precios[j-1];
+                        if (cambio > 0) ganancias += cambio;
+                        else perdidas -= cambio;
+                    }
+                    const avgGain = ganancias / periodo;
+                    const avgLoss = perdidas / periodo;
+                    const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+                    rsi.push(100 - (100 / (1 + rs)));
+                }
+            }
+            return rsi;
+        }
+        
+        function toggleRSI(enabled) {
+            const container = document.getElementById('rsi-container');
+            if (enabled) {
+                container.classList.remove('hidden');
+                renderRSIChart();
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+        
+        function renderRSIChart() {
+            if (!window.chartData) return;
+            
+            const ctx = document.getElementById('rsi-chart').getContext('2d');
+            const rsi = calcularRSI(window.chartData.precios);
+            
+            if (rsiChart) rsiChart.destroy();
+            
+            rsiChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: window.chartData.fechas,
+                    datasets: [{
+                        label: 'RSI',
+                        data: rsi,
+                        borderColor: '#06b6d4',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: {
+                            min: 0, max: 100,
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#9ca3af', stepSize: 30 }
+                        }
+                    }
+                }
+            });
+        }
+        
+        document.getElementById('rsi-toggle').addEventListener('change', function() {
+            toggleRSI(this.checked);
+        });
+        
+        // Bollinger
+        function calcularBollinger(precios, periodo = 20, desviaciones = 2) {
+            const sma = [], upper = [], lower = [];
+            for (let i = 0; i < precios.length; i++) {
+                if (i < periodo - 1) {
+                    sma.push(null); upper.push(null); lower.push(null);
+                } else {
+                    let sum = 0;
+                    for (let j = 0; j < periodo; j++) sum += precios[i - j];
+                    const media = sum / periodo;
+                    sma.push(media);
+                    
+                    let sumCuadrados = 0;
+                    for (let j = 0; j < periodo; j++) sumCuadrados += Math.pow(precios[i - j] - media, 2);
+                    const std = Math.sqrt(sumCuadrados / periodo);
+                    
+                    upper.push(media + desviaciones * std);
+                    lower.push(media - desviaciones * std);
+                }
+            }
+            return { sma, upper, lower };
+        }
+        
+        function toggleBollinger(enabled) {
+            if (!priceChart || !window.chartData) return;
+            
+            priceChart.data.datasets = priceChart.data.datasets.filter(ds => 
+                !['BB Superior', 'BB Inferior'].includes(ds.label)
+            );
+            
+            if (enabled) {
+                const bollinger = calcularBollinger(window.chartData.precios);
+                
+                priceChart.data.datasets.push({
+                    label: 'BB Superior',
+                    data: bollinger.upper,
+                    borderColor: '#ec4899',
+                    borderWidth: 1,
+                    borderDash: [3, 3],
+                    pointRadius: 0,
+                    fill: false
+                });
+                
+                priceChart.data.datasets.push({
+                    label: 'BB Inferior',
+                    data: bollinger.lower,
+                    borderColor: '#ec4899',
+                    backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                    borderWidth: 1,
+                    borderDash: [3, 3],
+                    pointRadius: 0,
+                    fill: '-1'
+                });
+                
+                actualizarInfoBollinger();
+            } else {
+                const badge = document.getElementById('bollinger-badge');
+                if (badge) badge.remove();
+            }
+            
+            priceChart.update();
+        }
+        
+        function actualizarInfoBollinger() {
+            if (!window.chartData) return;
+            
+            const precios = window.chartData.precios;
+            const bollinger = calcularBollinger(precios);
+            const precioActual = precios[precios.length - 1];
+            const upperActual = bollinger.upper[bollinger.upper.length - 1];
+            const lowerActual = bollinger.lower[bollinger.lower.length - 1];
+            
+            const posicionBB = ((precioActual - lowerActual) / (upperActual - lowerActual)) * 100;
+            
+            let mensaje, clase;
+            if (posicionBB >= 95) {
+                mensaje = '⚠️ Tocando banda superior - Posible sobrecompra';
+                clase = 'text-red-400';
+            } else if (posicionBB <= 5) {
+                mensaje = '✨ Tocando banda inferior - Posible sobreventa';
+                clase = 'text-green-400';
+            } else if (posicionBB >= 80) {
+                mensaje = '📈 Cerca de banda superior';
+                clase = 'text-yellow-400';
+            } else if (posicionBB <= 20) {
+                mensaje = '📉 Cerca de banda inferior';
+                clase = 'text-blue-400';
+            } else {
+                mensaje = '➡️ Zona neutral';
+                clase = 'text-gray-400';
+            }
+            
+            let badge = document.getElementById('bollinger-badge');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.id = 'bollinger-badge';
+                document.getElementById('alerts-container').appendChild(badge);
+            }
+            badge.className = `p-2 bg-pink-900/20 border border-pink-700/30 rounded text-xs ${clase}`;
+            badge.innerHTML = `🎀 <strong>Bandas Bollinger:</strong> ${mensaje} (${posicionBB.toFixed(0)}%)`;
+        }
+        
+        document.getElementById('bollinger-toggle').addEventListener('change', function() {
+            toggleBollinger(this.checked);
+        });
+        
+        // Indicadores rápidos
+        function ejecutarAnalisisRendimiento() {
+            if (!window.chartData || !window.chartData.precios) return;
+            
+            const precios = window.chartData.precios;
+            
+            // RSI
+            const rsi = calcularRSI(precios);
+            const rsiActual = rsi[rsi.length - 1];
+            if (rsiActual !== null) {
+                document.getElementById('rsi-value').textContent = rsiActual.toFixed(1);
+                const rsiSignal = document.getElementById('rsi-signal');
+                if (rsiActual >= 70) {
+                    document.getElementById('rsi-value').className = 'text-xl font-bold text-red-400';
+                    rsiSignal.textContent = '⚠️ Sobrecompra';
+                    rsiSignal.className = 'text-xs mt-1 text-red-400';
+                } else if (rsiActual <= 30) {
+                    document.getElementById('rsi-value').className = 'text-xl font-bold text-green-400';
+                    rsiSignal.textContent = '✨ Sobreventa';
+                    rsiSignal.className = 'text-xs mt-1 text-green-400';
+                } else {
+                    document.getElementById('rsi-value').className = 'text-xl font-bold text-cyan-400';
+                    rsiSignal.textContent = 'Neutral';
+                    rsiSignal.className = 'text-xs mt-1 text-gray-400';
+                }
+            }
+            
+            // Racha
+            let racha = 0;
+            let tipoRacha = precios[precios.length - 1] >= precios[precios.length - 2] ? 'subida' : 'bajada';
+            for (let i = precios.length - 1; i > 0; i--) {
+                const sube = precios[i] >= precios[i-1];
+                if ((tipoRacha === 'subida' && sube) || (tipoRacha === 'bajada' && !sube)) {
+                    racha++;
+                } else {
+                    break;
+                }
+            }
+            document.getElementById('streak-value').textContent = racha + 'd';
+            document.getElementById('streak-value').className = `text-xl font-bold ${tipoRacha === 'subida' ? 'text-green-400' : 'text-red-400'}`;
+            document.getElementById('streak-detail').textContent = tipoRacha === 'subida' ? '📈 Consecutivos subiendo' : '📉 Consecutivos bajando';
+            
+            // Volatilidad
+            const retornos = [];
+            for (let i = 1; i < precios.length; i++) {
+                retornos.push((precios[i] - precios[i-1]) / precios[i-1]);
+            }
+            const mediaRetornos = retornos.reduce((a, b) => a + b, 0) / retornos.length;
+            const varianza = retornos.reduce((sum, r) => sum + Math.pow(r - mediaRetornos, 2), 0) / retornos.length;
+            const volatilidad = Math.sqrt(varianza) * Math.sqrt(252) * 100;
+            
+            document.getElementById('volatility-value').textContent = volatilidad.toFixed(1) + '%';
+            if (volatilidad < 15) {
+                document.getElementById('volatility-value').className = 'text-xl font-bold text-green-400';
+                document.getElementById('volatility-signal').textContent = 'Baja volatilidad';
+            } else if (volatilidad < 25) {
+                document.getElementById('volatility-value').className = 'text-xl font-bold text-yellow-400';
+                document.getElementById('volatility-signal').textContent = 'Volatilidad media';
+            } else {
+                document.getElementById('volatility-value').className = 'text-xl font-bold text-red-400';
+                document.getElementById('volatility-signal').textContent = 'Alta volatilidad';
+            }
+            
+            // Beta (asíncrono)
+            calcularBeta();
+            
+            // Rentabilidad por año y heatmap
+            calcularRentabilidadAnual();
+            calcularHeatmapMensual();
+        }
+        
+        async function calcularBeta() {
+            try {
+                const response = await fetch('/api/historical/%5EGSPC?periodo=1y');
+                const result = await response.json();
+                
+                if (result.success && result.data.precios && window.chartData) {
+                    const retornosActivo = [];
+                    const retornosSP = [];
+                    
+                    const preciosActivo = window.chartData.precios;
+                    const preciosSP = result.data.precios;
+                    const n = Math.min(preciosActivo.length, preciosSP.length);
+                    
+                    for (let i = 1; i < n; i++) {
+                        retornosActivo.push((preciosActivo[i] - preciosActivo[i-1]) / preciosActivo[i-1]);
+                        retornosSP.push((preciosSP[i] - preciosSP[i-1]) / preciosSP[i-1]);
+                    }
+                    
+                    // Calcular covarianza y varianza
+                    const mediaActivo = retornosActivo.reduce((a, b) => a + b, 0) / retornosActivo.length;
+                    const mediaSP = retornosSP.reduce((a, b) => a + b, 0) / retornosSP.length;
+                    
+                    let covarianza = 0, varianzaSP = 0;
+                    for (let i = 0; i < retornosActivo.length; i++) {
+                        covarianza += (retornosActivo[i] - mediaActivo) * (retornosSP[i] - mediaSP);
+                        varianzaSP += Math.pow(retornosSP[i] - mediaSP, 2);
+                    }
+                    
+                    const beta = varianzaSP === 0 ? 0 : covarianza / varianzaSP;
+                    
+                    document.getElementById('beta-value').textContent = beta.toFixed(2);
+                    if (beta < 0.8) {
+                        document.getElementById('beta-value').className = 'text-xl font-bold text-green-400';
+                        document.getElementById('beta-signal').textContent = 'Defensivo';
+                    } else if (beta <= 1.2) {
+                        document.getElementById('beta-value').className = 'text-xl font-bold text-blue-400';
+                        document.getElementById('beta-signal').textContent = 'Similar al mercado';
+                    } else {
+                        document.getElementById('beta-value').className = 'text-xl font-bold text-red-400';
+                        document.getElementById('beta-signal').textContent = 'Agresivo';
+                    }
+                }
+            } catch (error) {
+                console.error('Error calculando beta:', error);
+            }
+        }
+        
+        function calcularRentabilidadAnual() {
+            if (!window.chartData) return;
+            
+            const precios = window.chartData.precios;
+            const fechas = window.chartData.fechas;
+            
+            const porAnio = {};
+            fechas.forEach((fecha, i) => {
+                const anio = fecha.substring(0, 4);
+                if (!porAnio[anio]) porAnio[anio] = { primero: precios[i], ultimo: precios[i] };
+                porAnio[anio].ultimo = precios[i];
+            });
+            
+            const container = document.getElementById('yearly-returns');
+            let html = '';
+            
+            const anios = Object.keys(porAnio).sort();
+            const rentabilidades = anios.map(anio => {
+                return ((porAnio[anio].ultimo - porAnio[anio].primero) / porAnio[anio].primero) * 100;
+            });
+            const maxAbs = Math.max(...rentabilidades.map(Math.abs), 1);
+            
+            anios.forEach((anio, i) => {
+                const rent = rentabilidades[i];
+                const width = (Math.abs(rent) / maxAbs) * 100;
+                const color = rent >= 0 ? 'bg-green-500' : 'bg-red-500';
+                const textColor = rent >= 0 ? 'text-green-400' : 'text-red-400';
+                
+                html += `
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="w-12 text-sm text-gray-400">${anio}</span>
+                        <div class="flex-1 h-6 bg-gray-700 rounded overflow-hidden">
+                            <div class="${color} h-full rounded" style="width: ${width}%"></div>
+                        </div>
+                        <span class="w-16 text-right text-sm ${textColor}">${rent >= 0 ? '+' : ''}${rent.toFixed(1)}%</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html || '<p class="text-gray-500">No hay datos suficientes</p>';
+        }
+        
+        function calcularHeatmapMensual() {
+            if (!window.chartData) return;
+            
+            const precios = window.chartData.precios;
+            const fechas = window.chartData.fechas;
+            
+            const porMes = {};
+            fechas.forEach((fecha, i) => {
+                const key = fecha.substring(0, 7); // YYYY-MM
+                if (!porMes[key]) porMes[key] = { primero: precios[i], ultimo: precios[i] };
+                porMes[key].ultimo = precios[i];
+            });
+            
+            // Agrupar por año
+            const porAnio = {};
+            Object.keys(porMes).forEach(key => {
+                const [anio, mes] = key.split('-');
+                if (!porAnio[anio]) porAnio[anio] = {};
+                const rent = ((porMes[key].ultimo - porMes[key].primero) / porMes[key].primero) * 100;
+                porAnio[anio][parseInt(mes)] = rent;
+            });
+            
+            const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+            const anios = Object.keys(porAnio).sort();
+            
+            let html = '<table class="w-full text-xs"><thead><tr><th></th>';
+            meses.forEach(m => html += `<th class="p-1 text-gray-400">${m}</th>`);
+            html += '<th class="p-1 text-gray-400">Total</th></tr></thead><tbody>';
+            
+            anios.forEach(anio => {
+                html += `<tr><td class="p-1 text-gray-400">${anio}</td>`;
+                let totalAnio = 0, mesesConDatos = 0;
+                
+                for (let m = 1; m <= 12; m++) {
+                    const rent = porAnio[anio][m];
+                    if (rent !== undefined) {
+                        totalAnio += rent;
+                        mesesConDatos++;
+                        const color = getHeatmapColor(rent);
+                        html += `<td class="p-1"><div class="${color} rounded p-1 text-center">${rent >= 0 ? '+' : ''}${rent.toFixed(1)}</div></td>`;
+                    } else {
+                        html += '<td class="p-1"><div class="bg-gray-700 rounded p-1 text-center text-gray-500">-</div></td>';
+                    }
+                }
+                
+                const colorTotal = getHeatmapColor(totalAnio);
+                html += `<td class="p-1"><div class="${colorTotal} rounded p-1 text-center font-medium">${totalAnio >= 0 ? '+' : ''}${totalAnio.toFixed(1)}</div></td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            document.getElementById('monthly-heatmap').innerHTML = html;
+        }
+        
+        function getHeatmapColor(valor) {
+            if (valor <= -5) return 'bg-red-600 text-white';
+            if (valor < 0) return 'bg-red-400/50 text-red-200';
+            if (valor === 0) return 'bg-gray-600 text-gray-300';
+            if (valor <= 5) return 'bg-green-400/50 text-green-200';
+            return 'bg-green-600 text-white';
+        }
+        
+        // DCA Simulator
+        function toggleDCASimulator() {
+            document.getElementById('dca-simulator').classList.toggle('hidden');
+        }
+        
+        function calcularDCA() {
+            if (!window.chartData) return;
+            
+            const aportacion = parseFloat(document.getElementById('dca-amount').value) || 100;
+            const periodoSelect = document.getElementById('dca-period').value;
+            const mesesMap = { '1y': 12, '2y': 24, '3y': 36, '5y': 60, '10y': 120 };
+            const mesesSimular = mesesMap[periodoSelect] || 60;
+            
+            const precios = window.chartData.precios;
+            const diasTotales = precios.length;
+            const mesesDisponibles = Math.floor(diasTotales / 21);
+            const mesesUsar = Math.min(mesesSimular, mesesDisponibles);
+            
+            if (mesesUsar < 2) {
+                alert('No hay suficientes datos históricos');
+                return;
+            }
+            
+            let totalInvertido = 0;
+            let totalUnidades = 0;
+            const intervalo = Math.floor(diasTotales / mesesUsar);
+            
+            for (let i = 0; i < mesesUsar; i++) {
+                const idx = diasTotales - 1 - (i * intervalo);
+                if (idx >= 0) {
+                    const precio = precios[idx];
+                    const unidades = aportacion / precio;
+                    totalUnidades += unidades;
+                    totalInvertido += aportacion;
+                }
+            }
+            
+            const precioActual = precios[precios.length - 1];
+            const valorActual = totalUnidades * precioActual;
+            const beneficio = valorActual - totalInvertido;
+            const rentabilidad = ((valorActual - totalInvertido) / totalInvertido) * 100;
+            const precioMedio = totalInvertido / totalUnidades;
+            
+            document.getElementById('dca-invested').textContent = totalInvertido.toFixed(0) + '€';
+            document.getElementById('dca-current').textContent = valorActual.toFixed(0) + '€';
+            document.getElementById('dca-profit').textContent = (beneficio >= 0 ? '+' : '') + beneficio.toFixed(0) + '€';
+            document.getElementById('dca-profit').className = `text-lg font-bold ${beneficio >= 0 ? 'text-green-400' : 'text-red-400'}`;
+            document.getElementById('dca-return').textContent = (rentabilidad >= 0 ? '+' : '') + rentabilidad.toFixed(1) + '%';
+            document.getElementById('dca-return').className = `text-lg font-bold ${rentabilidad >= 0 ? 'text-green-400' : 'text-red-400'}`;
+            document.getElementById('dca-summary').textContent = `Invirtiendo ${aportacion}€/mes durante ${mesesUsar} meses. Precio medio: ${precioMedio.toFixed(2)}€. Precio actual: ${precioActual.toFixed(2)}€`;
+            
+            document.getElementById('dca-results').classList.remove('hidden');
+        }
+        
+        // Soportes y Resistencias
+        function toggleSoportesResistencias() {
+            const panel = document.getElementById('sr-panel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                calcularSoportesResistencias();
+            }
+        }
+        
+        function calcularSoportesResistencias() {
+            if (!window.chartData) return;
+            
+            const precios = window.chartData.precios;
+            const precioActual = precios[precios.length - 1];
+            const ventana = Math.max(5, Math.floor(precios.length / 20));
+            
+            const pivotes = [];
+            for (let i = ventana; i < precios.length - ventana; i++) {
+                let esMinimo = true, esMaximo = true;
+                for (let j = i - ventana; j <= i + ventana; j++) {
+                    if (j !== i) {
+                        if (precios[j] <= precios[i]) esMinimo = false;
+                        if (precios[j] >= precios[i]) esMaximo = false;
+                    }
+                }
+                if (esMinimo) pivotes.push({ tipo: 'soporte', precio: precios[i] });
+                if (esMaximo) pivotes.push({ tipo: 'resistencia', precio: precios[i] });
+            }
+            
+            // Agrupar niveles cercanos
+            const tolerancia = precioActual * 0.02;
+            const niveles = [];
+            pivotes.forEach(p => {
+                const existente = niveles.find(n => n.tipo === p.tipo && Math.abs(n.precio - p.precio) < tolerancia);
+                if (existente) {
+                    existente.toques++;
+                    existente.precio = (existente.precio + p.precio) / 2;
+                } else {
+                    niveles.push({ ...p, toques: 1 });
+                }
+            });
+            
+            const soportes = niveles.filter(n => n.tipo === 'soporte' && n.precio < precioActual).sort((a, b) => b.precio - a.precio).slice(0, 3);
+            const resistencias = niveles.filter(n => n.tipo === 'resistencia' && n.precio > precioActual).sort((a, b) => a.precio - b.precio).slice(0, 3);
+            
+            // Mostrar
+            const soportesList = document.getElementById('soportes-list');
+            const resistenciasList = document.getElementById('resistencias-list');
+            
+            soportesList.innerHTML = soportes.length === 0 ? '<div class="text-gray-500 text-xs">No detectados</div>' :
+                soportes.map(s => {
+                    const dist = ((s.precio - precioActual) / precioActual * 100).toFixed(1);
+                    const fuerza = s.toques >= 3 ? '🟢🟢🟢' : s.toques >= 2 ? '🟢🟢' : '🟢';
+                    return `<div class="flex justify-between p-2 bg-green-900/20 rounded text-xs"><span class="text-green-400">${s.precio.toFixed(2)}€</span><span class="text-gray-400">${dist}%</span><span>${fuerza}</span></div>`;
+                }).join('');
+            
+            resistenciasList.innerHTML = resistencias.length === 0 ? '<div class="text-gray-500 text-xs">No detectadas</div>' :
+                resistencias.map(r => {
+                    const dist = ((r.precio - precioActual) / precioActual * 100).toFixed(1);
+                    const fuerza = r.toques >= 3 ? '🔴🔴🔴' : r.toques >= 2 ? '🔴🔴' : '🔴';
+                    return `<div class="flex justify-between p-2 bg-red-900/20 rounded text-xs"><span class="text-red-400">${r.precio.toFixed(2)}€</span><span class="text-gray-400">+${dist}%</span><span>${fuerza}</span></div>`;
+                }).join('');
+        }
+        
+        // Correlación con cartera
+        function toggleCorrelacion() {
+            const panel = document.getElementById('correlacion-panel');
+            panel.classList.toggle('hidden');
+            if (!panel.classList.contains('hidden')) {
+                calcularCorrelaciones();
+            }
+        }
+        
+        async function calcularCorrelaciones() {
+            document.getElementById('correlacion-loading').classList.remove('hidden');
+            document.getElementById('correlacion-results').classList.add('hidden');
+            
+            if (!window.chartData) {
+                document.getElementById('correlacion-loading').textContent = 'No hay datos del gráfico';
+                return;
+            }
+            
+            try {
+                const portfolioResponse = await fetch('/api/portfolio');
+                const portfolioResult = await portfolioResponse.json();
+                
+                if (!portfolioResult.success || !portfolioResult.data.posiciones || portfolioResult.data.posiciones.length === 0) {
+                    document.getElementById('correlacion-loading').textContent = 'No tienes activos en tu cartera para comparar';
+                    return;
+                }
+                
+                const posiciones = portfolioResult.data.posiciones.filter(p => p.ticker || p.isin);
+                const correlaciones = [];
+                
+                // Retornos del activo actual por fecha
+                const retornosActivoPorFecha = {};
+                for (let i = 1; i < window.chartData.precios.length; i++) {
+                    const retorno = (window.chartData.precios[i] - window.chartData.precios[i-1]) / window.chartData.precios[i-1];
+                    retornosActivoPorFecha[window.chartData.fechas[i]] = retorno;
+                }
+                
+                for (const pos of posiciones.slice(0, 5)) {
+                    try {
+                        const ticker = pos.ticker || pos.isin;
+                        const response = await fetch(`/api/historical/${encodeURIComponent(ticker)}?periodo=1y&isin=${encodeURIComponent(pos.isin || '')}`);
+                        const result = await response.json();
+                        
+                        if (result.success && result.data.precios && result.data.fechas) {
+                            const retornosOtroPorFecha = {};
+                            for (let i = 1; i < result.data.precios.length; i++) {
+                                const retorno = (result.data.precios[i] - result.data.precios[i-1]) / result.data.precios[i-1];
+                                retornosOtroPorFecha[result.data.fechas[i]] = retorno;
+                            }
+                            
+                            const fechasComunes = Object.keys(retornosActivoPorFecha).filter(f => retornosOtroPorFecha[f] !== undefined);
+                            
+                            if (fechasComunes.length >= 30) {
+                                const x = fechasComunes.map(f => retornosActivoPorFecha[f]);
+                                const y = fechasComunes.map(f => retornosOtroPorFecha[f]);
+                                
+                                const mediaX = x.reduce((a, b) => a + b, 0) / x.length;
+                                const mediaY = y.reduce((a, b) => a + b, 0) / y.length;
+                                
+                                let num = 0, denX = 0, denY = 0;
+                                for (let i = 0; i < x.length; i++) {
+                                    num += (x[i] - mediaX) * (y[i] - mediaY);
+                                    denX += Math.pow(x[i] - mediaX, 2);
+                                    denY += Math.pow(y[i] - mediaY, 2);
+                                }
+                                
+                                const corr = Math.sqrt(denX * denY) === 0 ? 0 : num / Math.sqrt(denX * denY);
+                                correlaciones.push({ nombre: pos.nombre, correlacion: corr, dias: fechasComunes.length });
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error:', e);
+                    }
+                }
+                
+                // Añadir benchmarks
+                for (const bench of [{ ticker: '%5EGSPC', nombre: 'S&P 500 📊' }, { ticker: '%5EIXIC', nombre: 'NASDAQ 📊' }]) {
+                    try {
+                        const response = await fetch(`/api/historical/${bench.ticker}?periodo=1y`);
+                        const result = await response.json();
+                        
+                        if (result.success && result.data.precios && result.data.fechas) {
+                            const retornosBenchPorFecha = {};
+                            for (let i = 1; i < result.data.precios.length; i++) {
+                                const retorno = (result.data.precios[i] - result.data.precios[i-1]) / result.data.precios[i-1];
+                                retornosBenchPorFecha[result.data.fechas[i]] = retorno;
+                            }
+                            
+                            const fechasComunes = Object.keys(retornosActivoPorFecha).filter(f => retornosBenchPorFecha[f] !== undefined);
+                            
+                            if (fechasComunes.length >= 30) {
+                                const x = fechasComunes.map(f => retornosActivoPorFecha[f]);
+                                const y = fechasComunes.map(f => retornosBenchPorFecha[f]);
+                                
+                                const mediaX = x.reduce((a, b) => a + b, 0) / x.length;
+                                const mediaY = y.reduce((a, b) => a + b, 0) / y.length;
+                                
+                                let num = 0, denX = 0, denY = 0;
+                                for (let i = 0; i < x.length; i++) {
+                                    num += (x[i] - mediaX) * (y[i] - mediaY);
+                                    denX += Math.pow(x[i] - mediaX, 2);
+                                    denY += Math.pow(y[i] - mediaY, 2);
+                                }
+                                
+                                const corr = Math.sqrt(denX * denY) === 0 ? 0 : num / Math.sqrt(denX * denY);
+                                correlaciones.push({ nombre: bench.nombre, correlacion: corr, dias: fechasComunes.length });
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Error:', e);
+                    }
+                }
+                
+                correlaciones.sort((a, b) => Math.abs(b.correlacion) - Math.abs(a.correlacion));
+                mostrarCorrelaciones(correlaciones);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('correlacion-loading').textContent = 'Error al calcular correlaciones';
+            }
+        }
+        
+        function mostrarCorrelaciones(correlaciones) {
+            document.getElementById('correlacion-loading').classList.add('hidden');
+            document.getElementById('correlacion-results').classList.remove('hidden');
+            
+            const list = document.getElementById('correlacion-list');
+            
+            if (correlaciones.length === 0) {
+                list.innerHTML = '<div class="text-gray-500 text-center py-4">No hay activos para comparar</div>';
+                return;
+            }
+            
+            list.innerHTML = correlaciones.map(c => {
+                const corr = c.correlacion;
+                const corrPct = (corr * 100).toFixed(0);
+                
+                let colorClass, barColor, interpretacion;
+                if (corr >= 0.7) {
+                    colorClass = 'text-red-400'; barColor = 'bg-red-500'; interpretacion = 'Alta correlación';
+                } else if (corr >= 0.4) {
+                    colorClass = 'text-yellow-400'; barColor = 'bg-yellow-500'; interpretacion = 'Correlación moderada';
+                } else if (corr >= -0.4) {
+                    colorClass = 'text-green-400'; barColor = 'bg-green-500'; interpretacion = 'Baja correlación ✓';
+                } else if (corr >= -0.7) {
+                    colorClass = 'text-blue-400'; barColor = 'bg-blue-500'; interpretacion = 'Correlación inversa';
+                } else {
+                    colorClass = 'text-purple-400'; barColor = 'bg-purple-500'; interpretacion = 'Alta correlación inversa';
+                }
+                
+                return `
+                    <div class="p-2 bg-gray-800/50 rounded">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-sm text-gray-300 truncate">${c.nombre}</span>
+                            <span class="${colorClass} font-medium">${corr >= 0 ? '+' : ''}${corrPct}%</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 h-2 bg-gray-700 rounded overflow-hidden">
+                                <div class="${barColor} h-full rounded" style="width: ${Math.abs(corr) * 100}%"></div>
+                            </div>
+                            <span class="text-xs text-gray-500">${interpretacion} (${c.dias}d)</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Añadir a cartera
+        function anadirACartera() {
+            if (!activoActual) return;
+            
+            const url = `/add?nombre=${encodeURIComponent(activoActual.nombre)}&ticker=${encodeURIComponent(activoActual.ticker)}&isin=${encodeURIComponent(activoActual.isin || '')}`;
+            window.location.href = url;
+        }
+        
+        // =====================
+        // SISTEMA DE ALERTAS
+        // =====================
+        
+        function mostrarModalAlerta() {
+            if (!activoActual) {
+                alert('Primero busca un activo');
+                return;
+            }
+            
+            // Obtener precio actual
+            const precioActual = window.chartData?.precios?.[window.chartData.precios.length - 1] || 0;
+            
+            document.getElementById('alerta-nombre').textContent = activoActual.nombre;
+            document.getElementById('alerta-ticker').textContent = activoActual.ticker;
+            document.getElementById('alerta-precio-actual').textContent = precioActual.toFixed(2) + '€';
+            document.getElementById('alerta-porcentaje').value = 8;
+            
+            // Calcular precio objetivo inicial
+            calcularPrecioObjetivo();
+            
+            document.getElementById('modal-alerta').classList.remove('hidden');
+        }
+        
+        function cerrarModalAlerta() {
+            document.getElementById('modal-alerta').classList.add('hidden');
+        }
+        
+        function calcularPrecioObjetivo() {
+            const precioActual = window.chartData?.precios?.[window.chartData.precios.length - 1] || 0;
+            const porcentaje = parseFloat(document.getElementById('alerta-porcentaje').value) || 0;
+            const tipo = document.getElementById('alerta-tipo').value;
+            
+            let precioObjetivo;
+            if (tipo === 'baja') {
+                precioObjetivo = precioActual * (1 - porcentaje / 100);
+            } else {
+                precioObjetivo = precioActual * (1 + porcentaje / 100);
+            }
+            
+            document.getElementById('alerta-precio-objetivo').textContent = precioObjetivo.toFixed(2) + '€';
+            
+            // Actualizar texto descriptivo
+            const descripcion = tipo === 'baja' 
+                ? `Te avisaremos cuando baje un ${porcentaje}% (a ${precioObjetivo.toFixed(2)}€)`
+                : `Te avisaremos cuando suba un ${porcentaje}% (a ${precioObjetivo.toFixed(2)}€)`;
+            document.getElementById('alerta-descripcion').textContent = descripcion;
+        }
+        
+        async function crearAlerta() {
+            if (!activoActual) return;
+            
+            const porcentaje = parseFloat(document.getElementById('alerta-porcentaje').value) || 0;
+            const tipo = document.getElementById('alerta-tipo').value;
+            
+            if (porcentaje <= 0 || porcentaje > 99) {
+                alert('El porcentaje debe estar entre 1 y 99');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/alertas', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nombre: activoActual.nombre,
+                        ticker: activoActual.ticker,
+                        isin: activoActual.isin || '',
+                        tipo: tipo,
+                        objetivo_pct: porcentaje
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    cerrarModalAlerta();
+                    
+                    // Mostrar confirmación
+                    const toast = document.createElement('div');
+                    toast.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+                    toast.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <span>✅</span>
+                            <span>Alerta creada para ${activoActual.nombre}</span>
+                        </div>
+                    `;
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 4000);
+                } else {
+                    alert('Error: ' + (result.error || 'No se pudo crear la alerta'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al crear la alerta');
+            }
+        }
+        
+        // Event listeners para actualizar precio objetivo
+        document.addEventListener('DOMContentLoaded', function() {
+            const porcentajeInput = document.getElementById('alerta-porcentaje');
+            const tipoSelect = document.getElementById('alerta-tipo');
+            
+            if (porcentajeInput) {
+                porcentajeInput.addEventListener('input', calcularPrecioObjetivo);
+            }
+            if (tipoSelect) {
+                tipoSelect.addEventListener('change', calcularPrecioObjetivo);
+            }
+        });
+    </script>
+    
+    <!-- Modal Crear Alerta -->
+    <div id="modal-alerta" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 max-w-md w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold flex items-center gap-2">
+                    <span>🔔</span> Crear Alerta de Precio
+                </h3>
+                <button onclick="cerrarModalAlerta()" class="text-gray-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Info del activo -->
+            <div class="bg-gray-700/50 rounded-lg p-4 mb-4">
+                <div class="font-medium text-lg" id="alerta-nombre">-</div>
+                <div class="text-sm text-gray-400" id="alerta-ticker">-</div>
+                <div class="text-2xl font-bold mt-2 text-green-400" id="alerta-precio-actual">-</div>
+            </div>
+            
+            <!-- Configuración -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Tipo de alerta</label>
+                    <select id="alerta-tipo" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                        <option value="baja">📉 Cuando BAJE</option>
+                        <option value="sube">📈 Cuando SUBA</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Porcentaje de cambio</label>
+                    <div class="flex items-center gap-2">
+                        <input type="range" id="alerta-porcentaje" min="1" max="50" value="8" 
+                            class="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                        <span class="text-xl font-bold w-16 text-right" id="alerta-pct-display">8%</span>
+                    </div>
+                    <script>
+                        document.getElementById('alerta-porcentaje').addEventListener('input', function() {
+                            document.getElementById('alerta-pct-display').textContent = this.value + '%';
+                        });
+                    </script>
+                </div>
+                
+                <div class="bg-orange-900/30 border border-orange-700/50 rounded-lg p-3">
+                    <div class="text-sm text-orange-300" id="alerta-descripcion">
+                        Te avisaremos cuando baje un 8%
+                    </div>
+                    <div class="text-lg font-bold text-orange-400 mt-1">
+                        Precio objetivo: <span id="alerta-precio-objetivo">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Botones -->
+            <div class="flex gap-3 mt-6">
+                <button onclick="cerrarModalAlerta()" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">
+                    Cancelar
+                </button>
+                <button onclick="crearAlerta()" class="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition flex items-center justify-center gap-2">
+                    <span>🔔</span> Crear Alerta
+                </button>
+            </div>
+            
+            <p class="text-xs text-gray-500 text-center mt-4">
+                💡 Las alertas se verifican cada vez que abres la app
+            </p>
+        </div>
+    </div>
+</body>
+</html>

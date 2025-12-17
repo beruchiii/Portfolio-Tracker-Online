@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Ajustes - Portfolio Tracker</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-3xl mx-auto px-4 py-4 flex items-center gap-4">
+            <a href="/" class="text-gray-400 hover:text-white transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </a>
+            <h1 class="text-xl font-bold">⚙️ Configuración</h1>
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-8 space-y-6">
+        
+        <!-- Export Section -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span>📤</span> Exportar Cartera
+            </h2>
+            <p class="text-gray-400 mb-4">
+                Descarga un archivo JSON con todos tus datos. Úsalo para hacer backup o transferir a otro dispositivo.
+            </p>
+            <a href="/api/export" 
+               class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Descargar Backup
+            </a>
+        </div>
+
+        <!-- Import Section -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span>📥</span> Importar Cartera
+            </h2>
+            <p class="text-gray-400 mb-4">
+                Restaura tu cartera desde un archivo de backup.
+            </p>
+            
+            <div class="space-y-4">
+                <!-- File Input -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">Selecciona archivo JSON</label>
+                    <input type="file" id="import-file" accept=".json"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer">
+                </div>
+                
+                <!-- Import Options -->
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button onclick="importReplace()" 
+                        class="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Reemplazar Todo
+                        <div id="replace-loader" class="loader hidden"></div>
+                    </button>
+                    <button onclick="importMerge()" 
+                        class="flex-1 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-medium transition flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Fusionar con Actual
+                        <div id="merge-loader" class="loader hidden"></div>
+                    </button>
+                </div>
+                
+                <p class="text-sm text-gray-500">
+                    <strong>Reemplazar:</strong> Borra todo y carga el archivo<br>
+                    <strong>Fusionar:</strong> Añade las posiciones/aportaciones que no tengas
+                </p>
+            </div>
+        </div>
+
+        <!-- Info Section -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span>💡</span> Consejos
+            </h2>
+            <ul class="space-y-3 text-gray-400">
+                <li class="flex items-start gap-2">
+                    <span class="text-green-400">✓</span>
+                    <span>Haz <strong>backup regularmente</strong> para no perder tus datos</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-green-400">✓</span>
+                    <span>Tus datos se guardan en <code class="bg-gray-700 px-2 py-0.5 rounded text-sm">data/portfolio.json</code></span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-green-400">✓</span>
+                    <span>Al actualizar la app, <strong>copia ese archivo</strong> antes de borrar la carpeta</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <span class="text-blue-400">ℹ</span>
+                    <span>Los archivos de backup incluyen fecha y hora para identificarlos fácilmente</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Update Instructions -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span>🔄</span> Cómo Actualizar Sin Perder Datos
+            </h2>
+            <div class="bg-gray-900 rounded-lg p-4 font-mono text-sm text-gray-300 overflow-x-auto">
+                <pre># 1. Exportar backup (o descargar desde arriba)
+cp ~/Downloads/portfolio_tracker/data/portfolio.json ~/mi_backup.json
+
+# 2. Descargar nueva versión y descomprimir
+cd ~/Downloads
+rm -rf portfolio_tracker
+unzip portfolio_tracker_NUEVO.zip
+
+# 3. Restaurar tus datos
+cp ~/mi_backup.json ~/Downloads/portfolio_tracker/data/portfolio.json
+
+# 4. Ejecutar
+cd portfolio_tracker
+source venv/bin/activate
+python web_app.py</pre>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Result Modal -->
+    <div id="result-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-8 max-w-md mx-4 border border-gray-700 text-center">
+            <div class="text-6xl mb-4" id="result-icon">✅</div>
+            <h3 class="text-xl font-semibold mb-2" id="result-title">Operación completada</h3>
+            <p class="text-gray-400 mb-6" id="result-message"></p>
+            <button onclick="closeModal()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition">
+                Aceptar
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function showModal(icon, title, message) {
+            document.getElementById('result-icon').textContent = icon;
+            document.getElementById('result-title').textContent = title;
+            document.getElementById('result-message').textContent = message;
+            document.getElementById('result-modal').classList.remove('hidden');
+            document.getElementById('result-modal').classList.add('flex');
+        }
+
+        function closeModal() {
+            document.getElementById('result-modal').classList.add('hidden');
+            document.getElementById('result-modal').classList.remove('flex');
+        }
+
+        function getFile() {
+            const fileInput = document.getElementById('import-file');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Selecciona un archivo primero');
+                return null;
+            }
+            return fileInput.files[0];
+        }
+
+        async function importReplace() {
+            const file = getFile();
+            if (!file) return;
+
+            if (!confirm('⚠️ Esto REEMPLAZARÁ toda tu cartera actual. ¿Continuar?')) return;
+
+            document.getElementById('replace-loader').classList.remove('hidden');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/import', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                document.getElementById('replace-loader').classList.add('hidden');
+
+                if (result.success) {
+                    showModal('✅', 'Importación Completada', result.message);
+                } else {
+                    showModal('❌', 'Error', result.error);
+                }
+            } catch (error) {
+                document.getElementById('replace-loader').classList.add('hidden');
+                showModal('❌', 'Error', 'Error al procesar el archivo');
+            }
+        }
+
+        async function importMerge() {
+            const file = getFile();
+            if (!file) return;
+
+            document.getElementById('merge-loader').classList.remove('hidden');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/import/merge', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                document.getElementById('merge-loader').classList.add('hidden');
+
+                if (result.success) {
+                    showModal('✅', 'Fusión Completada', result.message);
+                } else {
+                    showModal('❌', 'Error', result.error);
+                }
+            } catch (error) {
+                document.getElementById('merge-loader').classList.add('hidden');
+                showModal('❌', 'Error', 'Error al procesar el archivo');
+            }
+        }
+    </script>
+</body>
+</html>

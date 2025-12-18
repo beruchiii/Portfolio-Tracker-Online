@@ -139,9 +139,16 @@
             <!-- Chart Section -->
             <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-                    <h3 class="text-lg font-semibold flex items-center gap-2">
-                        <span>📈</span> Histórico de Precios
-                    </h3>
+                    <div class="flex items-center gap-4">
+                        <h3 class="text-lg font-semibold flex items-center gap-2">
+                            <span>📈</span> Histórico de Precios
+                        </h3>
+                        <!-- Indicador de rentabilidad del período -->
+                        <div id="period-return" class="hidden px-3 py-1 rounded-lg text-sm font-semibold">
+                            <span id="period-return-value">+0.00%</span>
+                            <span id="period-return-label" class="text-xs text-gray-400 ml-1">(6M)</span>
+                        </div>
+                    </div>
                     <div class="flex gap-2" id="period-buttons">
                         <button class="period-btn px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 transition text-sm" data-period="1mo">1M</button>
                         <button class="period-btn px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 transition text-sm" data-period="3mo">3M</button>
@@ -732,6 +739,18 @@
             }
 
             document.getElementById('chart-loader').classList.remove('hidden');
+            
+            // Mapeo de período a etiqueta
+            const periodLabels = {
+                '1mo': '1M',
+                '3mo': '3M',
+                '6mo': '6M',
+                '1y': '1A',
+                '5y': '5A',
+                '10y': '10A',
+                'max': 'Máx'
+            };
+            const periodLabel = periodLabels[period] || period;
 
             try {
                 // Pasar tanto ticker como ISIN para fallback a justETF
@@ -743,10 +762,12 @@
                 if (!result.success) {
                     document.getElementById('chart-loader').classList.remove('hidden');
                     document.getElementById('chart-loader').innerHTML = '<p class="text-gray-400">No hay datos históricos disponibles</p>';
+                    // Ocultar indicador de rentabilidad si hay error
+                    document.getElementById('period-return')?.classList.add('hidden');
                     return;
                 }
 
-                renderChart(result.data);
+                renderChart(result.data, periodLabel);
                 
                 // Mostrar fuente de datos si es justETF
                 if (result.fuente === 'justetf') {
@@ -767,7 +788,7 @@
         }
 
         // Render chart
-        function renderChart(data) {
+        function renderChart(data, periodLabel = '6M') {
             if (priceChart) priceChart.destroy();
 
             const ctx = document.getElementById('price-chart').getContext('2d');
@@ -778,6 +799,25 @@
             const isPositive = lastPrice >= firstPrice;
             const lineColor = isPositive ? '#10b981' : '#ef4444';
             const bgColor = isPositive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+            
+            // Calcular y mostrar rentabilidad del período
+            const rentabilidad = ((lastPrice - firstPrice) / firstPrice) * 100;
+            const periodReturnEl = document.getElementById('period-return');
+            const periodReturnValue = document.getElementById('period-return-value');
+            const periodReturnLabel = document.getElementById('period-return-label');
+            
+            if (periodReturnEl && periodReturnValue && periodReturnLabel) {
+                periodReturnEl.classList.remove('hidden', 'bg-green-900/50', 'text-green-400', 'bg-red-900/50', 'text-red-400');
+                
+                if (isPositive) {
+                    periodReturnEl.classList.add('bg-green-900/50', 'text-green-400');
+                    periodReturnValue.textContent = `+${rentabilidad.toFixed(2)}%`;
+                } else {
+                    periodReturnEl.classList.add('bg-red-900/50', 'text-red-400');
+                    periodReturnValue.textContent = `${rentabilidad.toFixed(2)}%`;
+                }
+                periodReturnLabel.textContent = `(${periodLabel})`;
+            }
 
             priceChart = new Chart(ctx, {
                 type: 'line',

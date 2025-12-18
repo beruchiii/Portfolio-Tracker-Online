@@ -172,9 +172,16 @@
             <!-- Gráfico y análisis técnico -->
             <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
                 <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
-                    <h3 class="text-lg font-semibold flex items-center gap-2">
-                        <span>📈</span> Histórico de Precios
-                    </h3>
+                    <div class="flex items-center gap-4">
+                        <h3 class="text-lg font-semibold flex items-center gap-2">
+                            <span>📈</span> Histórico de Precios
+                        </h3>
+                        <!-- Indicador de rentabilidad del período -->
+                        <div id="period-return" class="hidden px-3 py-1 rounded-lg text-sm font-semibold">
+                            <span id="period-return-value">+0.00%</span>
+                            <span id="period-return-label" class="text-xs text-gray-400 ml-1">(1A)</span>
+                        </div>
+                    </div>
                     <div class="flex gap-2">
                         <button onclick="loadChart('1mo')" class="period-btn px-3 py-1 rounded text-sm bg-gray-700 hover:bg-gray-600 transition" data-period="1mo">1M</button>
                         <button onclick="loadChart('3mo')" class="period-btn px-3 py-1 rounded text-sm bg-gray-700 hover:bg-gray-600 transition" data-period="3mo">3M</button>
@@ -565,6 +572,18 @@
         async function loadChart(periodo) {
             if (!activoActual) return;
             
+            // Mapeo de período a etiqueta
+            const periodLabels = {
+                '1mo': '1M',
+                '3mo': '3M',
+                '6mo': '6M',
+                '1y': '1A',
+                '5y': '5A',
+                '10y': '10A',
+                'max': 'Máx'
+            };
+            const periodLabel = periodLabels[periodo] || periodo;
+            
             // Actualizar botones
             document.querySelectorAll('.period-btn').forEach(btn => {
                 btn.classList.remove('bg-blue-600');
@@ -585,11 +604,15 @@
                         fechas: result.data.fechas
                     };
                     
-                    renderChart(result.data.fechas, result.data.precios);
+                    renderChart(result.data.fechas, result.data.precios, periodLabel);
                     ejecutarAnalisisRendimiento();
+                } else {
+                    // Ocultar indicador si no hay datos
+                    document.getElementById('period-return')?.classList.add('hidden');
                 }
             } catch (error) {
                 console.error('Error cargando gráfico:', error);
+                document.getElementById('period-return')?.classList.add('hidden');
             }
             
             document.getElementById('chart-loader').classList.add('hidden');
@@ -602,12 +625,40 @@
             document.getElementById('alerts-container').innerHTML = '';
         }
         
-        function renderChart(fechas, precios) {
+        function renderChart(fechas, precios, periodLabel = '1A') {
             const ctx = document.getElementById('price-chart').getContext('2d');
             
             if (priceChart) {
                 priceChart.destroy();
             }
+            
+            // Calcular rentabilidad del período
+            const firstPrice = precios[0];
+            const lastPrice = precios[precios.length - 1];
+            const isPositive = lastPrice >= firstPrice;
+            const rentabilidad = ((lastPrice - firstPrice) / firstPrice) * 100;
+            
+            // Mostrar indicador de rentabilidad
+            const periodReturnEl = document.getElementById('period-return');
+            const periodReturnValue = document.getElementById('period-return-value');
+            const periodReturnLabel = document.getElementById('period-return-label');
+            
+            if (periodReturnEl && periodReturnValue && periodReturnLabel) {
+                periodReturnEl.classList.remove('hidden', 'bg-green-900/50', 'text-green-400', 'bg-red-900/50', 'text-red-400');
+                
+                if (isPositive) {
+                    periodReturnEl.classList.add('bg-green-900/50', 'text-green-400');
+                    periodReturnValue.textContent = `+${rentabilidad.toFixed(2)}%`;
+                } else {
+                    periodReturnEl.classList.add('bg-red-900/50', 'text-red-400');
+                    periodReturnValue.textContent = `${rentabilidad.toFixed(2)}%`;
+                }
+                periodReturnLabel.textContent = `(${periodLabel})`;
+            }
+            
+            // Color de la línea según rendimiento
+            const lineColor = isPositive ? '#10b981' : '#ef4444';
+            const bgColor = isPositive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
             
             priceChart = new Chart(ctx, {
                 type: 'line',
@@ -616,8 +667,8 @@
                     datasets: [{
                         label: 'Precio',
                         data: precios,
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderColor: lineColor,
+                        backgroundColor: bgColor,
                         borderWidth: 2,
                         fill: true,
                         tension: 0.1,

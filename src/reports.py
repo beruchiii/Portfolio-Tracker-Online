@@ -14,19 +14,73 @@ class PortfolioAnalyzer:
         self.portfolio = portfolio
         self._posiciones_con_precio: List[PositionWithPrice] = []
     
+    def _obtener_precio_historico(self, ticker: str, isin: str) -> Optional[float]:
+        """Obtiene el último precio del histórico como fallback"""
+        try:
+            import yfinance as yf
+            
+            # Intentar con ticker
+            if ticker:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period="5d")
+                if not hist.empty:
+                    return float(hist['Close'].iloc[-1])
+            
+            # Intentar con ISIN como ticker (algunos fondos)
+            if isin:
+                stock = yf.Ticker(isin)
+                hist = stock.history(period="5d")
+                if not hist.empty:
+                    return float(hist['Close'].iloc[-1])
+            
+            return None
+        except:
+            return None
+    
+    def _obtener_precio_justetf_historico(self, isin: str) -> Optional[float]:
+        """Obtiene el último precio de justETF vía histórico"""
+        try:
+            from .scrapers import justetf_scraper
+            datos = justetf_scraper(isin, periodo='1mo')
+            if datos and 'precios' in datos and len(datos['precios']) > 0:
+                return float(datos['precios'][-1])
+            return None
+        except:
+            return None
+    
     def actualizar_precios(self) -> List[PositionWithPrice]:
         """Actualiza los precios de todas las posiciones"""
         self._posiciones_con_precio = []
         
         for pos in self.portfolio.posiciones:
-            # Pasar tanto ticker como ISIN para el sistema de fallback
+            precio_final = 0.0
+            moneda = 'EUR'
+            
+            # 1️⃣ Intentar precio normal (Yahoo + justETF)
             precio_data = price_fetcher.obtener_precio(pos.ticker, pos.isin)
             
-            # Si no hay precio o es 0, intentar con justETF directamente por ISIN
-            if (not precio_data or precio_data.get('precio', 0) == 0) and pos.isin:
+            if precio_data and precio_data.get('precio', 0) > 0:
+                precio_final = precio_data['precio']
+                moneda = precio_data.get('moneda', 'EUR')
+            
+            # 2️⃣ Si precio es 0, intentar con justETF directamente
+            if precio_final == 0 and pos.isin:
                 precio_data_alt = price_fetcher.obtener_precio_por_isin(pos.isin)
                 if precio_data_alt and precio_data_alt.get('precio', 0) > 0:
-                    precio_data = precio_data_alt
+                    precio_final = precio_data_alt['precio']
+                    moneda = precio_data_alt.get('moneda', 'EUR')
+            
+            # 3️⃣ Si sigue siendo 0, usar histórico de Yahoo
+            if precio_final == 0:
+                precio_hist = self._obtener_precio_historico(pos.ticker, pos.isin)
+                if precio_hist and precio_hist > 0:
+                    precio_final = precio_hist
+            
+            # 4️⃣ Último recurso: histórico de justETF
+            if precio_final == 0 and pos.isin:
+                precio_justetf = self._obtener_precio_justetf_historico(pos.isin)
+                if precio_justetf and precio_justetf > 0:
+                    precio_final = precio_justetf
             
             pos_with_price = PositionWithPrice(
                 id=pos.id,
@@ -35,8 +89,8 @@ class PortfolioAnalyzer:
                 nombre=pos.nombre,
                 cantidad=pos.cantidad,
                 precio_medio=pos.precio_medio,
-                precio_actual=precio_data['precio'] if precio_data and precio_data.get('precio', 0) > 0 else 0.0,
-                moneda=precio_data['moneda'] if precio_data else 'EUR',
+                precio_actual=precio_final,
+                moneda=moneda,
                 aportaciones=pos.aportaciones,
                 num_aportaciones=pos.num_aportaciones,
                 fecha_primera_compra=pos.fecha_primera_compra,

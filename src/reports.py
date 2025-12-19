@@ -22,6 +22,12 @@ class PortfolioAnalyzer:
             # Pasar tanto ticker como ISIN para el sistema de fallback
             precio_data = price_fetcher.obtener_precio(pos.ticker, pos.isin)
             
+            # Si no hay precio o es 0, intentar con justETF directamente por ISIN
+            if (not precio_data or precio_data.get('precio', 0) == 0) and pos.isin:
+                precio_data_alt = price_fetcher.obtener_precio_por_isin(pos.isin)
+                if precio_data_alt and precio_data_alt.get('precio', 0) > 0:
+                    precio_data = precio_data_alt
+            
             pos_with_price = PositionWithPrice(
                 id=pos.id,
                 isin=pos.isin,
@@ -29,7 +35,7 @@ class PortfolioAnalyzer:
                 nombre=pos.nombre,
                 cantidad=pos.cantidad,
                 precio_medio=pos.precio_medio,
-                precio_actual=precio_data['precio'] if precio_data else 0.0,
+                precio_actual=precio_data['precio'] if precio_data and precio_data.get('precio', 0) > 0 else 0.0,
                 moneda=precio_data['moneda'] if precio_data else 'EUR',
                 aportaciones=pos.aportaciones,
                 num_aportaciones=pos.num_aportaciones,

@@ -61,9 +61,11 @@ class PriceFetcher:
         if ticker and ticker.strip():
             resultado = self._obtener_yahoo(ticker)
         
-        # 2️⃣ Si falla y tenemos ISIN, intentar fuentes alternativas
-        if resultado is None and isin and self._scrapers_disponibles:
-            resultado = self._buscar_alternativo(isin)
+        # 2️⃣ Si falla o devuelve precio 0, y tenemos ISIN, intentar fuentes alternativas
+        if (resultado is None or resultado.get('precio', 0) == 0) and isin and self._scrapers_disponibles:
+            resultado_alt = self._buscar_alternativo(isin)
+            if resultado_alt and resultado_alt.get('precio', 0) > 0:
+                resultado = resultado_alt
         
         # Guardar en caché si encontramos algo
         if resultado:
@@ -88,13 +90,25 @@ class PriceFetcher:
                 info.get('previousClose')
             )
             
-            if precio is None:
-                # Intentar con historial
+            # Si precio es None o 0, intentar con historial corto
+            if precio is None or precio == 0:
                 hist = stock.history(period="1d")
                 if not hist.empty:
                     precio = hist['Close'].iloc[-1]
             
-            if precio is None:
+            # Si sigue siendo None o 0, intentar con historial más largo
+            if precio is None or precio == 0:
+                hist = stock.history(period="5d")
+                if not hist.empty:
+                    precio = hist['Close'].iloc[-1]
+            
+            # Último intento: historial de 1 mes
+            if precio is None or precio == 0:
+                hist = stock.history(period="1mo")
+                if not hist.empty:
+                    precio = hist['Close'].iloc[-1]
+            
+            if precio is None or precio == 0:
                 return None
             
             return {

@@ -272,12 +272,16 @@ def cargar_portfolio() -> Portfolio:
             )
             pos.id = pos_db.id
             for ap_db in pos_db.aportaciones:
-                pos.aportaciones.append({
-                    'fecha': ap_db.fecha.isoformat() if ap_db.fecha else None,
-                    'cantidad': ap_db.cantidad,
-                    'precio': ap_db.precio,
-                    'comision': ap_db.comision or 0
-                })
+                # Crear objeto Aportacion en lugar de dict
+                from src.models import Aportacion as AportacionModel
+                ap = AportacionModel(
+                    cantidad=ap_db.cantidad,
+                    precio_compra=ap_db.precio,
+                    fecha_compra=ap_db.fecha.isoformat() if ap_db.fecha else '',
+                    broker=getattr(ap_db, 'broker', '') or '',
+                    notas=ap_db.notas or ''
+                )
+                pos.aportaciones.append(ap)
             portfolio.posiciones.append(pos)
         return portfolio
     else:

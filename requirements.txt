@@ -2,6 +2,7 @@
 flask>=3.0.0
 flask-cors>=4.0.0
 flask-sqlalchemy>=3.1.0
+flask-login>=0.6.0
 
 # Base de datos
 psycopg2-binary>=2.9.0
@@ -16,9 +17,12 @@ requests>=2.31.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
 
-# CLI/Utils
+# CLI (opcional para local)
 rich>=13.7.0
+inquirerpy>=0.3.4
+plotext>=5.2.8
 
 # Producción
 gunicorn>=21.0.0
+python-dotenv>=1.0.0
 werkzeug>=3.0.0

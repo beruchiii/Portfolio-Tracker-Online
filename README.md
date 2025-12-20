@@ -1,100 +1,95 @@
 # 📊 Portfolio Tracker
 
-Aplicación para el seguimiento de tu cartera de inversiones con **dos interfaces**:
-- 🖥️ **Terminal** - Interfaz de línea de comandos visual
-- 🌐 **Web** - Dashboard interactivo en el navegador
+Dashboard web para gestionar tu cartera de inversiones.
 
-## ✨ Características
+## 🚀 Deploy en Render (Gratis)
 
-- ✅ Registro de posiciones por ISIN (sin necesitar ticker)
-- ✅ **Sistema multi-fuente de cotizaciones:**
-  - 1️⃣ Yahoo Finance (acciones, ETFs internacionales)
-  - 2️⃣ justETF API (ETFs europeos) ⭐
-  - 3️⃣ Morningstar (fondos europeos)
-- ✅ **Dashboard web** con gráficos comparativos
-- ✅ Cálculo automático de rentabilidad (€ y %)
-- ✅ Comparativa visual entre posiciones
-- ✅ Datos guardados localmente en JSON
+### Paso 1: Crear cuenta en Render
+1. Ve a [render.com](https://render.com)
+2. Regístrate con GitHub
 
-## 🚀 Instalación
+### Paso 2: Subir código a GitHub
+1. Crea un repositorio en GitHub
+2. Sube los archivos de portfolio_tracker:
+```bash
+git init
+git add .
+git commit -m "Portfolio Tracker v1"
+git remote add origin https://github.com/TU_USUARIO/portfolio-tracker.git
+git push -u origin main
+```
+
+### Paso 3: Crear Base de Datos en Render
+1. En Render Dashboard → New → PostgreSQL
+2. Nombre: `portfolio-db`
+3. Plan: Free
+4. Crear → Copiar "Internal Database URL"
+
+### Paso 4: Crear Web Service en Render
+1. New → Web Service
+2. Conectar tu repo de GitHub
+3. Configurar:
+   - Name: `portfolio-tracker`
+   - Runtime: Python 3
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `gunicorn web_app:app --bind 0.0.0.0:$PORT`
+
+### Paso 5: Variables de Entorno
+En Render → Environment, añadir:
+
+| Variable | Valor |
+|----------|-------|
+| `DATABASE_URL` | (la URL de PostgreSQL del paso 3) |
+| `SECRET_KEY` | (genera una: `python -c "import secrets; print(secrets.token_hex(32))"`) |
+| `REQUIRE_AUTH` | `true` |
+| `ADMIN_USER` | tu_usuario |
+| `ADMIN_PASS` | tu_contraseña_segura |
+| `FLASK_ENV` | `production` |
+
+### Paso 6: Deploy
+1. Click en "Create Web Service"
+2. Espera 2-3 minutos
+3. ¡Listo! Tu app estará en `https://portfolio-tracker-xxxx.onrender.com`
+
+---
+
+## 💻 Desarrollo Local
 
 ```bash
-# 1. Descomprimir
-unzip portfolio_tracker_web.zip
-cd portfolio_tracker
-
-# 2. Crear entorno virtual
-python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# 3. Instalar dependencias
+# Instalar dependencias
 pip install -r requirements.txt
+
+# Ejecutar (modo desarrollo, sin auth)
+python web_app.py --port 9000
+
+# Ejecutar con autenticación
+REQUIRE_AUTH=true ADMIN_USER=admin ADMIN_PASS=test123 python web_app.py
 ```
 
-## 📖 Uso
+---
 
-### 🌐 Versión Web (Recomendada)
+## 📱 Instalar como App (PWA)
 
-```bash
-python web_app.py
-```
+1. Abre la web en Safari (iPhone) o Chrome (Android)
+2. Menú Compartir → "Añadir a pantalla de inicio"
+3. ¡Listo! Tendrás un icono como app nativa
 
-Abre tu navegador en: **http://localhost:5000**
+---
 
-![Dashboard](https://via.placeholder.com/800x400?text=Dashboard+Preview)
+## 🔧 Características
 
-### 🖥️ Versión Terminal
+- ✅ Dashboard con resumen de cartera
+- ✅ Gráficos de evolución y distribución
+- ✅ Alertas de precio
+- ✅ Target Allocation y rebalanceo automático
+- ✅ Análisis técnico (RSI, Bollinger, soportes/resistencias)
+- ✅ Explorar activos sin añadirlos
+- ✅ Backup/Restore de datos
+- ✅ PWA para móvil
+- ✅ Autenticación básica
 
-```bash
-python main.py
-```
+---
 
-## 🌐 Características de la Versión Web
+## 📄 Licencia
 
-### Dashboard
-- 📊 **Resumen de cartera** - Valor total, beneficio, rentabilidad
-- 📈 **Gráfico de rentabilidad** - Compara el rendimiento de cada posición
-- 🥧 **Distribución de cartera** - Ve el peso de cada activo
-- 💹 **Beneficio por posición** - Gráfico de ganancias/pérdidas
-- 📋 **Tabla de posiciones** - Detalle completo de cada activo
-
-### Añadir Posición
-- 🔍 **Búsqueda por ISIN** - Encuentra automáticamente el activo
-- ✅ **Validación en tiempo real** - Verifica el activo antes de añadir
-- 📝 **Formulario guiado** - Paso a paso para no olvidar nada
-
-## 📁 Estructura del proyecto
-
-```
-portfolio_tracker/
-├── data/
-│   └── portfolio.json      # Tus datos
-├── src/
-│   ├── models.py           # Modelos de datos
-│   ├── price_fetcher.py    # Sistema multi-fuente
-│   ├── scrapers.py         # Scrapers y API justETF
-│   └── reports.py          # Análisis y cálculos
-├── templates/
-│   ├── index.html          # Dashboard web
-│   └── add_position.html   # Formulario añadir
-├── static/                 # Archivos estáticos
-├── main.py                 # App terminal
-├── web_app.py              # App web (Flask)
-└── requirements.txt
-```
-
-## 🛠️ Tecnologías
-
-- **Python 3.8+**
-- **Flask** - Servidor web
-- **Tailwind CSS** - Estilos
-- **Chart.js** - Gráficos
-- **Rich** - Interfaz terminal
-- **yfinance** - Yahoo Finance
-- **BeautifulSoup4** - Scraping
-
-## 📝 Notas
-
-- Los datos se guardan en `data/portfolio.json`
-- Los precios se actualizan cada vez que cargas el dashboard
-- Compatible con Windows, macOS y Linux
+MIT - Uso libre para proyectos personales

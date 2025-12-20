@@ -40,6 +40,16 @@ if USE_DATABASE:
     db.init_app(app)
     
     with app.app_context():
+        # Forzar recreación de tabla alertas con columnas nuevas
+        try:
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                conn.execute(text("DROP TABLE IF EXISTS alertas CASCADE"))
+                conn.commit()
+                print("🗑️ Tabla alertas eliminada para recrear")
+        except Exception as e:
+            print(f"⚠️ Error eliminando alertas: {e}")
+        
         db.create_all()
     
     print("✅ Usando base de datos PostgreSQL")

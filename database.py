@@ -1,5 +1,5 @@
 """
-Base de datos para Portfolio Tracker
+Base de datos para Portfolio Tracker - Sistema Multiusuario
 Soporta SQLite (local) y PostgreSQL (producción)
 """
 import os
@@ -9,11 +9,51 @@ from sqlalchemy import func
 
 db = SQLAlchemy()
 
+
+class Usuario(db.Model):
+    """Modelo para usuarios"""
+    __tablename__ = 'usuarios'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    nombre = db.Column(db.String(100))  # Nombre para mostrar
+    is_admin = db.Column(db.Boolean, default=False)
+    activo = db.Column(db.Boolean, default=True)
+    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
+    ultimo_acceso = db.Column(db.DateTime)
+    
+    # Relaciones
+    posiciones = db.relationship('Posicion', backref='usuario', lazy=True, cascade='all, delete-orphan')
+    alertas = db.relationship('Alerta', backref='usuario', lazy=True, cascade='all, delete-orphan')
+    targets = db.relationship('Target', backref='usuario', lazy=True, cascade='all, delete-orphan')
+    activos_nuevos = db.relationship('ActivoNuevo', backref='usuario', lazy=True, cascade='all, delete-orphan')
+    
+    def set_password(self, password):
+        from werkzeug.security import generate_password_hash
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        from werkzeug.security import check_password_hash
+        return check_password_hash(self.password_hash, password)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'nombre': self.nombre,
+            'is_admin': self.is_admin,
+            'activo': self.activo,
+            'fecha_creacion': self.fecha_creacion.isoformat() if self.fecha_creacion else None
+        }
+
+
 class Posicion(db.Model):
     """Modelo para posiciones de la cartera"""
     __tablename__ = 'posiciones'
     
     id = db.Column(db.String(50), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True, index=True)
     isin = db.Column(db.String(20), nullable=False, index=True)
     ticker = db.Column(db.String(20))
     nombre = db.Column(db.String(200), nullable=False)
@@ -75,16 +115,18 @@ class Alerta(db.Model):
     __tablename__ = 'alertas'
     
     id = db.Column(db.String(50), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True, index=True)
     isin = db.Column(db.String(20), nullable=False, index=True)
     nombre = db.Column(db.String(200))
-    tipo = db.Column(db.String(20), nullable=False)  # 'above' o 'below'
+    tipo = db.Column(db.String(20), nullable=False)  # 'baja' o 'sube'
     precio_objetivo = db.Column(db.Float, nullable=False)
     precio_actual = db.Column(db.Float)
-    precio_referencia = db.Column(db.Float)  # Precio cuando se creó la alerta
-    objetivo_pct = db.Column(db.Float)  # Porcentaje objetivo
-    ticker = db.Column(db.String(20))  # Ticker del activo
+    precio_referencia = db.Column(db.Float)
+    objetivo_pct = db.Column(db.Float)
+    ticker = db.Column(db.String(20))
     activa = db.Column(db.Boolean, default=True)
     disparada = db.Column(db.Boolean, default=False)
+    notificada = db.Column(db.Boolean, default=False)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_disparo = db.Column(db.DateTime)
     notas = db.Column(db.Text)
@@ -102,6 +144,7 @@ class Alerta(db.Model):
             'ticker': self.ticker,
             'activa': self.activa,
             'disparada': self.disparada,
+            'notificada': self.notificada,
             'fecha_creacion': self.fecha_creacion.isoformat() if self.fecha_creacion else None,
             'fecha_disparo': self.fecha_disparo.isoformat() if self.fecha_disparo else None,
             'notas': self.notas
@@ -113,7 +156,8 @@ class Target(db.Model):
     __tablename__ = 'targets'
     
     id = db.Column(db.Integer, primary_key=True)
-    isin = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True, index=True)
+    isin = db.Column(db.String(20), nullable=False, index=True)
     porcentaje = db.Column(db.Float, nullable=False)
     
     def to_dict(self):
@@ -128,7 +172,8 @@ class ActivoNuevo(db.Model):
     __tablename__ = 'activos_nuevos'
     
     id = db.Column(db.Integer, primary_key=True)
-    isin = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True, index=True)
+    isin = db.Column(db.String(20), nullable=False, index=True)
     nombre = db.Column(db.String(200))
     categoria = db.Column(db.String(100))
     precio = db.Column(db.Float)
@@ -142,30 +187,12 @@ class ActivoNuevo(db.Model):
         }
 
 
-class Usuario(db.Model):
-    """Modelo para usuarios (autenticación básica)"""
-    __tablename__ = 'usuarios'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
-    ultimo_acceso = db.Column(db.DateTime)
-    
-    def set_password(self, password):
-        from werkzeug.security import generate_password_hash
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        from werkzeug.security import check_password_hash
-        return check_password_hash(self.password_hash, password)
-
-
 class TelegramConfig(db.Model):
-    """Modelo para configuración de Telegram"""
+    """Modelo para configuración de Telegram por usuario"""
     __tablename__ = 'telegram_config'
     
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True, unique=True, index=True)
     bot_token = db.Column(db.String(100), nullable=False)
     chat_id = db.Column(db.String(50))
     activo = db.Column(db.Boolean, default=True)
@@ -181,7 +208,7 @@ class TelegramConfig(db.Model):
         }
 
 
-# Funciones helper para migrar datos
+# Funciones helper
 def init_db(app):
     """Inicializa la base de datos"""
     db.init_app(app)
@@ -189,65 +216,40 @@ def init_db(app):
         db.create_all()
 
 
-def migrar_desde_json(app, portfolio_data, alertas_data, targets_data, nuevos_data):
-    """Migra datos desde archivos JSON a la base de datos"""
+def crear_usuario_admin(app, username, password, nombre=None):
+    """Crea el usuario administrador inicial"""
     with app.app_context():
-        # Migrar posiciones
-        if portfolio_data and 'posiciones' in portfolio_data:
-            for pos_data in portfolio_data['posiciones']:
-                pos = Posicion(
-                    id=pos_data.get('id', pos_data.get('isin')),
-                    isin=pos_data['isin'],
-                    ticker=pos_data.get('ticker'),
-                    nombre=pos_data['nombre'],
-                    categoria=pos_data.get('categoria')
-                )
-                db.session.add(pos)
-                
-                # Migrar aportaciones
-                for ap_data in pos_data.get('aportaciones', []):
-                    ap = Aportacion(
-                        posicion_id=pos.id,
-                        fecha=datetime.fromisoformat(ap_data['fecha']).date() if ap_data.get('fecha') else datetime.utcnow().date(),
-                        cantidad=ap_data['cantidad'],
-                        precio=ap_data['precio'],
-                        comision=ap_data.get('comision', 0),
-                        notas=ap_data.get('notas')
-                    )
-                    db.session.add(ap)
-        
-        # Migrar alertas
-        if alertas_data:
-            for al_data in alertas_data:
-                alerta = Alerta(
-                    id=al_data['id'],
-                    isin=al_data['isin'],
-                    nombre=al_data.get('nombre'),
-                    tipo=al_data['tipo'],
-                    precio_objetivo=al_data['precio_objetivo'],
-                    precio_actual=al_data.get('precio_actual'),
-                    activa=al_data.get('activa', True),
-                    disparada=al_data.get('disparada', False),
-                    notas=al_data.get('notas')
-                )
-                db.session.add(alerta)
-        
-        # Migrar targets
-        if targets_data:
-            for isin, porcentaje in targets_data.items():
-                target = Target(isin=isin, porcentaje=porcentaje)
-                db.session.add(target)
-        
-        # Migrar activos nuevos
-        if nuevos_data:
-            for isin, info in nuevos_data.items():
-                nuevo = ActivoNuevo(
-                    isin=isin,
-                    nombre=info.get('nombre'),
-                    categoria=info.get('categoria'),
-                    precio=info.get('precio')
-                )
-                db.session.add(nuevo)
-        
-        db.session.commit()
-        print("✅ Migración completada")
+        # Verificar si ya existe
+        admin = Usuario.query.filter_by(username=username).first()
+        if not admin:
+            admin = Usuario(
+                username=username,
+                nombre=nombre or 'Administrador',
+                is_admin=True,
+                activo=True
+            )
+            admin.set_password(password)
+            db.session.add(admin)
+            db.session.commit()
+            print(f"✅ Usuario admin '{username}' creado")
+            return admin
+        else:
+            print(f"ℹ️ Usuario admin '{username}' ya existe")
+            return admin
+
+
+def migrar_datos_a_usuario(user_id):
+    """Migra datos sin user_id al usuario especificado"""
+    # Migrar posiciones
+    Posicion.query.filter_by(user_id=None).update({'user_id': user_id})
+    # Migrar alertas
+    Alerta.query.filter_by(user_id=None).update({'user_id': user_id})
+    # Migrar targets
+    Target.query.filter_by(user_id=None).update({'user_id': user_id})
+    # Migrar activos nuevos
+    ActivoNuevo.query.filter_by(user_id=None).update({'user_id': user_id})
+    # Migrar telegram config
+    TelegramConfig.query.filter_by(user_id=None).update({'user_id': user_id})
+    
+    db.session.commit()
+    print(f"✅ Datos migrados al usuario {user_id}")

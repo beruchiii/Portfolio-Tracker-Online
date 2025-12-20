@@ -99,6 +99,13 @@
                     </svg>
                 </button>
                 
+                <!-- Admin (solo si es admin) -->
+                {% if session.get('is_admin') %}
+                <a href="/admin" class="hidden md:flex bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-lg font-medium transition items-center gap-1 text-sm" title="Administración">
+                    👥 Admin
+                </a>
+                {% endif %}
+                
                 <!-- Navegación desktop (oculta en móvil) -->
                 <a href="/settings" class="hidden md:block text-gray-400 hover:text-white transition p-2" title="Configuración">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -125,6 +132,18 @@
                     </svg>
                     Añadir Posición
                 </a>
+                
+                <!-- Usuario y Logout -->
+                {% if session.get('logged_in') %}
+                <div class="hidden md:flex items-center gap-2 ml-2 pl-2 border-l border-gray-600">
+                    <span class="text-sm text-gray-400">{{ session.get('nombre', session.get('username', '')) }}</span>
+                    <a href="/logout" class="text-red-400 hover:text-red-300 p-1" title="Cerrar sesión">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                        </svg>
+                    </a>
+                </div>
+                {% endif %}
             </div>
         </div>
     </header>

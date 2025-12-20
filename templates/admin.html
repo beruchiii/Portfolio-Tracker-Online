@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administración - Portfolio Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="/" class="text-gray-400 hover:text-white transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                </a>
+                <h1 class="text-xl font-bold flex items-center gap-2">
+                    <span>👥</span> Administración de Usuarios
+                </h1>
+            </div>
+            <a href="/logout" class="text-red-400 hover:text-red-300 transition text-sm">
+                Cerrar sesión
+            </a>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+        
+        <!-- Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-3xl font-bold text-blue-400" id="stat-usuarios">-</div>
+                <div class="text-sm text-gray-400">Usuarios</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-3xl font-bold text-green-400" id="stat-posiciones">-</div>
+                <div class="text-sm text-gray-400">Posiciones</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-3xl font-bold text-orange-400" id="stat-alertas">-</div>
+                <div class="text-sm text-gray-400">Alertas Activas</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-3xl font-bold text-purple-400" id="stat-telegram">-</div>
+                <div class="text-sm text-gray-400">Con Telegram</div>
+            </div>
+        </div>
+        
+        <!-- Crear Usuario -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span>➕</span> Crear Nuevo Usuario
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Usuario *</label>
+                    <input type="text" id="nuevo-username" placeholder="ej: benito"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Contraseña *</label>
+                    <input type="password" id="nuevo-password" placeholder="••••••••"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Nombre</label>
+                    <input type="text" id="nuevo-nombre" placeholder="ej: Benito García"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 outline-none">
+                </div>
+                <div class="flex items-end gap-2">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="nuevo-admin" class="w-4 h-4 rounded">
+                        <span class="text-sm">Admin</span>
+                    </label>
+                    <button onclick="crearUsuario()" 
+                        class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition">
+                        Crear
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Lista de Usuarios -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <div class="p-4 border-b border-gray-700 flex items-center justify-between">
+                <h2 class="text-lg font-semibold flex items-center gap-2">
+                    <span>👤</span> Usuarios Registrados
+                </h2>
+                <button onclick="cargarUsuarios()" class="text-gray-400 hover:text-white transition">
+                    🔄 Actualizar
+                </button>
+            </div>
+            
+            <div id="usuarios-loading" class="p-8 text-center">
+                <div class="loader mx-auto mb-4"></div>
+                <p class="text-gray-400">Cargando usuarios...</p>
+            </div>
+            
+            <div id="usuarios-list" class="hidden">
+                <!-- Se llena dinámicamente -->
+            </div>
+        </div>
+        
+    </main>
+
+    <!-- Modal Editar -->
+    <div id="modal-editar" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 border border-gray-700">
+            <h3 class="text-lg font-semibold mb-4">✏️ Editar Usuario</h3>
+            <input type="hidden" id="editar-id">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Usuario</label>
+                    <input type="text" id="editar-username" disabled
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-gray-500">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Nombre</label>
+                    <input type="text" id="editar-nombre"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Nueva Contraseña (dejar vacío para no cambiar)</label>
+                    <input type="password" id="editar-password" placeholder="••••••••"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-blue-500 outline-none">
+                </div>
+                <div class="flex gap-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="editar-activo" class="w-4 h-4 rounded">
+                        <span class="text-sm">Activo</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="editar-admin" class="w-4 h-4 rounded">
+                        <span class="text-sm">Admin</span>
+                    </label>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="cerrarModalEditar()" 
+                    class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition">
+                    Cancelar
+                </button>
+                <button onclick="guardarEdicion()" 
+                    class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition">
+                    Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            cargarStats();
+            cargarUsuarios();
+        });
+        
+        async function cargarStats() {
+            try {
+                const response = await fetch('/api/admin/stats');
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('stat-usuarios').textContent = result.data.usuarios_activos;
+                    document.getElementById('stat-posiciones').textContent = result.data.total_posiciones;
+                    document.getElementById('stat-alertas').textContent = result.data.alertas_activas;
+                    document.getElementById('stat-telegram').textContent = result.data.telegram_configurados;
+                }
+            } catch (error) {
+                console.error('Error cargando stats:', error);
+            }
+        }
+        
+        async function cargarUsuarios() {
+            document.getElementById('usuarios-loading').classList.remove('hidden');
+            document.getElementById('usuarios-list').classList.add('hidden');
+            
+            try {
+                const response = await fetch('/api/admin/usuarios');
+                const result = await response.json();
+                
+                document.getElementById('usuarios-loading').classList.add('hidden');
+                document.getElementById('usuarios-list').classList.remove('hidden');
+                
+                if (result.success) {
+                    const container = document.getElementById('usuarios-list');
+                    
+                    if (result.data.length === 0) {
+                        container.innerHTML = '<p class="p-8 text-center text-gray-500">No hay usuarios</p>';
+                        return;
+                    }
+                    
+                    container.innerHTML = `
+                        <table class="w-full">
+                            <thead class="bg-gray-700/50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-400">Usuario</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-400">Nombre</th>
+                                    <th class="px-4 py-3 text-center text-sm font-medium text-gray-400">Admin</th>
+                                    <th class="px-4 py-3 text-center text-sm font-medium text-gray-400">Estado</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-400">Creado</th>
+                                    <th class="px-4 py-3 text-right text-sm font-medium text-gray-400">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-700">
+                                ${result.data.map(u => `
+                                    <tr class="hover:bg-gray-700/30">
+                                        <td class="px-4 py-3 font-medium">${u.username}</td>
+                                        <td class="px-4 py-3 text-gray-400">${u.nombre || '-'}</td>
+                                        <td class="px-4 py-3 text-center">
+                                            ${u.is_admin ? '<span class="text-yellow-400">👑</span>' : '-'}
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            ${u.activo 
+                                                ? '<span class="px-2 py-1 bg-green-900/50 text-green-400 rounded text-xs">Activo</span>'
+                                                : '<span class="px-2 py-1 bg-red-900/50 text-red-400 rounded text-xs">Inactivo</span>'
+                                            }
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-gray-500">
+                                            ${u.fecha_creacion ? new Date(u.fecha_creacion).toLocaleDateString('es-ES') : '-'}
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <button onclick='abrirModalEditar(${JSON.stringify(u)})' 
+                                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm transition mr-1">
+                                                ✏️
+                                            </button>
+                                            <button onclick="eliminarUsuario(${u.id}, '${u.username}')" 
+                                                class="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm transition">
+                                                🗑️
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error cargando usuarios:', error);
+                document.getElementById('usuarios-loading').classList.add('hidden');
+                document.getElementById('usuarios-list').innerHTML = '<p class="p-8 text-center text-red-400">Error cargando usuarios</p>';
+                document.getElementById('usuarios-list').classList.remove('hidden');
+            }
+        }
+        
+        async function crearUsuario() {
+            const username = document.getElementById('nuevo-username').value.trim();
+            const password = document.getElementById('nuevo-password').value;
+            const nombre = document.getElementById('nuevo-nombre').value.trim();
+            const isAdmin = document.getElementById('nuevo-admin').checked;
+            
+            if (!username || !password) {
+                alert('Usuario y contraseña son requeridos');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/usuarios', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, nombre, is_admin: isAdmin })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('Usuario creado correctamente');
+                    document.getElementById('nuevo-username').value = '';
+                    document.getElementById('nuevo-password').value = '';
+                    document.getElementById('nuevo-nombre').value = '';
+                    document.getElementById('nuevo-admin').checked = false;
+                    cargarUsuarios();
+                    cargarStats();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error de conexión');
+            }
+        }
+        
+        function abrirModalEditar(usuario) {
+            document.getElementById('editar-id').value = usuario.id;
+            document.getElementById('editar-username').value = usuario.username;
+            document.getElementById('editar-nombre').value = usuario.nombre || '';
+            document.getElementById('editar-password').value = '';
+            document.getElementById('editar-activo').checked = usuario.activo;
+            document.getElementById('editar-admin').checked = usuario.is_admin;
+            
+            document.getElementById('modal-editar').classList.remove('hidden');
+            document.getElementById('modal-editar').classList.add('flex');
+        }
+        
+        function cerrarModalEditar() {
+            document.getElementById('modal-editar').classList.add('hidden');
+            document.getElementById('modal-editar').classList.remove('flex');
+        }
+        
+        async function guardarEdicion() {
+            const id = document.getElementById('editar-id').value;
+            const nombre = document.getElementById('editar-nombre').value.trim();
+            const password = document.getElementById('editar-password').value;
+            const activo = document.getElementById('editar-activo').checked;
+            const isAdmin = document.getElementById('editar-admin').checked;
+            
+            const data = { nombre, activo, is_admin: isAdmin };
+            if (password) data.password = password;
+            
+            try {
+                const response = await fetch(`/api/admin/usuarios/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    cerrarModalEditar();
+                    cargarUsuarios();
+                    cargarStats();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error de conexión');
+            }
+        }
+        
+        async function eliminarUsuario(id, username) {
+            if (!confirm(`¿Eliminar usuario "${username}"?\n\nSe eliminarán también todas sus posiciones, alertas y configuración.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/admin/usuarios/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    cargarUsuarios();
+                    cargarStats();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error de conexión');
+            }
+        }
+    </script>
+</body>
+</html>

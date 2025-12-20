@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Portfolio Tracker - Versión Web
+Portfolio Tracker - Versión Web Multiusuario
 Dashboard interactivo para seguimiento de cartera
 """
 import os
@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import Flask, render_template, jsonify, request, redirect, url_for, session
+from flask import Flask, render_template, jsonify, request, redirect, url_for, session, g
 
 # Añadir src al path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -28,6 +28,10 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-portfolio-tracker'
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 USE_DATABASE = bool(DATABASE_URL)
 
+# Credenciales admin por defecto (para crear usuario inicial)
+ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
+ADMIN_PASS = os.environ.get('ADMIN_PASS', 'portfolio2024')
+
 if USE_DATABASE:
     # Render usa postgres://, SQLAlchemy necesita postgresql://
     if DATABASE_URL.startswith('postgres://'):
@@ -36,13 +40,62 @@ if USE_DATABASE:
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    from database import db, init_db, Posicion, Aportacion, Alerta, Target, ActivoNuevo, TelegramConfig
+    from database import db, Posicion, Aportacion, Alerta, Target, ActivoNuevo, TelegramConfig, Usuario, migrar_datos_a_usuario
     db.init_app(app)
     
     with app.app_context():
+        # Crear tablas
         db.create_all()
+        
+        # Añadir columnas nuevas si no existen (migración)
+        try:
+            from sqlalchemy import text
+            with db.engine.connect() as conn:
+                # Columnas user_id en tablas existentes
+                for tabla in ['posiciones', 'alertas', 'targets', 'activos_nuevos', 'telegram_config']:
+                    try:
+                        conn.execute(text(f"ALTER TABLE {tabla} ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES usuarios(id)"))
+                    except:
+                        pass
+                # Columnas nuevas en usuarios
+                try:
+                    conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS nombre VARCHAR(100)"))
+                    conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE"))
+                    conn.execute(text("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE"))
+                except:
+                    pass
+                # Columna notificada en alertas
+                try:
+                    conn.execute(text("ALTER TABLE alertas ADD COLUMN IF NOT EXISTS notificada BOOLEAN DEFAULT FALSE"))
+                except:
+                    pass
+                conn.commit()
+        except Exception as e:
+            print(f"⚠️ Migración: {e}")
+        
+        # Crear usuario admin si no existe
+        admin = Usuario.query.filter_by(username=ADMIN_USER).first()
+        if not admin:
+            admin = Usuario(
+                username=ADMIN_USER,
+                nombre='Administrador',
+                is_admin=True,
+                activo=True
+            )
+            admin.set_password(ADMIN_PASS)
+            db.session.add(admin)
+            db.session.commit()
+            print(f"✅ Usuario admin '{ADMIN_USER}' creado")
+            
+            # Migrar datos existentes al admin
+            migrar_datos_a_usuario(admin.id)
+        else:
+            # Asegurar que es admin
+            if not admin.is_admin:
+                admin.is_admin = True
+                db.session.commit()
     
-    print("✅ Usando base de datos PostgreSQL")
+    print("✅ Usando base de datos PostgreSQL (Multiusuario)")
 else:
     print("📁 Usando archivos JSON locales")
 
@@ -50,10 +103,17 @@ else:
 from flask_cors import CORS
 CORS(app)
 
-# Autenticación
-REQUIRE_AUTH = os.environ.get('REQUIRE_AUTH', 'false').lower() == 'true'
-ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
-ADMIN_PASS = os.environ.get('ADMIN_PASS', 'portfolio2024')
+# Autenticación siempre requerida en modo BD
+REQUIRE_AUTH = USE_DATABASE or os.environ.get('REQUIRE_AUTH', 'false').lower() == 'true'
+
+def get_current_user():
+    """Obtiene el usuario actual de la sesión"""
+    if not USE_DATABASE:
+        return None
+    user_id = session.get('user_id')
+    if user_id:
+        return Usuario.query.get(user_id)
+    return None
 
 def login_required(f):
     """Decorador para requerir autenticación"""
@@ -63,6 +123,25 @@ def login_required(f):
             if request.is_json:
                 return jsonify({'success': False, 'error': 'No autorizado'}), 401
             return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    """Decorador para requerir ser administrador"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'No autorizado'}), 401
+            return redirect(url_for('login'))
+        
+        if USE_DATABASE:
+            user = get_current_user()
+            if not user or not user.is_admin:
+                if request.is_json:
+                    return jsonify({'success': False, 'error': 'Se requiere ser administrador'}), 403
+                return redirect('/')
+        
         return f(*args, **kwargs)
     return decorated_function
 
@@ -89,10 +168,28 @@ def login():
         username = request.form.get('username', '')
         password = request.form.get('password', '')
         
-        if username == ADMIN_USER and password == ADMIN_PASS:
-            session['logged_in'] = True
-            session['username'] = username
-            return redirect('/')
+        if USE_DATABASE:
+            # Login con base de datos
+            user = Usuario.query.filter_by(username=username, activo=True).first()
+            if user and user.check_password(password):
+                session['logged_in'] = True
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session['is_admin'] = user.is_admin
+                session['nombre'] = user.nombre or user.username
+                
+                # Actualizar último acceso
+                user.ultimo_acceso = datetime.utcnow()
+                db.session.commit()
+                
+                return redirect('/')
+        else:
+            # Login con variables de entorno (modo local)
+            if username == ADMIN_USER and password == ADMIN_PASS:
+                session['logged_in'] = True
+                session['username'] = username
+                session['is_admin'] = True
+                return redirect('/')
         
         return render_template('login.html', error='Usuario o contraseña incorrectos')
     
@@ -109,10 +206,17 @@ def logout():
 # SISTEMA DE ALERTAS
 # =============================================================================
 
-def cargar_alertas():
+def cargar_alertas(user_id=None):
     """Carga las alertas desde archivo o BD"""
     if USE_DATABASE:
-        alertas = Alerta.query.all()
+        # Si no se especifica user_id, usar el de la sesión
+        if user_id is None:
+            user_id = session.get('user_id')
+        
+        if user_id:
+            alertas = Alerta.query.filter_by(user_id=user_id).all()
+        else:
+            alertas = Alerta.query.all()
         return [a.to_dict() for a in alertas]
     
     if ALERTS_FILE.exists():
@@ -123,13 +227,20 @@ def cargar_alertas():
             pass
     return []
 
-def guardar_alertas(alertas):
+def guardar_alertas(alertas, user_id=None):
     """Guarda las alertas en archivo o BD"""
     if USE_DATABASE:
-        Alerta.query.delete()
+        if user_id is None:
+            user_id = session.get('user_id')
+        
+        # Solo eliminar alertas del usuario actual
+        if user_id:
+            Alerta.query.filter_by(user_id=user_id).delete()
+        
         for al_data in alertas:
             alerta = Alerta(
                 id=al_data.get('id'),
+                user_id=user_id,
                 isin=al_data.get('isin'),
                 nombre=al_data.get('nombre'),
                 tipo=al_data.get('tipo'),
@@ -261,10 +372,18 @@ def invalidar_cache():
     return cache
 
 
-def cargar_portfolio() -> Portfolio:
+def cargar_portfolio(user_id=None) -> Portfolio:
     """Carga el portfolio desde archivo o BD"""
     if USE_DATABASE:
-        posiciones = Posicion.query.all()
+        # Si no se especifica user_id, usar el de la sesión
+        if user_id is None:
+            user_id = session.get('user_id')
+        
+        if user_id:
+            posiciones = Posicion.query.filter_by(user_id=user_id).all()
+        else:
+            posiciones = Posicion.query.all()
+        
         portfolio = Portfolio()
         for pos_db in posiciones:
             pos = Position(
@@ -294,17 +413,25 @@ def cargar_portfolio() -> Portfolio:
         return Portfolio()
 
 
-def guardar_portfolio(portfolio: Portfolio):
+def guardar_portfolio(portfolio: Portfolio, user_id=None):
     """Guarda el portfolio en archivo o BD"""
     if USE_DATABASE:
         try:
-            # Eliminar todo y recrear
-            Aportacion.query.delete()
-            Posicion.query.delete()
+            # Si no se especifica user_id, usar el de la sesión
+            if user_id is None:
+                user_id = session.get('user_id')
+            
+            # Solo eliminar posiciones del usuario actual
+            if user_id:
+                posiciones_usuario = Posicion.query.filter_by(user_id=user_id).all()
+                for pos in posiciones_usuario:
+                    Aportacion.query.filter_by(posicion_id=pos.id).delete()
+                Posicion.query.filter_by(user_id=user_id).delete()
             
             for pos in portfolio.posiciones:
                 pos_db = Posicion(
                     id=pos.id or pos.isin,
+                    user_id=user_id,
                     isin=pos.isin,
                     ticker=pos.ticker,
                     nombre=pos.nombre,
@@ -3732,10 +3859,16 @@ def obtener_chat_id_telegram(token: str) -> str:
         return None
 
 
-def cargar_config_telegram():
+def cargar_config_telegram(user_id=None):
     """Carga la configuración de Telegram"""
     if USE_DATABASE:
-        config = TelegramConfig.query.first()
+        if user_id is None:
+            user_id = session.get('user_id')
+        
+        if user_id:
+            config = TelegramConfig.query.filter_by(user_id=user_id).first()
+        else:
+            config = TelegramConfig.query.first()
         return config
     else:
         config_file = DATA_DIR / 'telegram_config.json'
@@ -3748,16 +3881,19 @@ def cargar_config_telegram():
     return None
 
 
-def guardar_config_telegram(token: str, chat_id: str):
+def guardar_config_telegram(token: str, chat_id: str, user_id=None):
     """Guarda la configuración de Telegram"""
     if USE_DATABASE:
-        config = TelegramConfig.query.first()
+        if user_id is None:
+            user_id = session.get('user_id')
+        
+        config = TelegramConfig.query.filter_by(user_id=user_id).first() if user_id else TelegramConfig.query.first()
         if config:
             config.bot_token = token
             config.chat_id = chat_id
             config.activo = True
         else:
-            config = TelegramConfig(bot_token=token, chat_id=chat_id, activo=True)
+            config = TelegramConfig(user_id=user_id, bot_token=token, chat_id=chat_id, activo=True)
             db.session.add(config)
         db.session.commit()
     else:
@@ -3767,10 +3903,16 @@ def guardar_config_telegram(token: str, chat_id: str):
             json.dump({'token': token, 'chat_id': chat_id, 'activo': True}, f)
 
 
-def eliminar_config_telegram():
+def eliminar_config_telegram(user_id=None):
     """Elimina la configuración de Telegram"""
     if USE_DATABASE:
-        TelegramConfig.query.delete()
+        if user_id is None:
+            user_id = session.get('user_id')
+        
+        if user_id:
+            TelegramConfig.query.filter_by(user_id=user_id).delete()
+        else:
+            TelegramConfig.query.delete()
         db.session.commit()
     else:
         config_file = DATA_DIR / 'telegram_config.json'
@@ -3885,80 +4027,155 @@ def api_telegram_test():
 
 @app.route('/api/cron/verificar-alertas')
 def api_cron_verificar_alertas():
-    """Endpoint para cron-job: verifica alertas y notifica por Telegram"""
+    """Endpoint para cron-job: verifica alertas de TODOS los usuarios y notifica por Telegram"""
     try:
-        # Cargar configuración de Telegram
-        config = cargar_config_telegram()
-        
-        if not config:
-            return jsonify({'success': True, 'message': 'Telegram no configurado', 'alertas_cumplidas': 0})
+        total_verificadas = 0
+        total_cumplidas = 0
+        usuarios_notificados = 0
         
         if USE_DATABASE:
-            token = config.bot_token
-            chat_id = config.chat_id
-            activo = config.activo
+            # Obtener todos los usuarios con Telegram configurado
+            configs = TelegramConfig.query.filter_by(activo=True).all()
+            
+            if not configs:
+                return jsonify({'success': True, 'message': 'Ningún usuario tiene Telegram configurado', 'alertas_cumplidas': 0})
+            
+            for config in configs:
+                user_id = config.user_id
+                token = config.bot_token
+                chat_id = config.chat_id
+                
+                if not token or not chat_id:
+                    continue
+                
+                # Cargar alertas de este usuario
+                alertas = Alerta.query.filter_by(user_id=user_id, activa=True, notificada=False).all()
+                
+                for alerta_db in alertas:
+                    total_verificadas += 1
+                    
+                    try:
+                        # Obtener precio actual
+                        ticker = alerta_db.ticker or alerta_db.isin
+                        resultado = price_fetcher.obtener_precio(ticker, alerta_db.isin)
+                        
+                        if not resultado or not resultado.get('precio'):
+                            continue
+                        
+                        precio_actual = float(resultado['precio'])
+                        alerta_db.precio_actual = precio_actual
+                        
+                        # Verificar si se cumplió
+                        cumplida = False
+                        if alerta_db.tipo == 'baja' and precio_actual <= alerta_db.precio_objetivo:
+                            cumplida = True
+                        elif alerta_db.tipo == 'sube' and precio_actual >= alerta_db.precio_objetivo:
+                            cumplida = True
+                        
+                        if cumplida:
+                            alerta_db.notificada = True
+                            alerta_db.disparada = True
+                            alerta_db.fecha_disparo = datetime.utcnow()
+                            total_cumplidas += 1
+                            
+                            # Enviar notificación
+                            tipo_emoji = '📉' if alerta_db.tipo == 'baja' else '📈'
+                            tipo_texto = 'bajado' if alerta_db.tipo == 'baja' else 'subido'
+                            
+                            precio_ref = alerta_db.precio_referencia or 0
+                            cambio_pct = ((precio_actual - precio_ref) / precio_ref * 100) if precio_ref > 0 else 0
+                            
+                            mensaje = f"""🚨 <b>¡ALERTA CUMPLIDA!</b>
+
+{tipo_emoji} <b>{alerta_db.nombre or alerta_db.isin}</b>
+
+Ha {tipo_texto} a <b>{precio_actual:.2f}€</b>
+({cambio_pct:+.2f}% desde {precio_ref:.2f}€)
+
+🎯 Objetivo: {alerta_db.precio_objetivo:.2f}€
+
+🛒 <i>¡Momento de actuar!</i>"""
+                            
+                            enviar_telegram(token, chat_id, mensaje)
+                            
+                    except Exception as e:
+                        print(f"Error verificando alerta {alerta_db.id}: {e}")
+                        continue
+                
+                usuarios_notificados += 1
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'usuarios_verificados': usuarios_notificados,
+                'alertas_verificadas': total_verificadas,
+                'alertas_cumplidas': total_cumplidas,
+                'timestamp': datetime.now().isoformat()
+            })
+        
         else:
+            # Modo local (un solo usuario)
+            config = cargar_config_telegram()
+            
+            if not config:
+                return jsonify({'success': True, 'message': 'Telegram no configurado', 'alertas_cumplidas': 0})
+            
             token = config.get('token')
             chat_id = config.get('chat_id')
             activo = config.get('activo', True)
-        
-        if not activo:
-            return jsonify({'success': True, 'message': 'Telegram desactivado', 'alertas_cumplidas': 0})
-        
-        # Cargar y verificar alertas
-        alertas = cargar_alertas()
-        alertas_cumplidas = []
-        alertas_modificadas = False
-        
-        for alerta in alertas:
-            # Solo verificar alertas activas y no notificadas
-            if not alerta.get('activa', True) or alerta.get('notificada', False):
-                continue
             
-            try:
-                # Obtener precio actual
-                ticker = alerta.get('ticker') or alerta.get('isin')
-                resultado = price_fetcher.obtener_precio(ticker, alerta.get('isin'))
-                
-                if not resultado or not resultado.get('precio'):
+            if not activo:
+                return jsonify({'success': True, 'message': 'Telegram desactivado', 'alertas_cumplidas': 0})
+            
+            alertas = cargar_alertas()
+            alertas_cumplidas = []
+            alertas_modificadas = False
+            
+            for alerta in alertas:
+                if not alerta.get('activa', True) or alerta.get('notificada', False):
                     continue
                 
-                precio_actual = float(resultado['precio'])
-                alerta['precio_actual'] = precio_actual
+                total_verificadas += 1
                 
-                precio_objetivo = alerta.get('precio_objetivo', 0)
-                tipo = alerta.get('tipo', 'baja')
-                
-                # Verificar si se cumplió
-                cumplida = False
-                if tipo == 'baja' and precio_actual <= precio_objetivo:
-                    cumplida = True
-                elif tipo == 'sube' and precio_actual >= precio_objetivo:
-                    cumplida = True
-                
-                if cumplida:
-                    alerta['notificada'] = True
-                    alertas_modificadas = True
-                    alertas_cumplidas.append(alerta)
+                try:
+                    ticker = alerta.get('ticker') or alerta.get('isin')
+                    resultado = price_fetcher.obtener_precio(ticker, alerta.get('isin'))
                     
-            except Exception as e:
-                print(f"Error verificando alerta {alerta.get('id')}: {e}")
-                continue
-        
-        # Guardar alertas si hubo cambios
-        if alertas_modificadas:
-            guardar_alertas(alertas)
-        
-        # Enviar notificaciones
-        for alerta in alertas_cumplidas:
-            tipo_emoji = '📉' if alerta.get('tipo') == 'baja' else '📈'
-            tipo_texto = 'bajado' if alerta.get('tipo') == 'baja' else 'subido'
+                    if not resultado or not resultado.get('precio'):
+                        continue
+                    
+                    precio_actual = float(resultado['precio'])
+                    alerta['precio_actual'] = precio_actual
+                    
+                    cumplida = False
+                    if alerta.get('tipo') == 'baja' and precio_actual <= alerta.get('precio_objetivo', 0):
+                        cumplida = True
+                    elif alerta.get('tipo') == 'sube' and precio_actual >= alerta.get('precio_objetivo', 0):
+                        cumplida = True
+                    
+                    if cumplida:
+                        alerta['notificada'] = True
+                        alertas_modificadas = True
+                        alertas_cumplidas.append(alerta)
+                        total_cumplidas += 1
+                        
+                except Exception as e:
+                    print(f"Error verificando alerta {alerta.get('id')}: {e}")
+                    continue
             
-            precio_ref = alerta.get('precio_referencia', 0)
-            precio_actual = alerta.get('precio_actual', 0)
-            cambio_pct = ((precio_actual - precio_ref) / precio_ref * 100) if precio_ref > 0 else 0
+            if alertas_modificadas:
+                guardar_alertas(alertas)
             
-            mensaje = f"""🚨 <b>¡ALERTA CUMPLIDA!</b>
+            for alerta in alertas_cumplidas:
+                tipo_emoji = '📉' if alerta.get('tipo') == 'baja' else '📈'
+                tipo_texto = 'bajado' if alerta.get('tipo') == 'baja' else 'subido'
+                
+                precio_ref = alerta.get('precio_referencia', 0)
+                precio_actual = alerta.get('precio_actual', 0)
+                cambio_pct = ((precio_actual - precio_ref) / precio_ref * 100) if precio_ref > 0 else 0
+                
+                mensaje = f"""🚨 <b>¡ALERTA CUMPLIDA!</b>
 
 {tipo_emoji} <b>{alerta.get('nombre', alerta.get('isin'))}</b>
 
@@ -3968,14 +4185,181 @@ Ha {tipo_texto} a <b>{precio_actual:.2f}€</b>
 🎯 Objetivo: {alerta.get('precio_objetivo', 0):.2f}€
 
 🛒 <i>¡Momento de actuar!</i>"""
+                
+                enviar_telegram(token, chat_id, mensaje)
             
-            enviar_telegram(token, chat_id, mensaje)
+            return jsonify({
+                'success': True,
+                'alertas_verificadas': total_verificadas,
+                'alertas_cumplidas': total_cumplidas,
+                'timestamp': datetime.now().isoformat()
+            })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# =============================================================================
+# ADMINISTRACIÓN DE USUARIOS
+# =============================================================================
+
+@app.route('/admin')
+@admin_required
+def admin_page():
+    """Página de administración"""
+    return render_template('admin.html')
+
+
+@app.route('/api/admin/usuarios', methods=['GET'])
+@admin_required
+def api_admin_usuarios():
+    """Lista todos los usuarios"""
+    try:
+        if not USE_DATABASE:
+            return jsonify({'success': False, 'error': 'Requiere base de datos'})
+        
+        usuarios = Usuario.query.all()
+        return jsonify({
+            'success': True,
+            'data': [u.to_dict() for u in usuarios]
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/usuarios', methods=['POST'])
+@admin_required
+def api_admin_crear_usuario():
+    """Crea un nuevo usuario"""
+    try:
+        if not USE_DATABASE:
+            return jsonify({'success': False, 'error': 'Requiere base de datos'})
+        
+        data = request.json
+        username = data.get('username', '').strip()
+        password = data.get('password', '')
+        nombre = data.get('nombre', '').strip()
+        is_admin = data.get('is_admin', False)
+        
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'Usuario y contraseña requeridos'})
+        
+        # Verificar si ya existe
+        if Usuario.query.filter_by(username=username).first():
+            return jsonify({'success': False, 'error': 'El usuario ya existe'})
+        
+        # Crear usuario
+        usuario = Usuario(
+            username=username,
+            nombre=nombre or username,
+            is_admin=is_admin,
+            activo=True
+        )
+        usuario.set_password(password)
+        db.session.add(usuario)
+        db.session.commit()
         
         return jsonify({
             'success': True,
-            'alertas_verificadas': len([a for a in alertas if a.get('activa', True)]),
-            'alertas_cumplidas': len(alertas_cumplidas),
-            'timestamp': datetime.now().isoformat()
+            'data': usuario.to_dict(),
+            'message': f'Usuario {username} creado correctamente'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/usuarios/<int:user_id>', methods=['PUT'])
+@admin_required
+def api_admin_editar_usuario(user_id):
+    """Edita un usuario existente"""
+    try:
+        if not USE_DATABASE:
+            return jsonify({'success': False, 'error': 'Requiere base de datos'})
+        
+        usuario = Usuario.query.get(user_id)
+        if not usuario:
+            return jsonify({'success': False, 'error': 'Usuario no encontrado'})
+        
+        data = request.json
+        
+        if 'nombre' in data:
+            usuario.nombre = data['nombre'].strip()
+        if 'activo' in data:
+            usuario.activo = data['activo']
+        if 'is_admin' in data:
+            usuario.is_admin = data['is_admin']
+        if 'password' in data and data['password']:
+            usuario.set_password(data['password'])
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': usuario.to_dict(),
+            'message': 'Usuario actualizado'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/usuarios/<int:user_id>', methods=['DELETE'])
+@admin_required
+def api_admin_eliminar_usuario(user_id):
+    """Elimina un usuario"""
+    try:
+        if not USE_DATABASE:
+            return jsonify({'success': False, 'error': 'Requiere base de datos'})
+        
+        # No permitir eliminarse a sí mismo
+        if user_id == session.get('user_id'):
+            return jsonify({'success': False, 'error': 'No puedes eliminarte a ti mismo'})
+        
+        usuario = Usuario.query.get(user_id)
+        if not usuario:
+            return jsonify({'success': False, 'error': 'Usuario no encontrado'})
+        
+        db.session.delete(usuario)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Usuario {usuario.username} eliminado'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/admin/stats')
+@admin_required
+def api_admin_stats():
+    """Estadísticas de la plataforma"""
+    try:
+        if not USE_DATABASE:
+            return jsonify({'success': False, 'error': 'Requiere base de datos'})
+        
+        total_usuarios = Usuario.query.count()
+        usuarios_activos = Usuario.query.filter_by(activo=True).count()
+        total_posiciones = Posicion.query.count()
+        total_alertas = Alerta.query.count()
+        alertas_activas = Alerta.query.filter_by(activa=True).count()
+        telegram_configurados = TelegramConfig.query.filter_by(activo=True).count()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_usuarios': total_usuarios,
+                'usuarios_activos': usuarios_activos,
+                'total_posiciones': total_posiciones,
+                'total_alertas': total_alertas,
+                'alertas_activas': alertas_activas,
+                'telegram_configurados': telegram_configurados
+            }
         })
         
     except Exception as e:

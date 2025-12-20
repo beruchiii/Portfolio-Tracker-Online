@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Login - Portfolio Tracker</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <div class="text-5xl mb-4">📊</div>
+            <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+                Portfolio Tracker
+            </h1>
+            <p class="text-gray-400 mt-2">Accede a tu cartera de inversiones</p>
+        </div>
+        
+        <!-- Formulario -->
+        <div class="bg-gray-800 rounded-xl p-8 border border-gray-700 shadow-xl">
+            {% if error %}
+            <div class="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg mb-6 text-sm">
+                ⚠️ {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" action="/login" class="space-y-6">
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-400 mb-2">Usuario</label>
+                    <input type="text" id="username" name="username" required autofocus
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
+                        placeholder="Tu usuario">
+                </div>
+                
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-400 mb-2">Contraseña</label>
+                    <input type="password" id="password" name="password" required
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
+                        placeholder="••••••••">
+                </div>
+                
+                <button type="submit" 
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
+                    </svg>
+                    Entrar
+                </button>
+            </form>
+        </div>
+        
+        <!-- Footer -->
+        <p class="text-center text-gray-500 text-sm mt-6">
+            🔒 Conexión segura
+        </p>
+    </div>
+</body>
+</html>

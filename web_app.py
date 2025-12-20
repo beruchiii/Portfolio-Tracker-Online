@@ -1552,7 +1552,7 @@ def calcular_rentabilidad_cartera(periodo: str) -> float:
 
 @app.route('/api/portfolio/evolution')
 def api_portfolio_evolution():
-    """Calcula la evolución histórica de la cartera desde la fecha de primera compra"""
+    """Calcula la evolución histórica REAL de la cartera, considerando las fechas de cada compra"""
     periodo = request.args.get('periodo', '1y')
     portfolio = cargar_portfolio()
     
@@ -1566,27 +1566,33 @@ def api_portfolio_evolution():
         
         justetf = JustETFScraper()
         
-        # Encontrar la fecha más antigua de todas las aportaciones
+        # Construir historial de aportaciones por posición
+        # Formato: {pos_id: [(fecha_compra, cantidad), ...]}
+        aportaciones_por_posicion = {}
         fecha_primera_compra = None
+        
         for pos in portfolio.posiciones:
+            aportaciones_pos = []
             for ap in pos.aportaciones:
-                if ap.fecha_compra:
+                if ap.fecha_compra and ap.cantidad:
                     try:
                         fecha_ap = datetime.strptime(ap.fecha_compra, '%Y-%m-%d')
+                        aportaciones_pos.append((ap.fecha_compra, ap.cantidad))
                         if fecha_primera_compra is None or fecha_ap < fecha_primera_compra:
                             fecha_primera_compra = fecha_ap
                     except:
                         pass
+            # Ordenar por fecha
+            aportaciones_pos.sort(key=lambda x: x[0])
+            aportaciones_por_posicion[pos.id] = aportaciones_pos
         
         if not fecha_primera_compra:
             fecha_primera_compra = datetime.now() - timedelta(days=365)
         
         # Si el período es "max", usar desde la primera compra
-        # Para otros períodos, calcular la fecha de inicio
         fecha_inicio_filtro = None
         if periodo == 'max':
             fecha_inicio_filtro = fecha_primera_compra
-            # Calcular período equivalente para API
             dias = (datetime.now() - fecha_primera_compra).days
             if dias <= 30:
                 periodo_api = '1mo'
@@ -1602,22 +1608,20 @@ def api_portfolio_evolution():
                 periodo_api = '5y'
         else:
             periodo_api = periodo
-            # Calcular fecha de inicio según período seleccionado
             dias_map = {'1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825}
             dias = dias_map.get(periodo, 365)
             fecha_inicio_filtro = datetime.now() - timedelta(days=dias)
             
-            # Si la fecha de primera compra es después, usar esa
             if fecha_primera_compra > fecha_inicio_filtro:
                 fecha_inicio_filtro = fecha_primera_compra
         
-        # Obtener histórico de cada posición
+        # Obtener histórico de precios de cada posición
         all_data = {}
         
         for pos in portfolio.posiciones:
             hist_data = None
             
-            # 1. Intentar con Yahoo Finance si hay ticker
+            # 1. Intentar con Yahoo Finance
             if pos.ticker:
                 try:
                     ticker = yf.Ticker(pos.ticker)
@@ -1625,7 +1629,7 @@ def api_portfolio_evolution():
                     if not hist.empty:
                         hist_data = {
                             'fechas': {d.strftime('%Y-%m-%d'): hist.loc[d, 'Close'] for d in hist.index},
-                            'cantidad': pos.cantidad,
+                            'aportaciones': aportaciones_por_posicion.get(pos.id, []),
                             'nombre': pos.nombre
                         }
                 except:
@@ -1638,7 +1642,7 @@ def api_portfolio_evolution():
                     if historico and historico.get('precios'):
                         hist_data = {
                             'fechas': dict(zip(historico['fechas'], historico['precios'])),
-                            'cantidad': pos.cantidad,
+                            'aportaciones': aportaciones_por_posicion.get(pos.id, []),
                             'nombre': pos.nombre
                         }
                 except:
@@ -1650,12 +1654,11 @@ def api_portfolio_evolution():
         if not all_data:
             return jsonify({'success': False, 'error': 'No hay datos históricos. Verifica que tus posiciones tienen ISIN válido.'})
         
-        # Encontrar todas las fechas únicas
+        # Encontrar todas las fechas únicas de precios
         all_fechas = set()
         for data in all_data.values():
             all_fechas.update(data['fechas'].keys())
         
-        # Filtrar fechas: solo desde la fecha de inicio (primera compra o período seleccionado)
         fecha_inicio_str = fecha_inicio_filtro.strftime('%Y-%m-%d')
         fechas_filtradas = [f for f in all_fechas if f >= fecha_inicio_str]
         fechas_ordenadas = sorted(fechas_filtradas)
@@ -1663,32 +1666,47 @@ def api_portfolio_evolution():
         if not fechas_ordenadas:
             return jsonify({'success': False, 'error': 'No hay datos para el período seleccionado'})
         
-        # Calcular valor de cartera para cada fecha
-        # IMPORTANTE: Solo usar fechas donde TODAS las posiciones tienen datos
-        # para evitar inconsistencias
+        # Función helper: calcular cantidad que tenía en una fecha específica
+        def cantidad_en_fecha(aportaciones, fecha_str):
+            """Suma las cantidades de aportaciones anteriores o iguales a la fecha"""
+            total = 0
+            for fecha_compra, cantidad in aportaciones:
+                if fecha_compra <= fecha_str:
+                    total += cantidad
+            return total
+        
+        # Calcular valor REAL de cartera para cada fecha
         valores_cartera = []
         fechas_str = []
-        
-        # Guardar el último precio conocido de cada posición para interpolar
         ultimo_precio_conocido = {pos_id: None for pos_id in all_data.keys()}
         
         for fecha in fechas_ordenadas:
             valor_total = 0
-            posiciones_con_valor = 0
+            hay_alguna_posicion = False
             
             for pos_id, data in all_data.items():
+                # Calcular cuántas unidades tenía EN ESTA FECHA
+                cantidad_actual = cantidad_en_fecha(data['aportaciones'], fecha)
+                
+                # Si aún no había comprado esta posición, no sumar nada
+                if cantidad_actual <= 0:
+                    continue
+                
+                hay_alguna_posicion = True
+                
+                # Obtener precio (actual o último conocido)
                 if fecha in data['fechas']:
                     precio = data['fechas'][fecha]
                     ultimo_precio_conocido[pos_id] = precio
-                    valor_total += precio * data['cantidad']
-                    posiciones_con_valor += 1
                 elif ultimo_precio_conocido[pos_id] is not None:
-                    # Usar último precio conocido si no hay dato para esta fecha
-                    valor_total += ultimo_precio_conocido[pos_id] * data['cantidad']
-                    posiciones_con_valor += 1
+                    precio = ultimo_precio_conocido[pos_id]
+                else:
+                    continue
+                
+                valor_total += precio * cantidad_actual
             
-            # Solo incluir si tenemos datos para TODAS las posiciones
-            if posiciones_con_valor == len(all_data):
+            # Solo incluir fechas donde tenía al menos una posición
+            if hay_alguna_posicion and valor_total > 0:
                 valores_cartera.append(round(valor_total, 2))
                 fechas_str.append(fecha)
         

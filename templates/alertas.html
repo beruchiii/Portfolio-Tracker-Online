@@ -172,6 +172,65 @@
             </div>
         </div>
 
+        <!-- Alertas Grupales -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-6">
+            <div class="flex items-center justify-between mb-4 cursor-pointer" onclick="toggleAlertasGrupales()">
+                <h2 class="text-xl font-bold flex items-center gap-2">
+                    <span>🎯</span> Alertas Grupales
+                    <span class="text-sm font-normal text-gray-500">(crear para múltiples activos)</span>
+                </h2>
+                <svg id="grupales-arrow" class="w-5 h-5 text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </div>
+            
+            <div id="grupales-content" class="hidden space-y-4">
+                <!-- Opciones de selección -->
+                <div class="flex flex-wrap gap-3 mb-4">
+                    <button onclick="seleccionarTodos()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm transition">
+                        ✅ Seleccionar Todos
+                    </button>
+                    <button onclick="deseleccionarTodos()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg text-sm transition">
+                        ❌ Deseleccionar Todos
+                    </button>
+                </div>
+                
+                <!-- Lista de activos para seleccionar -->
+                <div id="activos-cartera" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto p-2 bg-gray-900/50 rounded-lg">
+                    <p class="text-gray-500 col-span-full text-center py-4">Cargando activos...</p>
+                </div>
+                
+                <!-- Configuración de la alerta grupal -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 p-4 bg-gray-700/30 rounded-lg">
+                    <div>
+                        <label class="text-sm text-gray-400 block mb-1">Tipo de Alerta</label>
+                        <select id="grupal-tipo" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                            <option value="baja">📉 Si baja</option>
+                            <option value="sube">📈 Si sube</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-400 block mb-1">Porcentaje</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="grupal-pct" value="5" min="1" max="50" step="1"
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                            <span class="text-gray-400">%</span>
+                        </div>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="crearAlertasGrupales()" id="btn-crear-grupal"
+                            class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition flex items-center justify-center gap-2">
+                            <span>🚀</span>
+                            Crear Alertas (<span id="seleccionados-count">0</span>)
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Resultado de creación -->
+                <div id="grupal-resultado" class="hidden mt-4 p-4 rounded-lg"></div>
+            </div>
+        </div>
+
         <!-- Lista de alertas -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
             <div class="p-6 border-b border-gray-700 flex items-center justify-between">
@@ -530,6 +589,178 @@
             `).join('');
             
             container.classList.remove('hidden');
+        }
+        
+        // =========== ALERTAS GRUPALES ===========
+        
+        let activosSeleccionados = new Set();
+        let activosCartera = [];
+        
+        function toggleAlertasGrupales() {
+            const content = document.getElementById('grupales-content');
+            const arrow = document.getElementById('grupales-arrow');
+            
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                arrow.classList.add('rotate-180');
+                cargarActivosCartera();
+            } else {
+                content.classList.add('hidden');
+                arrow.classList.remove('rotate-180');
+            }
+        }
+        
+        async function cargarActivosCartera() {
+            const container = document.getElementById('activos-cartera');
+            
+            try {
+                const response = await fetch('/api/portfolio');
+                const result = await response.json();
+                
+                if (!result.success || !result.data.posiciones.length) {
+                    container.innerHTML = '<p class="text-gray-500 col-span-full text-center py-4">No hay activos en tu cartera</p>';
+                    return;
+                }
+                
+                activosCartera = result.data.posiciones;
+                
+                container.innerHTML = activosCartera.map(pos => `
+                    <label class="flex items-center gap-3 p-3 bg-gray-700/50 rounded-lg cursor-pointer hover:bg-gray-700 transition ${activosSeleccionados.has(pos.isin) ? 'ring-2 ring-green-500' : ''}" data-isin="${pos.isin}">
+                        <input type="checkbox" 
+                            class="activo-checkbox w-4 h-4 rounded text-green-600 bg-gray-600 border-gray-500"
+                            value="${pos.isin}"
+                            ${activosSeleccionados.has(pos.isin) ? 'checked' : ''}
+                            onchange="toggleActivoSeleccionado('${pos.isin}', this.checked)">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-white truncate">${pos.nombre}</div>
+                            <div class="text-xs text-gray-400">${pos.isin}</div>
+                        </div>
+                        <div class="text-sm font-semibold ${pos.rentabilidad_pct >= 0 ? 'text-green-400' : 'text-red-400'}">
+                            ${pos.rentabilidad_pct >= 0 ? '+' : ''}${pos.rentabilidad_pct?.toFixed(1)}%
+                        </div>
+                    </label>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Error cargando cartera:', error);
+                container.innerHTML = '<p class="text-red-400 col-span-full text-center py-4">Error cargando activos</p>';
+            }
+        }
+        
+        function toggleActivoSeleccionado(isin, seleccionado) {
+            if (seleccionado) {
+                activosSeleccionados.add(isin);
+            } else {
+                activosSeleccionados.delete(isin);
+            }
+            
+            // Actualizar visual
+            const label = document.querySelector(`label[data-isin="${isin}"]`);
+            if (label) {
+                if (seleccionado) {
+                    label.classList.add('ring-2', 'ring-green-500');
+                } else {
+                    label.classList.remove('ring-2', 'ring-green-500');
+                }
+            }
+            
+            actualizarContadorSeleccionados();
+        }
+        
+        function seleccionarTodos() {
+            activosSeleccionados.clear();
+            activosCartera.forEach(pos => activosSeleccionados.add(pos.isin));
+            
+            document.querySelectorAll('.activo-checkbox').forEach(cb => {
+                cb.checked = true;
+                const label = cb.closest('label');
+                if (label) label.classList.add('ring-2', 'ring-green-500');
+            });
+            
+            actualizarContadorSeleccionados();
+        }
+        
+        function deseleccionarTodos() {
+            activosSeleccionados.clear();
+            
+            document.querySelectorAll('.activo-checkbox').forEach(cb => {
+                cb.checked = false;
+                const label = cb.closest('label');
+                if (label) label.classList.remove('ring-2', 'ring-green-500');
+            });
+            
+            actualizarContadorSeleccionados();
+        }
+        
+        function actualizarContadorSeleccionados() {
+            document.getElementById('seleccionados-count').textContent = activosSeleccionados.size;
+        }
+        
+        async function crearAlertasGrupales() {
+            if (activosSeleccionados.size === 0) {
+                alert('Selecciona al menos un activo');
+                return;
+            }
+            
+            const tipo = document.getElementById('grupal-tipo').value;
+            const pct = parseFloat(document.getElementById('grupal-pct').value);
+            
+            const btn = document.getElementById('btn-crear-grupal');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<svg class="animate-spin h-5 w-5 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/alertas/masiva', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tipo: tipo,
+                        objetivo_pct: pct,
+                        isins: Array.from(activosSeleccionados)
+                    })
+                });
+                
+                const result = await response.json();
+                const resultDiv = document.getElementById('grupal-resultado');
+                
+                if (result.success) {
+                    resultDiv.className = 'mt-4 p-4 rounded-lg bg-green-900/30 border border-green-700';
+                    let html = `<p class="text-green-400 font-medium">✅ ${result.data.creadas} alertas creadas correctamente</p>`;
+                    
+                    if (result.data.errores && result.data.errores.length > 0) {
+                        html += `<p class="text-yellow-400 text-sm mt-2">⚠️ Advertencias:</p>`;
+                        html += `<ul class="text-sm text-yellow-300 mt-1 list-disc list-inside">`;
+                        result.data.errores.forEach(e => {
+                            html += `<li>${e}</li>`;
+                        });
+                        html += `</ul>`;
+                    }
+                    
+                    resultDiv.innerHTML = html;
+                    
+                    // Recargar alertas
+                    setTimeout(() => {
+                        cargarAlertas();
+                        deseleccionarTodos();
+                    }, 1000);
+                } else {
+                    resultDiv.className = 'mt-4 p-4 rounded-lg bg-red-900/30 border border-red-700';
+                    resultDiv.innerHTML = `<p class="text-red-400">❌ Error: ${result.error}</p>`;
+                }
+                
+                resultDiv.classList.remove('hidden');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                const resultDiv = document.getElementById('grupal-resultado');
+                resultDiv.className = 'mt-4 p-4 rounded-lg bg-red-900/30 border border-red-700';
+                resultDiv.innerHTML = `<p class="text-red-400">❌ Error de conexión</p>`;
+                resultDiv.classList.remove('hidden');
+            }
+            
+            btn.innerHTML = originalText;
+            btn.disabled = false;
         }
     </script>
 </body>

@@ -447,8 +447,6 @@ def api_crear_alerta():
         data = request.json
         
         # Validar datos requeridos
-        if not data.get('nombre'):
-            return jsonify({'success': False, 'error': 'Nombre requerido'})
         if not data.get('isin') and not data.get('ticker'):
             return jsonify({'success': False, 'error': 'ISIN o Ticker requerido'})
         
@@ -459,6 +457,20 @@ def api_crear_alerta():
         
         if not resultado_precio or not resultado_precio.get('precio'):
             return jsonify({'success': False, 'error': 'No se pudo obtener el precio actual'})
+        
+        # Obtener nombre - priorizar el del resultado, luego el proporcionado, luego ISIN/ticker
+        nombre = data.get('nombre', '')
+        if not nombre or nombre == isin or nombre == ticker:
+            # Intentar obtener nombre de la respuesta de precio
+            nombre = resultado_precio.get('nombre', '')
+        if not nombre or nombre == isin or nombre == ticker:
+            # Buscar en el portfolio si existe
+            portfolio = cargar_portfolio()
+            pos = portfolio.buscar_por_isin(isin) if isin else None
+            if pos:
+                nombre = pos.nombre
+        if not nombre:
+            nombre = ticker or isin
         
         precio_actual = float(resultado_precio['precio'])
         objetivo_pct = float(data.get('objetivo_pct', 5))
@@ -474,7 +486,7 @@ def api_crear_alerta():
         import uuid
         alerta = {
             'id': str(uuid.uuid4())[:8],
-            'nombre': data['nombre'],
+            'nombre': nombre,
             'isin': isin,
             'ticker': ticker,
             'tipo': tipo,
@@ -491,6 +503,102 @@ def api_crear_alerta():
         guardar_alertas(alertas)
         
         return jsonify({'success': True, 'data': alerta})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/alertas/masiva', methods=['POST'])
+def api_crear_alertas_masivas():
+    """Crea alertas para múltiples activos o todos los de la cartera"""
+    try:
+        data = request.json
+        tipo = data.get('tipo', 'baja')
+        objetivo_pct = float(data.get('objetivo_pct', 5))
+        isins = data.get('isins', [])  # Lista de ISINs específicos, o vacío para todos
+        
+        portfolio = cargar_portfolio()
+        
+        if not portfolio.posiciones:
+            return jsonify({'success': False, 'error': 'No hay posiciones en la cartera'})
+        
+        # Si no se especifican ISINs, usar todos los de la cartera
+        if not isins:
+            posiciones_a_alertar = portfolio.posiciones
+        else:
+            posiciones_a_alertar = [p for p in portfolio.posiciones if p.isin in isins]
+        
+        if not posiciones_a_alertar:
+            return jsonify({'success': False, 'error': 'No se encontraron posiciones para alertar'})
+        
+        alertas_creadas = []
+        alertas_existentes = cargar_alertas()
+        errores = []
+        
+        import uuid
+        
+        for pos in posiciones_a_alertar:
+            try:
+                # Verificar si ya existe alerta similar
+                ya_existe = any(
+                    a.get('isin') == pos.isin and 
+                    a.get('tipo') == tipo and 
+                    abs(a.get('objetivo_pct', 0) - objetivo_pct) < 0.1
+                    for a in alertas_existentes
+                )
+                
+                if ya_existe:
+                    errores.append(f"{pos.nombre}: ya existe alerta similar")
+                    continue
+                
+                # Obtener precio actual
+                resultado_precio = price_fetcher.obtener_precio(pos.ticker, pos.isin)
+                
+                if not resultado_precio or not resultado_precio.get('precio'):
+                    errores.append(f"{pos.nombre}: no se pudo obtener precio")
+                    continue
+                
+                precio_actual = float(resultado_precio['precio'])
+                
+                # Calcular precio objetivo
+                if tipo == 'baja':
+                    precio_objetivo = precio_actual * (1 - objetivo_pct / 100)
+                else:
+                    precio_objetivo = precio_actual * (1 + objetivo_pct / 100)
+                
+                # Crear alerta
+                alerta = {
+                    'id': str(uuid.uuid4())[:8],
+                    'nombre': pos.nombre,
+                    'isin': pos.isin,
+                    'ticker': pos.ticker,
+                    'tipo': tipo,
+                    'objetivo_pct': objetivo_pct,
+                    'precio_referencia': precio_actual,
+                    'precio_objetivo': precio_objetivo,
+                    'fecha_creacion': datetime.now().isoformat(),
+                    'activa': True,
+                    'notificada': False
+                }
+                
+                alertas_existentes.append(alerta)
+                alertas_creadas.append(alerta)
+                
+            except Exception as e:
+                errores.append(f"{pos.nombre}: {str(e)}")
+        
+        # Guardar todas las alertas
+        if alertas_creadas:
+            guardar_alertas(alertas_existentes)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'creadas': len(alertas_creadas),
+                'alertas': alertas_creadas,
+                'errores': errores
+            }
+        })
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})

@@ -8,8 +8,8 @@ import sys
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
-from flask import Flask, render_template, jsonify, request, redirect, url_for
-from flask_cors import CORS
+from functools import wraps
+from flask import Flask, render_template, jsonify, request, redirect, url_for, session
 
 # Añadir src al path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -20,7 +20,51 @@ from src.price_fetcher import price_fetcher
 
 # Configuración
 app = Flask(__name__, template_folder='templates', static_folder='static')
+
+# Configuración desde variables de entorno
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-portfolio-tracker')
+
+# Base de datos (si está disponible)
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+USE_DATABASE = bool(DATABASE_URL)
+
+if USE_DATABASE:
+    # Render usa postgres://, SQLAlchemy necesita postgresql://
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    from database import db, init_db, Posicion, Aportacion, Alerta, Target, ActivoNuevo
+    db.init_app(app)
+    
+    with app.app_context():
+        db.create_all()
+    
+    print("✅ Usando base de datos PostgreSQL")
+else:
+    print("📁 Usando archivos JSON locales")
+
+# CORS
+from flask_cors import CORS
 CORS(app)
+
+# Autenticación
+REQUIRE_AUTH = os.environ.get('REQUIRE_AUTH', 'false').lower() == 'true'
+ADMIN_USER = os.environ.get('ADMIN_USER', 'admin')
+ADMIN_PASS = os.environ.get('ADMIN_PASS', 'portfolio2024')
+
+def login_required(f):
+    """Decorador para requerir autenticación"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if REQUIRE_AUTH and not session.get('logged_in'):
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'No autorizado'}), 401
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 DATA_DIR = Path(__file__).parent / "data"
 PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
@@ -32,11 +76,45 @@ CACHE_DURATION_MINUTES = 15
 
 
 # =============================================================================
+# AUTENTICACIÓN
+# =============================================================================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Página de login"""
+    if not REQUIRE_AUTH:
+        return redirect('/')
+    
+    if request.method == 'POST':
+        username = request.form.get('username', '')
+        password = request.form.get('password', '')
+        
+        if username == ADMIN_USER and password == ADMIN_PASS:
+            session['logged_in'] = True
+            session['username'] = username
+            return redirect('/')
+        
+        return render_template('login.html', error='Usuario o contraseña incorrectos')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    """Cerrar sesión"""
+    session.clear()
+    return redirect('/login')
+
+
+# =============================================================================
 # SISTEMA DE ALERTAS
 # =============================================================================
 
 def cargar_alertas():
-    """Carga las alertas desde archivo"""
+    """Carga las alertas desde archivo o BD"""
+    if USE_DATABASE:
+        alertas = Alerta.query.all()
+        return [a.to_dict() for a in alertas]
+    
     if ALERTS_FILE.exists():
         try:
             with open(ALERTS_FILE, 'r') as f:
@@ -46,10 +124,26 @@ def cargar_alertas():
     return []
 
 def guardar_alertas(alertas):
-    """Guarda las alertas en archivo"""
-    DATA_DIR.mkdir(exist_ok=True)
-    with open(ALERTS_FILE, 'w') as f:
-        json.dump(alertas, f, indent=2)
+    """Guarda las alertas en archivo o BD"""
+    if USE_DATABASE:
+        Alerta.query.delete()
+        for al_data in alertas:
+            alerta = Alerta(
+                id=al_data.get('id'),
+                isin=al_data.get('isin'),
+                nombre=al_data.get('nombre'),
+                tipo=al_data.get('tipo'),
+                precio_objetivo=al_data.get('precio_objetivo'),
+                precio_actual=al_data.get('precio_actual'),
+                activa=al_data.get('activa', True),
+                disparada=al_data.get('disparada', False)
+            )
+            db.session.add(alerta)
+        db.session.commit()
+    else:
+        DATA_DIR.mkdir(exist_ok=True)
+        with open(ALERTS_FILE, 'w') as f:
+            json.dump(alertas, f, indent=2)
 
 def verificar_alertas():
     """Verifica si alguna alerta se ha disparado"""
@@ -165,17 +259,91 @@ def invalidar_cache():
 
 
 def cargar_portfolio() -> Portfolio:
-    """Carga el portfolio desde el archivo"""
-    DATA_DIR.mkdir(exist_ok=True)
-    if PORTFOLIO_FILE.exists():
-        return Portfolio.cargar(str(PORTFOLIO_FILE))
-    return Portfolio()
+    """Carga el portfolio desde archivo o BD"""
+    if USE_DATABASE:
+        posiciones = Posicion.query.all()
+        portfolio = Portfolio()
+        for pos_db in posiciones:
+            pos = Position(
+                isin=pos_db.isin,
+                nombre=pos_db.nombre,
+                ticker=pos_db.ticker,
+                categoria=pos_db.categoria
+            )
+            pos.id = pos_db.id
+            for ap_db in pos_db.aportaciones:
+                pos.aportaciones.append({
+                    'fecha': ap_db.fecha.isoformat() if ap_db.fecha else None,
+                    'cantidad': ap_db.cantidad,
+                    'precio': ap_db.precio,
+                    'comision': ap_db.comision or 0
+                })
+            portfolio.posiciones.append(pos)
+        return portfolio
+    else:
+        DATA_DIR.mkdir(exist_ok=True)
+        if PORTFOLIO_FILE.exists():
+            return Portfolio.cargar(str(PORTFOLIO_FILE))
+        return Portfolio()
 
 
 def guardar_portfolio(portfolio: Portfolio):
-    """Guarda el portfolio en el archivo"""
-    DATA_DIR.mkdir(exist_ok=True)
-    portfolio.guardar(str(PORTFOLIO_FILE))
+    """Guarda el portfolio en archivo o BD"""
+    if USE_DATABASE:
+        try:
+            # Eliminar todo y recrear
+            Aportacion.query.delete()
+            Posicion.query.delete()
+            
+            for pos in portfolio.posiciones:
+                pos_db = Posicion(
+                    id=pos.id or pos.isin,
+                    isin=pos.isin,
+                    ticker=pos.ticker,
+                    nombre=pos.nombre,
+                    categoria=pos.categoria
+                )
+                db.session.add(pos_db)
+                
+                for ap in pos.aportaciones:
+                    # Soportar tanto formato dict como objeto Aportacion
+                    if hasattr(ap, 'fecha_compra'):
+                        fecha = ap.fecha_compra
+                        precio = ap.precio_compra
+                        cantidad = ap.cantidad
+                        comision = getattr(ap, 'comision', 0)
+                    else:
+                        fecha = ap.get('fecha_compra') or ap.get('fecha')
+                        precio = ap.get('precio_compra') or ap.get('precio')
+                        cantidad = ap.get('cantidad', 0)
+                        comision = ap.get('comision', 0)
+                    
+                    if isinstance(fecha, str):
+                        try:
+                            fecha = datetime.fromisoformat(fecha).date()
+                        except:
+                            fecha = datetime.strptime(fecha, '%Y-%m-%d').date()
+                    elif fecha is None:
+                        fecha = datetime.utcnow().date()
+                    
+                    ap_db = Aportacion(
+                        posicion_id=pos_db.id,
+                        fecha=fecha,
+                        cantidad=cantidad,
+                        precio=precio,
+                        comision=comision or 0
+                    )
+                    db.session.add(ap_db)
+            
+            db.session.commit()
+            print(f"✅ Portfolio guardado: {len(portfolio.posiciones)} posiciones")
+        except Exception as e:
+            db.session.rollback()
+            print(f"❌ Error guardando portfolio: {e}")
+            raise
+    else:
+        DATA_DIR.mkdir(exist_ok=True)
+        portfolio.guardar(str(PORTFOLIO_FILE))
 
 
 # =============================================================================
@@ -183,24 +351,28 @@ def guardar_portfolio(portfolio: Portfolio):
 # =============================================================================
 
 @app.route('/')
+@login_required
 def index():
     """Página principal - Dashboard"""
     return render_template('index.html')
 
 
 @app.route('/add')
+@login_required
 def add_position_page():
     """Página para añadir posición"""
     return render_template('add_position.html')
 
 
 @app.route('/explorar')
+@login_required
 def explorar_page():
     """Página para explorar y analizar activos sin añadirlos a la cartera"""
     return render_template('explorar.html')
 
 
 @app.route('/alertas')
+@login_required
 def alertas_page():
     """Página para gestionar alertas de precio"""
     return render_template('alertas.html')
@@ -211,6 +383,7 @@ def alertas_page():
 # =============================================================================
 
 @app.route('/api/alertas')
+@login_required
 def api_get_alertas():
     """Obtiene todas las alertas"""
     alertas = cargar_alertas()
@@ -957,6 +1130,7 @@ def api_import_merge():
 
 
 @app.route('/settings')
+@login_required
 def settings_page():
     """Página de configuración"""
     return render_template('settings.html')
@@ -1993,6 +2167,9 @@ TARGETS_FILE = os.path.join(DATA_DIR, 'targets.json')
 
 def cargar_targets():
     """Carga los objetivos de asignación por categoría"""
+    # En BD solo usamos targets por posición
+    if USE_DATABASE:
+        return {}
     if os.path.exists(TARGETS_FILE):
         with open(TARGETS_FILE, 'r') as f:
             return json.load(f)
@@ -2000,6 +2177,10 @@ def cargar_targets():
 
 def cargar_targets_positions():
     """Carga los objetivos de asignación por posición (ISIN)"""
+    if USE_DATABASE:
+        targets = Target.query.all()
+        return {t.isin: t.porcentaje for t in targets}
+    
     targets_file = os.path.join(DATA_DIR, 'targets_positions.json')
     if os.path.exists(targets_file):
         with open(targets_file, 'r') as f:
@@ -2007,12 +2188,57 @@ def cargar_targets_positions():
     return {}
 
 def guardar_targets(targets):
-    """Guarda los objetivos de asignación"""
-    with open(TARGETS_FILE, 'w') as f:
-        json.dump(targets, f, indent=2)
+    """Guarda los objetivos de asignación por categoría"""
+    if not USE_DATABASE:
+        with open(TARGETS_FILE, 'w') as f:
+            json.dump(targets, f, indent=2)
+
+def guardar_targets_positions(targets):
+    """Guarda los objetivos de asignación por posición"""
+    if USE_DATABASE:
+        Target.query.delete()
+        for isin, porcentaje in targets.items():
+            target = Target(isin=isin, porcentaje=porcentaje)
+            db.session.add(target)
+        db.session.commit()
+    else:
+        targets_file = os.path.join(DATA_DIR, 'targets_positions.json')
+        with open(targets_file, 'w') as f:
+            json.dump(targets, f, indent=2)
+
+def cargar_nuevos_activos():
+    """Carga los activos nuevos planificados"""
+    if USE_DATABASE:
+        nuevos = ActivoNuevo.query.all()
+        return {n.isin: {'nombre': n.nombre, 'categoria': n.categoria, 'precio': n.precio} for n in nuevos}
+    
+    nuevos_file = os.path.join(DATA_DIR, 'nuevos_activos.json')
+    if os.path.exists(nuevos_file):
+        with open(nuevos_file, 'r') as f:
+            return json.load(f)
+    return {}
+
+def guardar_nuevos_activos(nuevos):
+    """Guarda los activos nuevos planificados"""
+    if USE_DATABASE:
+        ActivoNuevo.query.delete()
+        for isin, info in nuevos.items():
+            nuevo = ActivoNuevo(
+                isin=isin,
+                nombre=info.get('nombre'),
+                categoria=info.get('categoria'),
+                precio=info.get('precio')
+            )
+            db.session.add(nuevo)
+        db.session.commit()
+    else:
+        nuevos_file = os.path.join(DATA_DIR, 'nuevos_activos.json')
+        with open(nuevos_file, 'w') as f:
+            json.dump(nuevos, f, indent=2)
 
 
 @app.route('/api/targets', methods=['GET'])
+@login_required
 def api_get_targets():
     """Obtiene los objetivos de asignación"""
     targets = cargar_targets()
@@ -2195,24 +2421,14 @@ def api_positions_weights():
 
 
 @app.route('/api/targets/positions', methods=['GET', 'POST'])
+@login_required
 def api_targets_positions():
     """Gestiona los targets por posición individual (ISIN) incluyendo activos nuevos"""
-    targets_file = os.path.join(DATA_DIR, 'targets_positions.json')
-    nuevos_file = os.path.join(DATA_DIR, 'nuevos_activos.json')
     
     if request.method == 'GET':
         try:
-            targets = {}
-            nuevos = {}
-            
-            if os.path.exists(targets_file):
-                with open(targets_file, 'r') as f:
-                    targets = json.load(f)
-            
-            if os.path.exists(nuevos_file):
-                with open(nuevos_file, 'r') as f:
-                    nuevos = json.load(f)
-            
+            targets = cargar_targets_positions()
+            nuevos = cargar_nuevos_activos()
             return jsonify({'success': True, 'data': targets, 'nuevosActivos': nuevos})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})
@@ -2230,23 +2446,16 @@ def api_targets_positions():
                 targets = data
                 nuevos = {}
             
-            with open(targets_file, 'w') as f:
-                json.dump(targets, f, indent=2)
+            # Guardar targets
+            guardar_targets_positions(targets)
             
             # Guardar nuevos activos si existen
             if nuevos:
-                # Cargar existentes y actualizar
-                existentes = {}
-                if os.path.exists(nuevos_file):
-                    with open(nuevos_file, 'r') as f:
-                        existentes = json.load(f)
-                existentes.update(nuevos)
-                
+                nuevos_actuales = cargar_nuevos_activos()
+                nuevos_actuales.update(nuevos)
                 # Limpiar activos que ya no tienen target
-                existentes = {k: v for k, v in existentes.items() if k in targets}
-                
-                with open(nuevos_file, 'w') as f:
-                    json.dump(existentes, f, indent=2)
+                nuevos_actuales = {k: v for k, v in nuevos_actuales.items() if k in targets}
+                guardar_nuevos_activos(nuevos_actuales)
             
             return jsonify({'success': True})
         except Exception as e:

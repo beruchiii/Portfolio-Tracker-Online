@@ -137,6 +137,88 @@
             </ul>
         </div>
 
+        <!-- Telegram Bot Section -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <span>🤖</span> Notificaciones Telegram
+            </h2>
+            <p class="text-gray-400 mb-4">
+                Recibe alertas de precio directamente en tu Telegram.
+            </p>
+            
+            <div id="telegram-status" class="mb-4 p-3 rounded-lg bg-gray-700/50">
+                <div class="flex items-center gap-2">
+                    <span id="telegram-status-icon">⏳</span>
+                    <span id="telegram-status-text">Verificando configuración...</span>
+                </div>
+            </div>
+            
+            <div class="space-y-4">
+                <!-- Instrucciones colapsables -->
+                <div class="bg-gray-900/50 rounded-lg p-4">
+                    <button onclick="toggleInstrucciones()" class="flex items-center justify-between w-full text-left">
+                        <span class="font-medium text-blue-400">📖 ¿Cómo obtener el Token del Bot?</span>
+                        <svg id="instrucciones-arrow" class="w-5 h-5 text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </button>
+                    <div id="instrucciones-content" class="hidden mt-3 text-sm text-gray-300 space-y-2">
+                        <p><strong>1.</strong> Abre Telegram y busca <code class="bg-gray-700 px-1 rounded">@BotFather</code></p>
+                        <p><strong>2.</strong> Escribe <code class="bg-gray-700 px-1 rounded">/newbot</code></p>
+                        <p><strong>3.</strong> Ponle un nombre (ej: "Mi Portfolio Alertas")</p>
+                        <p><strong>4.</strong> Ponle un username (ej: "miportfolio_bot")</p>
+                        <p><strong>5.</strong> BotFather te dará un <strong>TOKEN</strong> - cópialo aquí abajo</p>
+                        <p><strong>6.</strong> <span class="text-yellow-400">¡Importante!</span> Envía cualquier mensaje a tu bot nuevo para activarlo</p>
+                    </div>
+                </div>
+                
+                <!-- Token input -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Token del Bot</label>
+                    <input type="text" id="telegram-token" 
+                        placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 font-mono text-sm focus:border-blue-500 outline-none">
+                </div>
+                
+                <!-- Chat ID (auto-detectado) -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Chat ID <span class="text-gray-500">(se detecta automáticamente)</span></label>
+                    <input type="text" id="telegram-chatid" 
+                        placeholder="Se detectará al guardar el token"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 font-mono text-sm focus:border-blue-500 outline-none" readonly>
+                </div>
+                
+                <!-- Botones -->
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="guardarTelegram()" id="btn-guardar-telegram"
+                        class="flex-1 sm:flex-none px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition flex items-center justify-center gap-2">
+                        <span>💾</span> Guardar
+                    </button>
+                    <button onclick="probarTelegram()" id="btn-probar-telegram"
+                        class="flex-1 sm:flex-none px-6 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition flex items-center justify-center gap-2 disabled:bg-gray-600 disabled:cursor-not-allowed" disabled>
+                        <span>🔔</span> Enviar Prueba
+                    </button>
+                    <button onclick="desactivarTelegram()" id="btn-desactivar-telegram"
+                        class="flex-1 sm:flex-none px-6 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition flex items-center justify-center gap-2 hidden">
+                        <span>🚫</span> Desactivar
+                    </button>
+                </div>
+                
+                <!-- URL para cron-job -->
+                <div id="cron-url-section" class="hidden mt-4 p-4 bg-green-900/20 border border-green-700/50 rounded-lg">
+                    <h4 class="font-medium text-green-400 mb-2">✅ URL para cron-job.org</h4>
+                    <p class="text-sm text-gray-400 mb-2">Copia esta URL y configúrala en cron-job.org cada 10-14 minutos:</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="cron-url" readonly
+                            class="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 font-mono text-xs text-green-300">
+                        <button onclick="copiarCronUrl()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition">
+                            📋
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Update Instructions -->
         <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
             <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -256,6 +338,155 @@ python web_app.py</pre>
                 document.getElementById('merge-loader').classList.add('hidden');
                 showModal('❌', 'Error', 'Error al procesar el archivo');
             }
+        }
+        
+        // =========== TELEGRAM ===========
+        
+        document.addEventListener('DOMContentLoaded', cargarConfigTelegram);
+        
+        function toggleInstrucciones() {
+            const content = document.getElementById('instrucciones-content');
+            const arrow = document.getElementById('instrucciones-arrow');
+            content.classList.toggle('hidden');
+            arrow.classList.toggle('rotate-180');
+        }
+        
+        async function cargarConfigTelegram() {
+            try {
+                const response = await fetch('/api/telegram/config');
+                const result = await response.json();
+                
+                if (result.success && result.data.configurado) {
+                    document.getElementById('telegram-token').value = result.data.token_masked || '';
+                    document.getElementById('telegram-chatid').value = result.data.chat_id || '';
+                    actualizarEstadoTelegram(true, result.data.chat_id);
+                } else {
+                    actualizarEstadoTelegram(false);
+                }
+            } catch (error) {
+                actualizarEstadoTelegram(false, null, 'Error al cargar configuración');
+            }
+        }
+        
+        function actualizarEstadoTelegram(configurado, chatId = null, error = null) {
+            const icon = document.getElementById('telegram-status-icon');
+            const text = document.getElementById('telegram-status-text');
+            const statusDiv = document.getElementById('telegram-status');
+            const btnProbar = document.getElementById('btn-probar-telegram');
+            const btnDesactivar = document.getElementById('btn-desactivar-telegram');
+            const cronSection = document.getElementById('cron-url-section');
+            
+            if (error) {
+                icon.textContent = '❌';
+                text.textContent = error;
+                statusDiv.className = 'mb-4 p-3 rounded-lg bg-red-900/30 border border-red-700/50';
+                btnProbar.disabled = true;
+                btnDesactivar.classList.add('hidden');
+                cronSection.classList.add('hidden');
+            } else if (configurado) {
+                icon.textContent = '✅';
+                text.textContent = `Configurado - Chat ID: ${chatId}`;
+                statusDiv.className = 'mb-4 p-3 rounded-lg bg-green-900/30 border border-green-700/50';
+                btnProbar.disabled = false;
+                btnDesactivar.classList.remove('hidden');
+                cronSection.classList.remove('hidden');
+                document.getElementById('cron-url').value = window.location.origin + '/api/cron/verificar-alertas';
+            } else {
+                icon.textContent = '⚠️';
+                text.textContent = 'No configurado';
+                statusDiv.className = 'mb-4 p-3 rounded-lg bg-yellow-900/30 border border-yellow-700/50';
+                btnProbar.disabled = true;
+                btnDesactivar.classList.add('hidden');
+                cronSection.classList.add('hidden');
+            }
+        }
+        
+        async function guardarTelegram() {
+            const token = document.getElementById('telegram-token').value.trim();
+            
+            if (!token) {
+                showModal('❌', 'Error', 'Introduce el token del bot');
+                return;
+            }
+            
+            const btn = document.getElementById('btn-guardar-telegram');
+            btn.innerHTML = '<div class="loader mx-auto"></div>';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/telegram/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('telegram-chatid').value = result.data.chat_id;
+                    actualizarEstadoTelegram(true, result.data.chat_id);
+                    showModal('✅', '¡Configurado!', 'Bot de Telegram configurado correctamente. Recibirás un mensaje de prueba.');
+                } else {
+                    showModal('❌', 'Error', result.error);
+                    actualizarEstadoTelegram(false);
+                }
+            } catch (error) {
+                showModal('❌', 'Error', 'Error de conexión');
+            }
+            
+            btn.innerHTML = '<span>💾</span> Guardar';
+            btn.disabled = false;
+        }
+        
+        async function probarTelegram() {
+            const btn = document.getElementById('btn-probar-telegram');
+            btn.innerHTML = '<div class="loader mx-auto"></div>';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/telegram/test', { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showModal('✅', '¡Enviado!', 'Revisa tu Telegram, deberías haber recibido un mensaje.');
+                } else {
+                    showModal('❌', 'Error', result.error);
+                }
+            } catch (error) {
+                showModal('❌', 'Error', 'Error de conexión');
+            }
+            
+            btn.innerHTML = '<span>🔔</span> Enviar Prueba';
+            btn.disabled = false;
+        }
+        
+        async function desactivarTelegram() {
+            if (!confirm('¿Desactivar notificaciones de Telegram?')) return;
+            
+            try {
+                const response = await fetch('/api/telegram/config', { method: 'DELETE' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('telegram-token').value = '';
+                    document.getElementById('telegram-chatid').value = '';
+                    actualizarEstadoTelegram(false);
+                    showModal('✅', 'Desactivado', 'Notificaciones de Telegram desactivadas');
+                }
+            } catch (error) {
+                showModal('❌', 'Error', 'Error de conexión');
+            }
+        }
+        
+        function copiarCronUrl() {
+            const url = document.getElementById('cron-url');
+            url.select();
+            document.execCommand('copy');
+            
+            const btn = event.target;
+            const original = btn.textContent;
+            btn.textContent = '✅';
+            setTimeout(() => btn.textContent = '📋', 1500);
         }
     </script>
 </body>

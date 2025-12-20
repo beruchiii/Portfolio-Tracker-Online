@@ -36,20 +36,10 @@ if USE_DATABASE:
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    from database import db, init_db, Posicion, Aportacion, Alerta, Target, ActivoNuevo
+    from database import db, init_db, Posicion, Aportacion, Alerta, Target, ActivoNuevo, TelegramConfig
     db.init_app(app)
     
     with app.app_context():
-        # Forzar recreación de tabla alertas con columnas nuevas
-        try:
-            from sqlalchemy import text
-            with db.engine.connect() as conn:
-                conn.execute(text("DROP TABLE IF EXISTS alertas CASCADE"))
-                conn.commit()
-                print("🗑️ Tabla alertas eliminada para recrear")
-        except Exception as e:
-            print(f"⚠️ Error eliminando alertas: {e}")
-        
         db.create_all()
     
     print("✅ Usando base de datos PostgreSQL")
@@ -3696,6 +3686,298 @@ def api_search_ticker(isin):
                 'error': 'No se encontró ticker para este ISIN'
             })
             
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# =============================================================================
+# API TELEGRAM
+# =============================================================================
+
+def enviar_telegram(token: str, chat_id: str, mensaje: str) -> bool:
+    """Envía un mensaje por Telegram"""
+    import requests
+    try:
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        data = {
+            'chat_id': chat_id,
+            'text': mensaje,
+            'parse_mode': 'HTML'
+        }
+        response = requests.post(url, data=data, timeout=10)
+        return response.status_code == 200
+    except Exception as e:
+        print(f"Error enviando Telegram: {e}")
+        return False
+
+
+def obtener_chat_id_telegram(token: str) -> str:
+    """Obtiene el chat_id del último mensaje recibido por el bot"""
+    import requests
+    try:
+        url = f"https://api.telegram.org/bot{token}/getUpdates"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        
+        if data.get('ok') and data.get('result'):
+            # Obtener el chat_id del último mensaje
+            ultimo = data['result'][-1]
+            if 'message' in ultimo:
+                return str(ultimo['message']['chat']['id'])
+            elif 'my_chat_member' in ultimo:
+                return str(ultimo['my_chat_member']['chat']['id'])
+        return None
+    except Exception as e:
+        print(f"Error obteniendo chat_id: {e}")
+        return None
+
+
+def cargar_config_telegram():
+    """Carga la configuración de Telegram"""
+    if USE_DATABASE:
+        config = TelegramConfig.query.first()
+        return config
+    else:
+        config_file = DATA_DIR / 'telegram_config.json'
+        if config_file.exists():
+            try:
+                with open(config_file, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+    return None
+
+
+def guardar_config_telegram(token: str, chat_id: str):
+    """Guarda la configuración de Telegram"""
+    if USE_DATABASE:
+        config = TelegramConfig.query.first()
+        if config:
+            config.bot_token = token
+            config.chat_id = chat_id
+            config.activo = True
+        else:
+            config = TelegramConfig(bot_token=token, chat_id=chat_id, activo=True)
+            db.session.add(config)
+        db.session.commit()
+    else:
+        config_file = DATA_DIR / 'telegram_config.json'
+        DATA_DIR.mkdir(exist_ok=True)
+        with open(config_file, 'w') as f:
+            json.dump({'token': token, 'chat_id': chat_id, 'activo': True}, f)
+
+
+def eliminar_config_telegram():
+    """Elimina la configuración de Telegram"""
+    if USE_DATABASE:
+        TelegramConfig.query.delete()
+        db.session.commit()
+    else:
+        config_file = DATA_DIR / 'telegram_config.json'
+        if config_file.exists():
+            config_file.unlink()
+
+
+@app.route('/api/telegram/config', methods=['GET'])
+@login_required
+def api_telegram_config_get():
+    """Obtiene la configuración de Telegram"""
+    try:
+        config = cargar_config_telegram()
+        
+        if config:
+            if USE_DATABASE:
+                return jsonify({'success': True, 'data': config.to_dict()})
+            else:
+                return jsonify({'success': True, 'data': {
+                    'configurado': True,
+                    'chat_id': config.get('chat_id'),
+                    'activo': config.get('activo', True),
+                    'token_masked': config['token'][:8] + '...' + config['token'][-4:]
+                }})
+        
+        return jsonify({'success': True, 'data': {'configurado': False}})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/telegram/config', methods=['POST'])
+@login_required
+def api_telegram_config_post():
+    """Guarda la configuración de Telegram"""
+    try:
+        data = request.json
+        token = data.get('token', '').strip()
+        
+        if not token:
+            return jsonify({'success': False, 'error': 'Token requerido'})
+        
+        # Validar token intentando obtener updates
+        chat_id = obtener_chat_id_telegram(token)
+        
+        if not chat_id:
+            return jsonify({'success': False, 'error': 'Token inválido o no has enviado ningún mensaje al bot. Envía cualquier mensaje a tu bot y vuelve a intentarlo.'})
+        
+        # Guardar configuración
+        guardar_config_telegram(token, chat_id)
+        
+        # Enviar mensaje de bienvenida
+        mensaje = """🤖 <b>Portfolio Tracker Bot</b>
+
+✅ ¡Configuración completada!
+
+Recibirás notificaciones cuando:
+• 📉 Un activo baje al precio objetivo
+• 📈 Un activo suba al precio objetivo
+
+<i>Configura cron-job.org para verificar alertas automáticamente.</i>"""
+        
+        enviar_telegram(token, chat_id, mensaje)
+        
+        return jsonify({'success': True, 'data': {'chat_id': chat_id}})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/telegram/config', methods=['DELETE'])
+@login_required
+def api_telegram_config_delete():
+    """Elimina la configuración de Telegram"""
+    try:
+        eliminar_config_telegram()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/telegram/test', methods=['POST'])
+@login_required
+def api_telegram_test():
+    """Envía un mensaje de prueba por Telegram"""
+    try:
+        config = cargar_config_telegram()
+        
+        if not config:
+            return jsonify({'success': False, 'error': 'Telegram no configurado'})
+        
+        if USE_DATABASE:
+            token = config.bot_token
+            chat_id = config.chat_id
+        else:
+            token = config.get('token')
+            chat_id = config.get('chat_id')
+        
+        mensaje = """🔔 <b>Mensaje de Prueba</b>
+
+✅ ¡Las notificaciones funcionan correctamente!
+
+📊 <b>Portfolio Tracker</b> te avisará cuando tus alertas se cumplan."""
+        
+        if enviar_telegram(token, chat_id, mensaje):
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Error enviando mensaje'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/cron/verificar-alertas')
+def api_cron_verificar_alertas():
+    """Endpoint para cron-job: verifica alertas y notifica por Telegram"""
+    try:
+        # Cargar configuración de Telegram
+        config = cargar_config_telegram()
+        
+        if not config:
+            return jsonify({'success': True, 'message': 'Telegram no configurado', 'alertas_cumplidas': 0})
+        
+        if USE_DATABASE:
+            token = config.bot_token
+            chat_id = config.chat_id
+            activo = config.activo
+        else:
+            token = config.get('token')
+            chat_id = config.get('chat_id')
+            activo = config.get('activo', True)
+        
+        if not activo:
+            return jsonify({'success': True, 'message': 'Telegram desactivado', 'alertas_cumplidas': 0})
+        
+        # Cargar y verificar alertas
+        alertas = cargar_alertas()
+        alertas_cumplidas = []
+        alertas_modificadas = False
+        
+        for alerta in alertas:
+            # Solo verificar alertas activas y no notificadas
+            if not alerta.get('activa', True) or alerta.get('notificada', False):
+                continue
+            
+            try:
+                # Obtener precio actual
+                ticker = alerta.get('ticker') or alerta.get('isin')
+                resultado = price_fetcher.obtener_precio(ticker, alerta.get('isin'))
+                
+                if not resultado or not resultado.get('precio'):
+                    continue
+                
+                precio_actual = float(resultado['precio'])
+                alerta['precio_actual'] = precio_actual
+                
+                precio_objetivo = alerta.get('precio_objetivo', 0)
+                tipo = alerta.get('tipo', 'baja')
+                
+                # Verificar si se cumplió
+                cumplida = False
+                if tipo == 'baja' and precio_actual <= precio_objetivo:
+                    cumplida = True
+                elif tipo == 'sube' and precio_actual >= precio_objetivo:
+                    cumplida = True
+                
+                if cumplida:
+                    alerta['notificada'] = True
+                    alertas_modificadas = True
+                    alertas_cumplidas.append(alerta)
+                    
+            except Exception as e:
+                print(f"Error verificando alerta {alerta.get('id')}: {e}")
+                continue
+        
+        # Guardar alertas si hubo cambios
+        if alertas_modificadas:
+            guardar_alertas(alertas)
+        
+        # Enviar notificaciones
+        for alerta in alertas_cumplidas:
+            tipo_emoji = '📉' if alerta.get('tipo') == 'baja' else '📈'
+            tipo_texto = 'bajado' if alerta.get('tipo') == 'baja' else 'subido'
+            
+            precio_ref = alerta.get('precio_referencia', 0)
+            precio_actual = alerta.get('precio_actual', 0)
+            cambio_pct = ((precio_actual - precio_ref) / precio_ref * 100) if precio_ref > 0 else 0
+            
+            mensaje = f"""🚨 <b>¡ALERTA CUMPLIDA!</b>
+
+{tipo_emoji} <b>{alerta.get('nombre', alerta.get('isin'))}</b>
+
+Ha {tipo_texto} a <b>{precio_actual:.2f}€</b>
+({cambio_pct:+.2f}% desde {precio_ref:.2f}€)
+
+🎯 Objetivo: {alerta.get('precio_objetivo', 0):.2f}€
+
+🛒 <i>¡Momento de actuar!</i>"""
+            
+            enviar_telegram(token, chat_id, mensaje)
+        
+        return jsonify({
+            'success': True,
+            'alertas_verificadas': len([a for a in alertas if a.get('activa', True)]),
+            'alertas_cumplidas': len(alertas_cumplidas),
+            'timestamp': datetime.now().isoformat()
+        })
+        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 

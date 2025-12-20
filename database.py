@@ -161,6 +161,26 @@ class Usuario(db.Model):
         return check_password_hash(self.password_hash, password)
 
 
+class TelegramConfig(db.Model):
+    """Modelo para configuración de Telegram"""
+    __tablename__ = 'telegram_config'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    bot_token = db.Column(db.String(100), nullable=False)
+    chat_id = db.Column(db.String(50))
+    activo = db.Column(db.Boolean, default=True)
+    fecha_configuracion = db.Column(db.DateTime, default=datetime.utcnow)
+    ultima_notificacion = db.Column(db.DateTime)
+    
+    def to_dict(self):
+        return {
+            'configurado': True,
+            'chat_id': self.chat_id,
+            'activo': self.activo,
+            'token_masked': self.bot_token[:8] + '...' + self.bot_token[-4:] if self.bot_token else None
+        }
+
+
 # Funciones helper para migrar datos
 def init_db(app):
     """Inicializa la base de datos"""

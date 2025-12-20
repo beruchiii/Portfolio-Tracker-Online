@@ -80,6 +80,9 @@ class Alerta(db.Model):
     tipo = db.Column(db.String(20), nullable=False)  # 'above' o 'below'
     precio_objetivo = db.Column(db.Float, nullable=False)
     precio_actual = db.Column(db.Float)
+    precio_referencia = db.Column(db.Float)  # Precio cuando se creó la alerta
+    objetivo_pct = db.Column(db.Float)  # Porcentaje objetivo
+    ticker = db.Column(db.String(20))  # Ticker del activo
     activa = db.Column(db.Boolean, default=True)
     disparada = db.Column(db.Boolean, default=False)
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
@@ -94,6 +97,9 @@ class Alerta(db.Model):
             'tipo': self.tipo,
             'precio_objetivo': self.precio_objetivo,
             'precio_actual': self.precio_actual,
+            'precio_referencia': self.precio_referencia,
+            'objetivo_pct': self.objetivo_pct,
+            'ticker': self.ticker,
             'activa': self.activa,
             'disparada': self.disparada,
             'fecha_creacion': self.fecha_creacion.isoformat() if self.fecha_creacion else None,

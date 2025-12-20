@@ -135,6 +135,9 @@ def guardar_alertas(alertas):
                 tipo=al_data.get('tipo'),
                 precio_objetivo=al_data.get('precio_objetivo'),
                 precio_actual=al_data.get('precio_actual'),
+                precio_referencia=al_data.get('precio_referencia'),
+                objetivo_pct=al_data.get('objetivo_pct'),
+                ticker=al_data.get('ticker'),
                 activa=al_data.get('activa', True),
                 disparada=al_data.get('disparada', False)
             )

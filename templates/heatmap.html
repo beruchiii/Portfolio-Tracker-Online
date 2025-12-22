@@ -76,6 +76,14 @@
         .loss-low { background: linear-gradient(135deg, #f87171 0%, #fca5a5 100%); }
         .loss-medium { background: linear-gradient(135deg, #ef4444 0%, #f87171 100%); }
         .loss-high { background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); }
+        .no-data { 
+            background: linear-gradient(135deg, #374151 0%, #4b5563 100%); 
+            border: 2px dashed #6b7280;
+        }
+        .no-data .change::after {
+            content: ' ⚠️';
+            font-size: 0.8em;
+        }
         
         .header-bar {
             height: 60px;
@@ -267,7 +275,8 @@
         }
         
         // Obtener clase de color según cambio %
-        function getColorClass(change) {
+        function getColorClass(change, sinDatos) {
+            if (sinDatos) return 'no-data';
             if (change > 3) return 'gain-high';
             if (change > 1) return 'gain-medium';
             if (change > 0) return 'gain-low';
@@ -376,7 +385,7 @@
             // Crear celdas
             cells.forEach(cell => {
                 const div = document.createElement('div');
-                div.className = `heatmap-cell ${getColorClass(cell.cambio)}`;
+                div.className = `heatmap-cell ${getColorClass(cell.cambio, cell.sin_datos)}`;
                 div.style.cssText = `
                     position: absolute;
                     left: ${cell.x + 2}px;
@@ -417,9 +426,14 @@
                 'ytd': 'Este año'
             }[currentPeriod];
             
+            const cambioHtml = data.sin_datos 
+                ? `<div class="font-semibold text-yellow-400">Sin datos ⚠️</div>`
+                : `<div class="font-semibold ${data.cambio >= 0 ? 'text-green-400' : 'text-red-400'}">${data.cambio >= 0 ? '+' : ''}${data.cambio.toFixed(2)}%</div>`;
+            
             tooltip.innerHTML = `
                 <div class="font-bold text-lg mb-2">${data.nombre}</div>
                 <div class="text-gray-400 text-sm mb-2">${data.ticker} · ${data.categoria || 'Sin categoría'}</div>
+                ${data.sin_datos ? '<div class="text-yellow-500 text-xs mb-2">⚠️ No hay datos históricos disponibles para este período</div>' : ''}
                 <div class="grid grid-cols-2 gap-2 text-sm">
                     <div>
                         <div class="text-gray-400">Valor</div>
@@ -427,9 +441,7 @@
                     </div>
                     <div>
                         <div class="text-gray-400">${periodText}</div>
-                        <div class="font-semibold ${data.cambio >= 0 ? 'text-green-400' : 'text-red-400'}">
-                            ${data.cambio >= 0 ? '+' : ''}${data.cambio.toFixed(2)}%
-                        </div>
+                        ${cambioHtml}
                     </div>
                     <div>
                         <div class="text-gray-400">Cantidad</div>

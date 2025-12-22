@@ -1270,14 +1270,34 @@
         });
 
         // =====================
-        // RENTABILIDAD POR AÑO
+        // RENTABILIDAD POR AÑO (SIEMPRE 10 AÑOS)
         // =====================
         
-        function calcularRentabilidadPorAno() {
-            if (!window.chartData || !window.chartData.precios) return;
+        async function cargarDatos10Anos() {
+            // Cargar datos de 10 años independientemente del período seleccionado
+            const ticker = '{{ position.ticker }}';
+            const isin = '{{ position.isin }}';
             
-            const precios = window.chartData.precios;
-            const fechas = window.chartData.fechas;
+            try {
+                // Intentar con Yahoo Finance primero
+                const response = await fetch(`/api/chart/${ticker || isin}?period=10y`);
+                const result = await response.json();
+                
+                if (result.success && result.data.precios && result.data.precios.length > 0) {
+                    return result.data;
+                }
+            } catch (e) {
+                console.log('Error cargando datos de 10 años:', e);
+            }
+            
+            return null;
+        }
+        
+        function calcularRentabilidadPorAno(chartData) {
+            if (!chartData || !chartData.precios) return [];
+            
+            const precios = chartData.precios;
+            const fechas = chartData.fechas;
             
             // Agrupar por año
             const porAno = {};
@@ -1295,15 +1315,19 @@
             const rentabilidades = [];
             const anos = Object.keys(porAno).sort();
             
-            for (let i = 0; i < anos.length; i++) {
-                const ano = anos[i];
+            // Tomar solo los últimos 10 años
+            const ultimosAnos = anos.slice(-10);
+            
+            for (let i = 0; i < ultimosAnos.length; i++) {
+                const ano = ultimosAnos[i];
                 const data = porAno[ano];
                 
                 // Para el primer año, usar el primer precio como base
                 // Para los siguientes, usar el último precio del año anterior
                 let precioInicio = data.primero;
                 if (i > 0) {
-                    precioInicio = porAno[anos[i-1]].ultimo;
+                    const anoAnterior = ultimosAnos[i-1];
+                    precioInicio = porAno[anoAnterior].ultimo;
                 }
                 
                 const rentabilidad = ((data.ultimo - precioInicio) / precioInicio) * 100;
@@ -1313,8 +1337,14 @@
             return rentabilidades;
         }
         
-        function mostrarRentabilidadPorAno() {
-            const rentabilidades = calcularRentabilidadPorAno();
+        async function mostrarRentabilidadPorAno() {
+            // Cargar siempre datos de 10 años
+            const datos10Anos = await cargarDatos10Anos();
+            
+            // Usar datos de 10 años si están disponibles, sino usar los datos actuales
+            const datosUsar = datos10Anos || window.chartData;
+            
+            const rentabilidades = calcularRentabilidadPorAno(datosUsar);
             if (!rentabilidades || rentabilidades.length < 1) return;
             
             // Mostrar sección

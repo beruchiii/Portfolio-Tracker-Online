@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Mapa de Calor - Portfolio Tracker</title>
+    
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body { 
+            font-family: 'Inter', sans-serif;
+            background: #111827;
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        .heatmap-container {
+            display: grid;
+            gap: 2px;
+            padding: 2px;
+            height: calc(100vh - 60px);
+            width: 100vw;
+        }
+        .heatmap-cell {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            overflow: hidden;
+            position: relative;
+        }
+        .heatmap-cell:hover {
+            transform: scale(1.02);
+            z-index: 10;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .heatmap-cell .ticker {
+            font-weight: 700;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .heatmap-cell .change {
+            font-weight: 600;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .heatmap-cell .category {
+            font-size: 0.6rem;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        
+        /* Colores según rentabilidad */
+        .gain-high { background: linear-gradient(135deg, #059669 0%, #10b981 100%); }
+        .gain-medium { background: linear-gradient(135deg, #10b981 0%, #34d399 100%); }
+        .gain-low { background: linear-gradient(135deg, #34d399 0%, #6ee7b7 100%); }
+        .neutral { background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%); }
+        .loss-low { background: linear-gradient(135deg, #f87171 0%, #fca5a5 100%); }
+        .loss-medium { background: linear-gradient(135deg, #ef4444 0%, #f87171 100%); }
+        .loss-high { background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); }
+        
+        .header-bar {
+            height: 60px;
+            background: #1f2937;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            border-bottom: 1px solid #374151;
+        }
+        
+        .period-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+        .period-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+        .period-btn:not(.active) {
+            background: #374151;
+            color: #9ca3af;
+        }
+        .period-btn:hover:not(.active) {
+            background: #4b5563;
+        }
+        
+        .fullscreen-btn {
+            background: #374151;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .fullscreen-btn:hover {
+            background: #4b5563;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(17, 24, 39, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .loader {
+            border: 4px solid #374151;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .legend {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.75rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: fixed;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 12px;
+            z-index: 1000;
+            pointer-events: none;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            min-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header-bar">
+        <div class="flex items-center gap-4">
+            <a href="/" class="text-gray-400 hover:text-white transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+            </a>
+            <h1 class="text-lg font-bold">🔥 Mapa de Calor</h1>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <button class="period-btn active" data-period="1d" onclick="changePeriod('1d')">Hoy</button>
+            <button class="period-btn" data-period="1w" onclick="changePeriod('1w')">Semana</button>
+            <button class="period-btn" data-period="1m" onclick="changePeriod('1m')">Mes</button>
+            <button class="period-btn" data-period="ytd" onclick="changePeriod('ytd')">YTD</button>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <div class="legend hidden md:flex">
+                <div class="legend-item">
+                    <div class="legend-color gain-high"></div>
+                    <span>&gt;3%</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color gain-medium"></div>
+                    <span>1-3%</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color gain-low"></div>
+                    <span>0-1%</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color neutral"></div>
+                    <span>0%</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color loss-low"></div>
+                    <span>0 a -1%</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color loss-medium"></div>
+                    <span>-1 a -3%</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color loss-high"></div>
+                    <span>&lt;-3%</span>
+                </div>
+            </div>
+            
+            <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Pantalla completa">
+                <svg id="fullscreen-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Heatmap Container -->
+    <div id="heatmap" class="heatmap-container"></div>
+    
+    <!-- Loading Overlay -->
+    <div id="loading" class="loading-overlay">
+        <div class="loader"></div>
+    </div>
+    
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip hidden"></div>
+
+    <script>
+        let currentPeriod = '1d';
+        let heatmapData = [];
+        
+        // Cambiar período
+        function changePeriod(period) {
+            currentPeriod = period;
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.period === period);
+            });
+            loadHeatmap();
+        }
+        
+        // Toggle fullscreen
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        // Obtener clase de color según cambio %
+        function getColorClass(change) {
+            if (change > 3) return 'gain-high';
+            if (change > 1) return 'gain-medium';
+            if (change > 0) return 'gain-low';
+            if (change === 0 || isNaN(change)) return 'neutral';
+            if (change > -1) return 'loss-low';
+            if (change > -3) return 'loss-medium';
+            return 'loss-high';
+        }
+        
+        // Calcular layout del treemap
+        function calculateTreemapLayout(data, containerWidth, containerHeight) {
+            // Ordenar por valor (mayor a menor)
+            const sortedData = [...data].sort((a, b) => b.valor - a.valor);
+            const totalValue = sortedData.reduce((sum, item) => sum + item.valor, 0);
+            
+            if (totalValue === 0) return [];
+            
+            // Algoritmo squarified treemap simplificado
+            const cells = [];
+            let remainingData = [...sortedData];
+            let x = 0, y = 0;
+            let width = containerWidth;
+            let height = containerHeight;
+            
+            while (remainingData.length > 0) {
+                // Dividir horizontal o verticalmente según aspect ratio
+                const isHorizontal = width >= height;
+                const mainSize = isHorizontal ? width : height;
+                const crossSize = isHorizontal ? height : width;
+                
+                // Tomar elementos para esta fila/columna
+                let rowData = [];
+                let rowValue = 0;
+                const remainingValue = remainingData.reduce((sum, item) => sum + item.valor, 0);
+                
+                // Calcular cuántos elementos incluir en esta fila
+                let bestAspect = Infinity;
+                for (let i = 1; i <= remainingData.length; i++) {
+                    const testRow = remainingData.slice(0, i);
+                    const testValue = testRow.reduce((sum, item) => sum + item.valor, 0);
+                    const rowSize = (testValue / remainingValue) * crossSize;
+                    
+                    // Calcular peor aspect ratio de esta configuración
+                    let worstAspect = 0;
+                    let pos = 0;
+                    for (const item of testRow) {
+                        const itemSize = (item.valor / testValue) * mainSize;
+                        const aspect = Math.max(itemSize / rowSize, rowSize / itemSize);
+                        worstAspect = Math.max(worstAspect, aspect);
+                    }
+                    
+                    if (worstAspect <= bestAspect) {
+                        bestAspect = worstAspect;
+                        rowData = testRow;
+                        rowValue = testValue;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Calcular dimensiones de la fila
+                const rowSize = (rowValue / remainingValue) * crossSize;
+                let pos = 0;
+                
+                for (const item of rowData) {
+                    const itemSize = (item.valor / rowValue) * mainSize;
+                    
+                    cells.push({
+                        ...item,
+                        x: isHorizontal ? x + pos : x,
+                        y: isHorizontal ? y : y + pos,
+                        width: isHorizontal ? itemSize : rowSize,
+                        height: isHorizontal ? rowSize : itemSize
+                    });
+                    
+                    pos += itemSize;
+                }
+                
+                // Actualizar área restante
+                if (isHorizontal) {
+                    y += rowSize;
+                    height -= rowSize;
+                } else {
+                    x += rowSize;
+                    width -= rowSize;
+                }
+                
+                remainingData = remainingData.slice(rowData.length);
+            }
+            
+            return cells;
+        }
+        
+        // Renderizar heatmap
+        function renderHeatmap(data) {
+            const container = document.getElementById('heatmap');
+            const containerRect = container.getBoundingClientRect();
+            
+            // Calcular layout
+            const cells = calculateTreemapLayout(data, containerRect.width - 4, containerRect.height - 4);
+            
+            // Limpiar contenedor
+            container.innerHTML = '';
+            container.style.position = 'relative';
+            
+            // Crear celdas
+            cells.forEach(cell => {
+                const div = document.createElement('div');
+                div.className = `heatmap-cell ${getColorClass(cell.cambio)}`;
+                div.style.cssText = `
+                    position: absolute;
+                    left: ${cell.x + 2}px;
+                    top: ${cell.y + 2}px;
+                    width: ${cell.width - 2}px;
+                    height: ${cell.height - 2}px;
+                `;
+                
+                // Calcular tamaño de fuente según tamaño de celda
+                const minDim = Math.min(cell.width, cell.height);
+                const tickerSize = Math.max(10, Math.min(32, minDim / 4));
+                const changeSize = Math.max(8, Math.min(24, minDim / 5));
+                const showCategory = cell.height > 60 && cell.width > 80;
+                
+                div.innerHTML = `
+                    ${showCategory ? `<span class="category">${cell.categoria || ''}</span>` : ''}
+                    <span class="ticker" style="font-size: ${tickerSize}px">${cell.ticker}</span>
+                    <span class="change" style="font-size: ${changeSize}px">${cell.cambio >= 0 ? '+' : ''}${cell.cambio.toFixed(2)}%</span>
+                `;
+                
+                // Tooltip events
+                div.addEventListener('mouseenter', (e) => showTooltip(e, cell));
+                div.addEventListener('mousemove', (e) => moveTooltip(e));
+                div.addEventListener('mouseleave', hideTooltip);
+                div.addEventListener('click', () => window.location.href = `/details/${cell.id}`);
+                
+                container.appendChild(div);
+            });
+        }
+        
+        // Tooltip functions
+        function showTooltip(e, data) {
+            const tooltip = document.getElementById('tooltip');
+            const periodText = {
+                '1d': 'Hoy',
+                '1w': 'Esta semana',
+                '1m': 'Este mes',
+                'ytd': 'Este año'
+            }[currentPeriod];
+            
+            tooltip.innerHTML = `
+                <div class="font-bold text-lg mb-2">${data.nombre}</div>
+                <div class="text-gray-400 text-sm mb-2">${data.ticker} · ${data.categoria || 'Sin categoría'}</div>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                        <div class="text-gray-400">Valor</div>
+                        <div class="font-semibold">${data.valor.toLocaleString('es-ES', {style: 'currency', currency: 'EUR'})}</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-400">${periodText}</div>
+                        <div class="font-semibold ${data.cambio >= 0 ? 'text-green-400' : 'text-red-400'}">
+                            ${data.cambio >= 0 ? '+' : ''}${data.cambio.toFixed(2)}%
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-gray-400">Cantidad</div>
+                        <div class="font-semibold">${data.cantidad}</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-400">Peso</div>
+                        <div class="font-semibold">${data.peso.toFixed(1)}%</div>
+                    </div>
+                </div>
+            `;
+            tooltip.classList.remove('hidden');
+            moveTooltip(e);
+        }
+        
+        function moveTooltip(e) {
+            const tooltip = document.getElementById('tooltip');
+            const x = e.clientX + 15;
+            const y = e.clientY + 15;
+            
+            // Ajustar si se sale de la pantalla
+            const rect = tooltip.getBoundingClientRect();
+            const maxX = window.innerWidth - rect.width - 10;
+            const maxY = window.innerHeight - rect.height - 10;
+            
+            tooltip.style.left = Math.min(x, maxX) + 'px';
+            tooltip.style.top = Math.min(y, maxY) + 'px';
+        }
+        
+        function hideTooltip() {
+            document.getElementById('tooltip').classList.add('hidden');
+        }
+        
+        // Cargar datos del heatmap
+        async function loadHeatmap() {
+            document.getElementById('loading').classList.remove('hidden');
+            
+            try {
+                const response = await fetch(`/api/portfolio/heatmap?periodo=${currentPeriod}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    heatmapData = result.data;
+                    renderHeatmap(heatmapData);
+                } else {
+                    console.error('Error:', result.error);
+                }
+            } catch (error) {
+                console.error('Error loading heatmap:', error);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+        
+        // Resize handler
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (heatmapData.length > 0) {
+                    renderHeatmap(heatmapData);
+                }
+            }, 100);
+        });
+        
+        // Initial load
+        loadHeatmap();
+    </script>
+</body>
+</html>

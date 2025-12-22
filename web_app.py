@@ -1776,6 +1776,112 @@ def api_portfolio_evolution():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/heatmap')
+@login_required
+def heatmap_page():
+    """Página del mapa de calor a pantalla completa"""
+    return render_template('heatmap.html')
+
+
+@app.route('/api/portfolio/heatmap')
+@login_required
+def api_portfolio_heatmap():
+    """Obtiene datos para el mapa de calor con cambio % por período"""
+    periodo = request.args.get('periodo', '1d')  # 1d, 1w, 1m, ytd
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    try:
+        import yfinance as yf
+        from datetime import datetime, timedelta
+        
+        # Mapeo de períodos a días hacia atrás
+        period_days = {
+            '1d': 1,
+            '1w': 7,
+            '1m': 30,
+            'ytd': (datetime.now() - datetime(datetime.now().year, 1, 1)).days
+        }
+        days_back = period_days.get(periodo, 1)
+        
+        # Actualizar precios actuales
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones_actualizadas = analyzer.actualizar_precios()
+        
+        # Calcular valor total para pesos
+        valor_total = sum(p.valor_actual for p in posiciones_actualizadas)
+        
+        heatmap_data = []
+        
+        for pos_actual in posiciones_actualizadas:
+            # Buscar posición original
+            pos_original = next((p for p in portfolio.posiciones if p.id == pos_actual.id), None)
+            if not pos_original:
+                continue
+            
+            cambio_pct = 0
+            
+            # Obtener precio histórico para calcular cambio
+            if pos_original.ticker:
+                try:
+                    ticker = yf.Ticker(pos_original.ticker)
+                    
+                    if periodo == '1d':
+                        # Para el día, usar el precio de cierre anterior
+                        hist = ticker.history(period='5d')
+                        if len(hist) >= 2:
+                            precio_anterior = hist['Close'].iloc[-2]
+                            precio_actual = pos_actual.precio_actual
+                            if precio_anterior > 0:
+                                cambio_pct = ((precio_actual - precio_anterior) / precio_anterior) * 100
+                    else:
+                        # Para otros períodos, calcular desde hace X días
+                        if periodo == 'ytd':
+                            start_date = datetime(datetime.now().year, 1, 1)
+                            hist = ticker.history(start=start_date)
+                        else:
+                            hist = ticker.history(period=f'{days_back}d')
+                        
+                        if not hist.empty:
+                            precio_inicio = hist['Close'].iloc[0]
+                            precio_actual = pos_actual.precio_actual
+                            if precio_inicio > 0:
+                                cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
+                except Exception as e:
+                    print(f"Error obteniendo histórico para {pos_original.ticker}: {e}")
+            
+            # Calcular peso en cartera
+            peso = (pos_actual.valor_actual / valor_total * 100) if valor_total > 0 else 0
+            
+            heatmap_data.append({
+                'id': pos_original.id,
+                'ticker': pos_original.ticker or pos_original.isin[:6],
+                'nombre': pos_original.nombre,
+                'categoria': pos_original.categoria or '',
+                'valor': round(pos_actual.valor_actual, 2),
+                'cantidad': pos_original.cantidad,
+                'cambio': round(cambio_pct, 2),
+                'peso': round(peso, 2)
+            })
+        
+        # Ordenar por valor (mayor a menor)
+        heatmap_data.sort(key=lambda x: x['valor'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': heatmap_data,
+            'periodo': periodo,
+            'valor_total': round(valor_total, 2)
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/portfolio/positions-evolution')
 def api_positions_evolution():
     """Obtiene la evolución de cada posición individual para comparar"""

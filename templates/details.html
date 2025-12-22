@@ -1287,17 +1287,20 @@
             
             const ticker = positionData.ticker;
             const isin = positionData.isin;
-            const identificador = ticker || isin;
             
-            if (!identificador) {
+            if (!ticker && !isin) {
                 console.log('[RentabilidadAnual] No hay ticker ni ISIN');
                 return null;
             }
             
-            console.log(`[RentabilidadAnual] Cargando 10 años para ${identificador}...`);
+            console.log(`[RentabilidadAnual] Cargando 10 años para ${ticker || isin}...`);
             
             try {
-                const response = await fetch(`/api/chart/${encodeURIComponent(identificador)}?period=10y`);
+                // Usar la API correcta: /api/historical/{ticker}?periodo=10y
+                const url = `/api/historical/${encodeURIComponent(ticker || isin)}?periodo=10y&isin=${encodeURIComponent(isin || '')}`;
+                console.log('[RentabilidadAnual] URL:', url);
+                
+                const response = await fetch(url);
                 const result = await response.json();
                 
                 console.log('[RentabilidadAnual] Respuesta:', result.success, result.data ? result.data.precios?.length : 0);

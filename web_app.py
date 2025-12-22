@@ -3867,6 +3867,7 @@ def api_historical(ticker):
                 '1y': '1y',
                 '2y': '2y',
                 '5y': '5y',
+                '10y': '5y',  # justETF máximo 5 años, usar eso para 10y
                 'ytd': '1y',
                 'max': '5y'
             }

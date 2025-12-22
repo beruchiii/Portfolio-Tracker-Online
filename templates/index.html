@@ -25,6 +25,11 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- amCharts 5 para mapa mundial -->
+    <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/map.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/geodata/worldLow.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/themes/Dark.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -73,24 +78,6 @@
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
-        }
-        
-        /* Mapa mundial */
-        .map-region {
-            fill: #374151;
-            stroke: #1f2937;
-            stroke-width: 1;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-        .map-region:hover {
-            opacity: 0.8;
-            transform: scale(1.02);
-            transform-origin: center;
-        }
-        .map-region.active {
-            stroke: #fff;
-            stroke-width: 2;
         }
     </style>
 </head>
@@ -463,54 +450,11 @@
                         <div class="loader"></div>
                     </div>
                     <div id="geography-content" class="hidden">
-                        <!-- Mapa Mundial -->
-                        <div id="world-map-container" class="relative mb-4" style="height: 200px;">
-                            <svg id="world-map" viewBox="0 0 1000 500" class="w-full h-full">
-                                <!-- Mapa mundial simplificado -->
-                                <!-- América del Norte -->
-                                <path id="map-usa" d="M180,120 L280,120 L300,180 L280,220 L200,220 L160,180 Z" class="map-region" data-region="USA"/>
-                                <path id="map-canada" d="M180,80 L300,80 L300,120 L180,120 Z" class="map-region" data-region="Canada"/>
-                                <path id="map-mexico" d="M160,220 L200,220 L220,260 L180,280 L140,260 Z" class="map-region" data-region="Mexico"/>
-                                
-                                <!-- América del Sur -->
-                                <path id="map-brasil" d="M260,300 L340,280 L360,360 L300,420 L240,380 Z" class="map-region" data-region="Brasil"/>
-                                <path id="map-argentina" d="M240,420 L300,420 L280,500 L220,500 Z" class="map-region" data-region="Argentina"/>
-                                
-                                <!-- Europa -->
-                                <path id="map-uk" d="M440,100 L460,100 L460,140 L440,140 Z" class="map-region" data-region="UK"/>
-                                <path id="map-europa" d="M460,80 L560,80 L580,180 L460,180 Z" class="map-region" data-region="Europa"/>
-                                <path id="map-alemania" d="M480,100 L520,100 L520,140 L480,140 Z" class="map-region" data-region="Alemania"/>
-                                <path id="map-espana" d="M440,160 L480,160 L480,200 L440,200 Z" class="map-region" data-region="España"/>
-                                
-                                <!-- África -->
-                                <path id="map-africa" d="M480,220 L580,200 L600,340 L520,400 L460,340 Z" class="map-region" data-region="Africa"/>
-                                
-                                <!-- Asia -->
-                                <path id="map-rusia" d="M580,60 L900,60 L900,160 L580,160 Z" class="map-region" data-region="Rusia"/>
-                                <path id="map-china" d="M720,180 L840,180 L860,280 L720,280 Z" class="map-region" data-region="China"/>
-                                <path id="map-india" d="M680,260 L740,260 L720,340 L660,320 Z" class="map-region" data-region="India"/>
-                                <path id="map-japon" d="M880,180 L920,180 L920,260 L880,260 Z" class="map-region" data-region="Japón"/>
-                                <path id="map-corea" d="M860,200 L880,200 L880,240 L860,240 Z" class="map-region" data-region="Corea"/>
-                                <path id="map-taiwan" d="M860,260 L880,260 L880,290 L860,290 Z" class="map-region" data-region="Taiwán"/>
-                                
-                                <!-- Oceanía -->
-                                <path id="map-australia" d="M800,360 L920,360 L920,460 L800,460 Z" class="map-region" data-region="Australia"/>
-                                
-                                <!-- Emergentes/Global (representado como puntos) -->
-                                <circle id="map-emergentes" cx="620" cy="300" r="20" class="map-region" data-region="Emergentes"/>
-                                <circle id="map-global" cx="500" cy="250" r="30" class="map-region" data-region="Global"/>
-                            </svg>
-                            <!-- Tooltip del mapa -->
-                            <div id="map-tooltip" class="hidden absolute bg-gray-900 border border-gray-600 rounded px-2 py-1 text-xs pointer-events-none z-10"></div>
-                        </div>
+                        <!-- Mapa Mundial Interactivo -->
+                        <div id="world-map" style="height: 250px; width: 100%; background: #1f2937; border-radius: 8px;"></div>
                         
-                        <!-- Gráfico donut pequeño + lista -->
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="h-32">
-                                <canvas id="geography-chart"></canvas>
-                            </div>
-                            <div id="geography-list" class="space-y-1 max-h-32 overflow-y-auto text-sm">
-                            </div>
+                        <!-- Lista de países debajo del mapa -->
+                        <div id="geography-list" class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
                         </div>
                     </div>
                 </div>
@@ -2822,7 +2766,7 @@
         // =====================
         // EXPOSICIÓN GEOGRÁFICA
         // =====================
-        let geographyChart = null;
+        // Variable del mapa eliminada - ahora se declara en renderGeography
 
         async function loadGeography() {
             document.getElementById('geography-loader').classList.remove('hidden');
@@ -2844,10 +2788,12 @@
             }
         }
 
+        let worldMapChart = null;
+        
         function renderGeography(data) {
             const exposicion = data.exposicion;
             
-            // Colores para el gráfico y mapa
+            // Colores para el mapa y lista
             const geoColors = {
                 'USA': '#3b82f6',
                 'Europa': '#10b981',
@@ -2869,107 +2815,141 @@
                 'Africa': '#78716c'
             };
             
-            const defaultColors = ['#64748b', '#475569', '#334155', '#1e293b'];
+            // Mapeo de nombres de país a códigos ISO
+            const paisToISO = {
+                'USA': 'US',
+                'Europa': ['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'PT', 'IE', 'FI', 'SE', 'DK', 'NO', 'CH', 'PL', 'CZ', 'HU', 'GR'],
+                'Japón': 'JP',
+                'UK': 'GB',
+                'China': 'CN',
+                'Alemania': 'DE',
+                'España': 'ES',
+                'Taiwán': 'TW',
+                'India': 'IN',
+                'Corea': 'KR',
+                'Brasil': 'BR',
+                'Canada': 'CA',
+                'Mexico': 'MX',
+                'Australia': 'AU',
+                'Rusia': 'RU',
+                'Global': null,
+                'Emergentes': ['CN', 'IN', 'BR', 'MX', 'ZA', 'ID', 'TH', 'MY', 'PH', 'VN'],
+                'Africa': ['ZA', 'EG', 'NG', 'KE', 'MA']
+            };
             
-            const labels = exposicion.map(e => e.pais);
-            const values = exposicion.map(e => e.porcentaje);
+            const defaultColors = ['#64748b', '#475569', '#334155', '#1e293b'];
             const colors = exposicion.map((e, i) => geoColors[e.pais] || defaultColors[i % defaultColors.length]);
             
             // ==================
-            // COLOREAR MAPA MUNDIAL
+            // MAPA MUNDIAL CON AMCHARTS
             // ==================
             
-            // Resetear todos los países a gris
-            document.querySelectorAll('.map-region').forEach(region => {
-                region.style.fill = '#374151';
-                region.classList.remove('active');
+            // Limpiar mapa anterior
+            if (worldMapChart) {
+                worldMapChart.dispose();
+            }
+            
+            // Crear raíz del mapa
+            const root = am5.Root.new("world-map");
+            
+            // Aplicar tema oscuro
+            root.setThemes([am5themes_Dark.new(root)]);
+            
+            // Crear mapa
+            const chart = root.container.children.push(
+                am5map.MapChart.new(root, {
+                    panX: "rotateX",
+                    panY: "rotateY",
+                    projection: am5map.geoNaturalEarth1(),
+                    homeZoomLevel: 1,
+                    homeGeoPoint: { longitude: 10, latitude: 30 }
+                })
+            );
+            
+            // Añadir países base (gris)
+            const polygonSeries = chart.series.push(
+                am5map.MapPolygonSeries.new(root, {
+                    geoJSON: am5geodata_worldLow,
+                    exclude: ["AQ"] // Excluir Antártida
+                })
+            );
+            
+            polygonSeries.mapPolygons.template.setAll({
+                fill: am5.color(0x374151),
+                strokeWidth: 0.5,
+                stroke: am5.color(0x1f2937),
+                tooltipText: "{name}",
+                interactive: true
             });
             
-            // Crear mapa de exposición para acceso rápido
+            polygonSeries.mapPolygons.template.states.create("hover", {
+                fill: am5.color(0x4b5563)
+            });
+            
+            // Crear datos para colorear países
+            const countryData = [];
             const exposicionMap = {};
+            
             exposicion.forEach((item, index) => {
+                const color = colors[index];
                 exposicionMap[item.pais] = {
                     porcentaje: item.porcentaje,
                     valor: item.valor,
-                    color: colors[index]
+                    color: color
                 };
-            });
-            
-            // Colorear países con exposición
-            document.querySelectorAll('.map-region').forEach(region => {
-                const regionName = region.dataset.region;
-                if (exposicionMap[regionName]) {
-                    region.style.fill = exposicionMap[regionName].color;
-                    region.classList.add('active');
-                    
-                    // Ajustar opacidad según porcentaje (mínimo 40%, máximo 100%)
-                    const opacity = 0.4 + (exposicionMap[regionName].porcentaje / 100) * 0.6;
-                    region.style.opacity = Math.min(opacity, 1);
-                }
                 
-                // Eventos de tooltip
-                region.addEventListener('mouseenter', (e) => {
-                    const tooltip = document.getElementById('map-tooltip');
-                    const info = exposicionMap[regionName];
-                    if (info) {
-                        tooltip.innerHTML = `<strong>${regionName}</strong><br>${info.porcentaje.toFixed(1)}% · ${formatCurrency(info.valor)}`;
-                        tooltip.classList.remove('hidden');
+                const isoCodes = paisToISO[item.pais];
+                if (isoCodes) {
+                    if (Array.isArray(isoCodes)) {
+                        // Múltiples países (Europa, Emergentes, etc.)
+                        isoCodes.forEach(iso => {
+                            countryData.push({
+                                id: iso,
+                                value: item.porcentaje,
+                                fill: am5.color(color),
+                                pais: item.pais,
+                                porcentaje: item.porcentaje,
+                                valor: item.valor
+                            });
+                        });
                     } else {
-                        tooltip.innerHTML = `<strong>${regionName}</strong><br>Sin exposición`;
-                        tooltip.classList.remove('hidden');
-                    }
-                });
-                
-                region.addEventListener('mousemove', (e) => {
-                    const tooltip = document.getElementById('map-tooltip');
-                    const container = document.getElementById('world-map-container');
-                    const rect = container.getBoundingClientRect();
-                    tooltip.style.left = (e.clientX - rect.left + 10) + 'px';
-                    tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
-                });
-                
-                region.addEventListener('mouseleave', () => {
-                    document.getElementById('map-tooltip').classList.add('hidden');
-                });
-            });
-            
-            // ==================
-            // GRÁFICO DONUT
-            // ==================
-            
-            const ctx = document.getElementById('geography-chart').getContext('2d');
-            
-            if (geographyChart) {
-                geographyChart.destroy();
-            }
-            
-            geographyChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: values,
-                        backgroundColor: colors,
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.label}: ${context.raw.toFixed(1)}%`;
-                                }
-                            }
-                        }
+                        // Un solo país
+                        countryData.push({
+                            id: isoCodes,
+                            value: item.porcentaje,
+                            fill: am5.color(color),
+                            pais: item.pais,
+                            porcentaje: item.porcentaje,
+                            valor: item.valor
+                        });
                     }
                 }
             });
+            
+            // Aplicar colores a los países
+            polygonSeries.mapPolygons.template.adapters.add("fill", function(fill, target) {
+                const dataItem = countryData.find(d => d.id === target.dataItem.get("id"));
+                if (dataItem) {
+                    return dataItem.fill;
+                }
+                return fill;
+            });
+            
+            // Tooltip personalizado
+            polygonSeries.mapPolygons.template.adapters.add("tooltipText", function(text, target) {
+                const id = target.dataItem.get("id");
+                const dataItem = countryData.find(d => d.id === id);
+                if (dataItem) {
+                    return `[bold]${dataItem.pais}[/]\n${dataItem.porcentaje.toFixed(1)}% · €${dataItem.valor.toLocaleString()}`;
+                }
+                return "{name}";
+            });
+            
+            // Zoom con rueda del ratón
+            chart.set("zoomControl", am5map.ZoomControl.new(root, {}));
+            
+            // Guardar referencia
+            worldMapChart = root;
             
             // ==================
             // LISTA DE PAÍSES
@@ -2981,13 +2961,16 @@
             exposicion.forEach((item, index) => {
                 const color = colors[index];
                 const div = document.createElement('div');
-                div.className = 'flex items-center justify-between';
+                div.className = 'flex items-center justify-between bg-gray-700/30 rounded px-2 py-1';
                 div.innerHTML = `
                     <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full" style="background-color: ${color}"></span>
+                        <span class="w-3 h-3 rounded-full" style="background-color: ${color}"></span>
                         <span class="text-gray-300">${item.pais}</span>
                     </div>
-                    <span class="font-medium">${item.porcentaje.toFixed(1)}%</span>
+                    <div class="text-right">
+                        <span class="font-semibold">${item.porcentaje.toFixed(1)}%</span>
+                        <span class="text-gray-500 text-xs ml-1">${formatCurrency(item.valor)}</span>
+                    </div>
                 `;
                 listContainer.appendChild(div);
             });

@@ -1275,8 +1275,11 @@
         
         async function cargarDatos10Anos() {
             // Cargar datos de 10 años independientemente del período seleccionado
-            const ticker = '{{ position.ticker }}';
-            const isin = '{{ position.isin }}';
+            // Usar positionData que ya está cargada
+            if (!positionData) return null;
+            
+            const ticker = positionData.ticker;
+            const isin = positionData.isin;
             
             try {
                 // Intentar con Yahoo Finance primero

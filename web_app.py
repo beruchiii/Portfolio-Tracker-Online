@@ -1796,13 +1796,22 @@ def api_portfolio_heatmap():
     try:
         import yfinance as yf
         from datetime import datetime, timedelta
+        from src.scrapers import JustETFScraper
         
-        # Mapeo de períodos a días hacia atrás
+        justetf = JustETFScraper()
+        
+        # Mapeo de períodos a días hacia atrás y períodos de justETF
         period_days = {
             '1d': 1,
             '1w': 7,
             '1m': 30,
             'ytd': (datetime.now() - datetime(datetime.now().year, 1, 1)).days
+        }
+        justetf_periods = {
+            '1d': '1mo',  # justETF mínimo 1 mes
+            '1w': '1mo',
+            '1m': '1mo',
+            'ytd': '1y'
         }
         days_back = period_days.get(periodo, 1)
         
@@ -1822,35 +1831,81 @@ def api_portfolio_heatmap():
                 continue
             
             cambio_pct = 0
+            datos_encontrados = False
             
-            # Obtener precio histórico para calcular cambio
-            if pos_original.ticker:
+            # 1. Intentar con Yahoo Finance (solo si tiene ticker que parece de Yahoo)
+            ticker_yahoo = pos_original.ticker
+            usar_yahoo = ticker_yahoo and not ticker_yahoo.startswith('IE') and not ticker_yahoo.startswith('GB') and not ticker_yahoo.startswith('LU')
+            
+            if usar_yahoo:
                 try:
-                    ticker = yf.Ticker(pos_original.ticker)
+                    ticker = yf.Ticker(ticker_yahoo)
                     
                     if periodo == '1d':
-                        # Para el día, usar el precio de cierre anterior
                         hist = ticker.history(period='5d')
-                        if len(hist) >= 2:
+                        if not hist.empty and len(hist) >= 2:
                             precio_anterior = hist['Close'].iloc[-2]
                             precio_actual = pos_actual.precio_actual
-                            if precio_anterior > 0:
+                            if precio_anterior > 0 and precio_actual > 0:
                                 cambio_pct = ((precio_actual - precio_anterior) / precio_anterior) * 100
+                                datos_encontrados = True
+                                print(f"[Heatmap] Yahoo OK para {ticker_yahoo}: {cambio_pct:.2f}%")
                     else:
-                        # Para otros períodos, calcular desde hace X días
                         if periodo == 'ytd':
                             start_date = datetime(datetime.now().year, 1, 1)
                             hist = ticker.history(start=start_date)
                         else:
                             hist = ticker.history(period=f'{days_back}d')
                         
-                        if not hist.empty:
+                        if not hist.empty and len(hist) > 0:
                             precio_inicio = hist['Close'].iloc[0]
                             precio_actual = pos_actual.precio_actual
-                            if precio_inicio > 0:
+                            if precio_inicio > 0 and precio_actual > 0:
                                 cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
+                                datos_encontrados = True
+                                print(f"[Heatmap] Yahoo OK para {ticker_yahoo}: {cambio_pct:.2f}%")
                 except Exception as e:
-                    print(f"Error obteniendo histórico para {pos_original.ticker}: {e}")
+                    print(f"[Heatmap] Yahoo error para {ticker_yahoo}: {e}")
+            
+            # 2. Fallback a justETF si hay ISIN y no encontramos datos
+            if not datos_encontrados and pos_original.isin:
+                print(f"[Heatmap] Intentando justETF para {pos_original.isin}...")
+                try:
+                    justetf_periodo = justetf_periods.get(periodo, '1mo')
+                    historico = justetf.obtener_historico(pos_original.isin, justetf_periodo)
+                    
+                    if historico and historico.get('precios') and len(historico['precios']) > 1:
+                        precios = historico['precios']
+                        fechas = historico['fechas']
+                        
+                        # Encontrar precio de inicio según período
+                        if periodo == 'ytd':
+                            # Buscar precio más cercano al 1 de enero
+                            year_start = f"{datetime.now().year}-01"
+                            precio_inicio = precios[0]
+                            for i, fecha in enumerate(fechas):
+                                if fecha.startswith(year_start):
+                                    precio_inicio = precios[i]
+                                    break
+                        elif periodo == '1m':
+                            precio_inicio = precios[0]
+                        elif periodo == '1w':
+                            # Últimos 7 días aprox (justETF tiene datos diarios)
+                            idx = max(0, len(precios) - 5)  # ~5 días de mercado en una semana
+                            precio_inicio = precios[idx]
+                        else:  # 1d
+                            # Último precio vs penúltimo
+                            precio_inicio = precios[-2] if len(precios) >= 2 else precios[0]
+                        
+                        precio_actual = precios[-1]
+                        if precio_inicio > 0:
+                            cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
+                            datos_encontrados = True
+                            print(f"[Heatmap] justETF OK para {pos_original.isin}: {cambio_pct:.2f}%")
+                    else:
+                        print(f"[Heatmap] justETF sin datos para {pos_original.isin}")
+                except Exception as e:
+                    print(f"[Heatmap] justETF error para {pos_original.isin}: {e}")
             
             # Calcular peso en cartera
             peso = (pos_actual.valor_actual / valor_total * 100) if valor_total > 0 else 0
@@ -1863,7 +1918,8 @@ def api_portfolio_heatmap():
                 'valor': round(pos_actual.valor_actual, 2),
                 'cantidad': pos_original.cantidad,
                 'cambio': round(cambio_pct, 2),
-                'peso': round(peso, 2)
+                'peso': round(peso, 2),
+                'sin_datos': not datos_encontrados
             })
         
         # Ordenar por valor (mayor a menor)

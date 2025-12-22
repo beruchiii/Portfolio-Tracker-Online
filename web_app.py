@@ -1833,13 +1833,10 @@ def api_portfolio_heatmap():
             cambio_pct = 0
             datos_encontrados = False
             
-            # 1. Intentar con Yahoo Finance (solo si tiene ticker que parece de Yahoo)
-            ticker_yahoo = pos_original.ticker
-            usar_yahoo = ticker_yahoo and not ticker_yahoo.startswith('IE') and not ticker_yahoo.startswith('GB') and not ticker_yahoo.startswith('LU')
-            
-            if usar_yahoo:
+            # 1. SIEMPRE intentar Yahoo Finance primero (si hay ticker)
+            if pos_original.ticker:
                 try:
-                    ticker = yf.Ticker(ticker_yahoo)
+                    ticker = yf.Ticker(pos_original.ticker)
                     
                     if periodo == '1d':
                         hist = ticker.history(period='5d')
@@ -1849,7 +1846,7 @@ def api_portfolio_heatmap():
                             if precio_anterior > 0 and precio_actual > 0:
                                 cambio_pct = ((precio_actual - precio_anterior) / precio_anterior) * 100
                                 datos_encontrados = True
-                                print(f"[Heatmap] Yahoo OK para {ticker_yahoo}: {cambio_pct:.2f}%")
+                                print(f"[Heatmap] Yahoo OK para {pos_original.ticker}: {cambio_pct:.2f}%")
                     else:
                         if periodo == 'ytd':
                             start_date = datetime(datetime.now().year, 1, 1)
@@ -1863,13 +1860,13 @@ def api_portfolio_heatmap():
                             if precio_inicio > 0 and precio_actual > 0:
                                 cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
                                 datos_encontrados = True
-                                print(f"[Heatmap] Yahoo OK para {ticker_yahoo}: {cambio_pct:.2f}%")
+                                print(f"[Heatmap] Yahoo OK para {pos_original.ticker}: {cambio_pct:.2f}%")
                 except Exception as e:
-                    print(f"[Heatmap] Yahoo error para {ticker_yahoo}: {e}")
+                    print(f"[Heatmap] Yahoo error para {pos_original.ticker}: {e}")
             
-            # 2. Fallback a justETF si hay ISIN y no encontramos datos
+            # 2. Fallback a justETF si Yahoo no devolvió datos Y hay ISIN
             if not datos_encontrados and pos_original.isin:
-                print(f"[Heatmap] Intentando justETF para {pos_original.isin}...")
+                print(f"[Heatmap] Yahoo sin datos, intentando justETF para {pos_original.isin}...")
                 try:
                     justetf_periodo = justetf_periods.get(periodo, '1mo')
                     historico = justetf.obtener_historico(pos_original.isin, justetf_periodo)
@@ -1890,11 +1887,11 @@ def api_portfolio_heatmap():
                         elif periodo == '1m':
                             precio_inicio = precios[0]
                         elif periodo == '1w':
-                            # Últimos 7 días aprox (justETF tiene datos diarios)
-                            idx = max(0, len(precios) - 5)  # ~5 días de mercado en una semana
+                            # Últimos 5 días de mercado aprox
+                            idx = max(0, len(precios) - 5)
                             precio_inicio = precios[idx]
                         else:  # 1d
-                            # Último precio vs penúltimo
+                            # Penúltimo precio
                             precio_inicio = precios[-2] if len(precios) >= 2 else precios[0]
                         
                         precio_actual = precios[-1]

@@ -1270,27 +1270,37 @@
         });
 
         // =====================
-        // RENTABILIDAD POR AÑO (SIEMPRE 10 AÑOS)
+        // RENTABILIDAD POR AÑO (SIEMPRE 10 AÑOS - INDEPENDIENTE)
         // =====================
         
+        let datosRentabilidadAnual = null; // Cache para no recargar cada vez
+        
         async function cargarDatos10Anos() {
-            // Cargar datos de 10 años independientemente del período seleccionado
-            // Usar positionData que ya está cargada
-            if (!positionData) return null;
+            // Si ya tenemos datos en cache, usarlos
+            if (datosRentabilidadAnual) return datosRentabilidadAnual;
+            
+            // Esperar a que positionData esté disponible
+            if (!positionData) {
+                console.log('[RentabilidadAnual] Esperando positionData...');
+                return null;
+            }
             
             const ticker = positionData.ticker;
             const isin = positionData.isin;
             
+            console.log(`[RentabilidadAnual] Cargando 10 años para ${ticker || isin}...`);
+            
             try {
-                // Intentar con Yahoo Finance primero
                 const response = await fetch(`/api/chart/${ticker || isin}?period=10y`);
                 const result = await response.json();
                 
                 if (result.success && result.data.precios && result.data.precios.length > 0) {
-                    return result.data;
+                    console.log(`[RentabilidadAnual] OK - ${result.data.precios.length} puntos de datos`);
+                    datosRentabilidadAnual = result.data;
+                    return datosRentabilidadAnual;
                 }
             } catch (e) {
-                console.log('Error cargando datos de 10 años:', e);
+                console.log('[RentabilidadAnual] Error:', e);
             }
             
             return null;
@@ -1341,14 +1351,21 @@
         }
         
         async function mostrarRentabilidadPorAno() {
-            // Cargar siempre datos de 10 años
+            // Cargar SIEMPRE datos de 10 años (independiente del gráfico principal)
             const datos10Anos = await cargarDatos10Anos();
             
-            // Usar datos de 10 años si están disponibles, sino usar los datos actuales
-            const datosUsar = datos10Anos || window.chartData;
+            // Si no hay datos de 10 años, NO usar window.chartData - ocultar sección
+            if (!datos10Anos) {
+                console.log('[RentabilidadAnual] No hay datos de 10 años disponibles');
+                document.getElementById('yearly-section').classList.add('hidden');
+                return;
+            }
             
-            const rentabilidades = calcularRentabilidadPorAno(datosUsar);
-            if (!rentabilidades || rentabilidades.length < 1) return;
+            const rentabilidades = calcularRentabilidadPorAno(datos10Anos);
+            if (!rentabilidades || rentabilidades.length < 1) {
+                document.getElementById('yearly-section').classList.add('hidden');
+                return;
+            }
             
             // Mostrar sección
             document.getElementById('yearly-section').classList.remove('hidden');
@@ -1378,6 +1395,25 @@
                 `;
             }).join('');
         }
+        
+        // Cargar rentabilidad anual una sola vez al inicio (después de cargar positionData)
+        async function inicializarRentabilidadAnual() {
+            // Esperar un poco para que positionData se cargue
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Intentar varias veces si positionData no está listo
+            for (let i = 0; i < 5; i++) {
+                if (positionData) {
+                    await mostrarRentabilidadPorAno();
+                    return;
+                }
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            console.log('[RentabilidadAnual] positionData no disponible después de varios intentos');
+        }
+        
+        // Ejecutar al cargar la página
+        inicializarRentabilidadAnual();
 
         // =====================
         // HEATMAP MENSUAL
@@ -1521,17 +1557,18 @@
         // =====================
         
         function ejecutarAnalisisRendimiento() {
-            // Solo mostrar si hay suficientes datos (más de 60 días)
+            // Heatmap mensual depende de window.chartData (período seleccionado)
             if (window.chartData && window.chartData.precios && window.chartData.precios.length > 60) {
-                mostrarRentabilidadPorAno();
                 mostrarHeatmapMensual();
             } else {
-                document.getElementById('yearly-section').classList.add('hidden');
                 document.getElementById('heatmap-section').classList.add('hidden');
             }
             
             // Calcular indicadores rápidos
             calcularIndicadoresRapidos();
+            
+            // NOTA: La rentabilidad anual se carga de forma INDEPENDIENTE
+            // con sus propios 10 años de datos (ver inicializarRentabilidadAnual)
         }
 
         // =====================

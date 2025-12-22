@@ -588,6 +588,9 @@
                 
                 loadChart('6mo');
                 loadStats();
+                
+                // Cargar rentabilidad anual (independiente del gráfico, siempre 10 años)
+                mostrarRentabilidadPorAno();
 
             } catch (error) {
                 console.error('Error:', error);
@@ -1396,24 +1399,8 @@
             }).join('');
         }
         
-        // Cargar rentabilidad anual una sola vez al inicio (después de cargar positionData)
-        async function inicializarRentabilidadAnual() {
-            // Esperar un poco para que positionData se cargue
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Intentar varias veces si positionData no está listo
-            for (let i = 0; i < 5; i++) {
-                if (positionData) {
-                    await mostrarRentabilidadPorAno();
-                    return;
-                }
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            console.log('[RentabilidadAnual] positionData no disponible después de varios intentos');
-        }
-        
-        // Ejecutar al cargar la página
-        inicializarRentabilidadAnual();
+        // NOTA: mostrarRentabilidadPorAno() se llama desde loadPosition()
+        // después de que positionData esté disponible
 
         // =====================
         // HEATMAP MENSUAL

@@ -2016,6 +2016,17 @@ def api_portfolio_sankey():
                 'industry': industry
             })
         
+        # Determinar umbral para agrupar posiciones pequeñas
+        num_posiciones = len(posiciones_actualizadas)
+        # Si hay más de 10 posiciones, agrupar las menores al 2%
+        # Si hay más de 20, agrupar las menores al 3%
+        if num_posiciones > 20:
+            umbral_agrupacion = 3.0
+        elif num_posiciones > 10:
+            umbral_agrupacion = 2.0
+        else:
+            umbral_agrupacion = 0.5  # Casi sin agrupar
+        
         # Construir datos del Sankey CON PORCENTAJES Y NOMBRES DESCRIPTIVOS
         # Nivel 1: Portfolio → Categoría
         for cat, cat_data in categorias.items():
@@ -2032,38 +2043,30 @@ def api_portfolio_sankey():
                 
             cat_label = f"{cat} ({peso_cat:.1f}%)"
             
-            sectores = {}
+            # Separar posiciones grandes y pequeñas
+            posiciones_grandes = []
+            valor_otros = 0
+            num_otros = 0
+            
             for pos in cat_data['posiciones']:
-                sector = pos['sector']
-                if sector not in sectores:
-                    sectores[sector] = {'valor': 0, 'posiciones': []}
-                sectores[sector]['valor'] += pos['valor']
-                sectores[sector]['posiciones'].append(pos)
+                peso_pos = (pos['valor'] / valor_total) * 100
+                if peso_pos >= umbral_agrupacion:
+                    posiciones_grandes.append(pos)
+                else:
+                    valor_otros += pos['valor']
+                    num_otros += 1
             
-            # Nivel 2: Categoría → Sector (si hay más de un sector diferente o sector != categoria)
-            sectores_diferentes = [s for s in sectores.keys() if s != cat]
+            # Añadir posiciones grandes
+            for pos in posiciones_grandes:
+                peso_pos = (pos['valor'] / valor_total) * 100
+                nombre_label = f"{pos['nombre']} ({peso_pos:.1f}%)"
+                sankey_data.append([cat_label, nombre_label, pos['valor']])
             
-            if len(sectores) > 1 or sectores_diferentes:
-                for sector, sector_data in sectores.items():
-                    peso = (sector_data['valor'] / valor_total) * 100
-                    if peso >= 0.5:
-                        # Evitar nodos duplicados
-                        sector_label = f"{sector} ({peso:.1f}%)" if sector != cat else f"{sector}  ({peso:.1f}%)"
-                        sankey_data.append([cat_label, sector_label, sector_data['valor']])
-                        
-                        # Nivel 3: Sector → Activo (usar NOMBRE en lugar de ticker)
-                        for pos in sector_data['posiciones']:
-                            peso_pos = (pos['valor'] / valor_total) * 100
-                            if peso_pos >= 0.3:
-                                nombre_label = f"{pos['nombre']} ({peso_pos:.1f}%)"
-                                sankey_data.append([sector_label, nombre_label, pos['valor']])
-            else:
-                # Solo un sector igual a la categoría, ir directo a activos
-                for pos in cat_data['posiciones']:
-                    peso_pos = (pos['valor'] / valor_total) * 100
-                    if peso_pos >= 0.3:
-                        nombre_label = f"{pos['nombre']} ({peso_pos:.1f}%)"
-                        sankey_data.append([cat_label, nombre_label, pos['valor']])
+            # Añadir "Otros" si hay posiciones agrupadas
+            if valor_otros > 0 and num_otros > 0:
+                peso_otros = (valor_otros / valor_total) * 100
+                otros_label = f"Otros ({num_otros}) ({peso_otros:.1f}%)"
+                sankey_data.append([cat_label, otros_label, valor_otros])
         
         # Crear resumen de categorías
         resumen = []
@@ -2076,6 +2079,10 @@ def api_portfolio_sankey():
                 'num_posiciones': len(cat_data['posiciones'])
             })
         
+        # Calcular altura recomendada según número de nodos
+        num_nodos_finales = len(set([row[1] for row in sankey_data]))
+        altura_recomendada = max(380, min(700, 50 + num_nodos_finales * 35))
+        
         return jsonify({
             'success': True,
             'data': {
@@ -2083,7 +2090,8 @@ def api_portfolio_sankey():
                 'resumen': resumen,
                 'valor_total': round(valor_total, 2),
                 'num_posiciones': len(posiciones_actualizadas),
-                'num_categorias': len(categorias)
+                'num_categorias': len(categorias),
+                'altura_recomendada': altura_recomendada
             }
         })
         

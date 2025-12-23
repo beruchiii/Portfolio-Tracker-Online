@@ -39,7 +39,6 @@
             justify-content: center;
             align-items: center;
             border-radius: 4px;
-            cursor: pointer;
             transition: all 0.2s ease;
             overflow: hidden;
             position: relative;
@@ -392,6 +391,7 @@
                     top: ${cell.y + 2}px;
                     width: ${cell.width - 2}px;
                     height: ${cell.height - 2}px;
+                    cursor: default;
                 `;
                 
                 // Calcular tamaño de fuente según tamaño de celda
@@ -400,17 +400,23 @@
                 const changeSize = Math.max(8, Math.min(24, minDim / 5));
                 const showCategory = cell.height > 60 && cell.width > 80;
                 
+                // Acortar nombre si es muy largo
+                let nombreMostrar = cell.nombre || cell.ticker;
+                const maxChars = Math.max(8, Math.floor(cell.width / 12));
+                if (nombreMostrar.length > maxChars) {
+                    nombreMostrar = nombreMostrar.substring(0, maxChars - 2) + '..';
+                }
+                
                 div.innerHTML = `
                     ${showCategory ? `<span class="category">${cell.categoria || ''}</span>` : ''}
-                    <span class="ticker" style="font-size: ${tickerSize}px">${cell.ticker}</span>
+                    <span class="ticker" style="font-size: ${tickerSize}px">${nombreMostrar}</span>
                     <span class="change" style="font-size: ${changeSize}px">${cell.cambio >= 0 ? '+' : ''}${cell.cambio.toFixed(2)}%</span>
                 `;
                 
-                // Tooltip events
+                // Tooltip events (solo hover, sin click)
                 div.addEventListener('mouseenter', (e) => showTooltip(e, cell));
                 div.addEventListener('mousemove', (e) => moveTooltip(e));
                 div.addEventListener('mouseleave', hideTooltip);
-                div.addEventListener('click', () => window.location.href = `/details/${cell.id}`);
                 
                 container.appendChild(div);
             });

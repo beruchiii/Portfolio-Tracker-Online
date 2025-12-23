@@ -3069,6 +3069,10 @@
                     });
                 }
                 
+                // Ajustar altura del contenedor según recomendación del API
+                const alturaRecomendada = result.data.altura_recomendada || 380;
+                document.getElementById('sankey-chart').style.height = alturaRecomendada + 'px';
+                
                 // Llenar el resumen
                 document.getElementById('sankey-valor-total').textContent = formatCurrency(result.data.valor_total);
                 document.getElementById('sankey-num-categorias').textContent = result.data.num_categorias;
@@ -3105,7 +3109,7 @@
                 // Esperar un frame para que el contenedor tenga dimensiones correctas
                 requestAnimationFrame(() => {
                     setTimeout(() => {
-                        renderSankeyGoogle(result.data.sankey);
+                        renderSankeyGoogle(result.data.sankey, result.data.altura_recomendada);
                     }, 50);
                 });
                 
@@ -3116,13 +3120,15 @@
             }
         }
         
-        function renderSankeyGoogle(sankeyDataArray) {
+        function renderSankeyGoogle(sankeyDataArray, alturaRecomendada) {
             const container = document.getElementById('sankey-chart');
             if (!container || container.offsetWidth === 0) {
                 // Si el contenedor no tiene ancho, reintentar
-                setTimeout(() => renderSankeyGoogle(sankeyDataArray), 100);
+                setTimeout(() => renderSankeyGoogle(sankeyDataArray, alturaRecomendada), 100);
                 return;
             }
+            
+            const altura = alturaRecomendada || 380;
             
             const data = new google.visualization.DataTable();
             data.addColumn('string', 'From');
@@ -3151,7 +3157,19 @@
                 'Technology': '#10b981',
                 'Communication Services': '#f43f5e',
                 'Materials': '#78716c',
-                'Real Estate': '#84cc16'
+                'Real Estate': '#84cc16',
+                'Tabaco/Consumo': '#f59e0b',
+                'Telecomunicaciones': '#06b6d4',
+                'REITs/Inmobiliario': '#84cc16',
+                'Ocio/Cruceros': '#ec4899',
+                'BDC/Financiero': '#0ea5e9',
+                'Energía/Petróleo': '#eab308',
+                'Consumo/Bebidas': '#a855f7',
+                'Consumo Básico': '#22c55e',
+                'Servicios Financieros': '#3b82f6',
+                'Petroquímica': '#78716c',
+                'REITs/Salud': '#ef4444',
+                'Otros': '#6b7280'
             };
             
             // Generar colores para los nodos basándose en el nombre base (sin porcentaje)
@@ -3170,18 +3188,18 @@
             });
             
             const options = {
-                height: 380,
+                height: altura,
                 sankey: {
                     node: {
                         colors: nodeColors,
                         label: {
                             fontName: 'Inter',
-                            fontSize: 12,
+                            fontSize: 11,
                             color: '#ffffff',
                             bold: true
                         },
-                        nodePadding: 20,
-                        width: 18,
+                        nodePadding: 12,
+                        width: 15,
                         interactivity: true
                     },
                     link: {

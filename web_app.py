@@ -1935,6 +1935,147 @@ def api_portfolio_heatmap():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/portfolio/sankey')
+@login_required
+def api_portfolio_sankey():
+    """Obtiene datos para el diagrama Sankey de diversificación"""
+    portfolio = cargar_portfolio()
+    
+    if not portfolio.posiciones:
+        return jsonify({'success': False, 'error': 'No hay posiciones'})
+    
+    try:
+        import yfinance as yf
+        
+        # Actualizar precios
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones_actualizadas = analyzer.actualizar_precios()
+        
+        # Calcular valor total
+        valor_total = sum(p.valor_actual for p in posiciones_actualizadas)
+        
+        if valor_total <= 0:
+            return jsonify({'success': False, 'error': 'Valor total es 0'})
+        
+        # Estructura para almacenar los datos del Sankey
+        sankey_data = []
+        
+        # Agrupar posiciones por categoría
+        categorias = {}
+        
+        for pos_actual in posiciones_actualizadas:
+            # Buscar posición original
+            pos_original = next((p for p in portfolio.posiciones if p.id == pos_actual.id), None)
+            if not pos_original:
+                continue
+            
+            categoria = pos_original.categoria or 'Sin categoría'
+            valor = pos_actual.valor_actual
+            
+            if categoria not in categorias:
+                categorias[categoria] = {
+                    'valor': 0,
+                    'posiciones': []
+                }
+            
+            categorias[categoria]['valor'] += valor
+            
+            # Intentar obtener sector/industria de Yahoo Finance para acciones
+            sector = None
+            industry = None
+            
+            if pos_original.ticker and not pos_original.isin:
+                # Probablemente es una acción, intentar obtener sector
+                try:
+                    ticker_yf = yf.Ticker(pos_original.ticker)
+                    info = ticker_yf.info
+                    sector = info.get('sector')
+                    industry = info.get('industry')
+                except:
+                    pass
+            
+            # Si no hay sector de Yahoo, usar la categoría como sector
+            if not sector:
+                sector = categoria
+            
+            # Si no hay industry, usar la categoría
+            if not industry:
+                industry = categoria
+            
+            categorias[categoria]['posiciones'].append({
+                'nombre': pos_original.nombre,
+                'ticker': pos_original.ticker or pos_original.isin[:12] if pos_original.isin else 'N/A',
+                'valor': valor,
+                'sector': sector,
+                'industry': industry
+            })
+        
+        # Construir datos del Sankey
+        # Nivel 1: Portfolio → Categoría
+        for cat, cat_data in categorias.items():
+            peso = (cat_data['valor'] / valor_total) * 100
+            if peso >= 0.5:  # Solo incluir si es >= 0.5%
+                sankey_data.append(['Portfolio', cat, cat_data['valor']])
+        
+        # Agrupar por sector dentro de cada categoría
+        for cat, cat_data in categorias.items():
+            sectores = {}
+            for pos in cat_data['posiciones']:
+                sector = pos['sector']
+                if sector not in sectores:
+                    sectores[sector] = {'valor': 0, 'posiciones': []}
+                sectores[sector]['valor'] += pos['valor']
+                sectores[sector]['posiciones'].append(pos)
+            
+            # Nivel 2: Categoría → Sector (si hay más de un sector diferente o sector != categoria)
+            sectores_diferentes = [s for s in sectores.keys() if s != cat]
+            
+            if len(sectores) > 1 or sectores_diferentes:
+                for sector, sector_data in sectores.items():
+                    peso = (sector_data['valor'] / valor_total) * 100
+                    if peso >= 0.5:
+                        # Evitar nodos duplicados
+                        sector_name = f"{sector} " if sector == cat else sector
+                        sankey_data.append([cat, sector_name, sector_data['valor']])
+                        
+                        # Nivel 3: Sector → Activo
+                        for pos in sector_data['posiciones']:
+                            peso_pos = (pos['valor'] / valor_total) * 100
+                            if peso_pos >= 0.3:
+                                sankey_data.append([sector_name, pos['ticker'], pos['valor']])
+            else:
+                # Solo un sector igual a la categoría, ir directo a activos
+                for pos in cat_data['posiciones']:
+                    peso_pos = (pos['valor'] / valor_total) * 100
+                    if peso_pos >= 0.3:
+                        sankey_data.append([cat, pos['ticker'], pos['valor']])
+        
+        # Crear resumen de categorías
+        resumen = []
+        for cat, cat_data in sorted(categorias.items(), key=lambda x: x[1]['valor'], reverse=True):
+            porcentaje = (cat_data['valor'] / valor_total) * 100
+            resumen.append({
+                'categoria': cat,
+                'valor': round(cat_data['valor'], 2),
+                'porcentaje': round(porcentaje, 1),
+                'num_posiciones': len(cat_data['posiciones'])
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'sankey': sankey_data,
+                'resumen': resumen,
+                'valor_total': round(valor_total, 2)
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/portfolio/positions-evolution')
 def api_positions_evolution():
     """Obtiene la evolución de cada posición individual para comparar"""

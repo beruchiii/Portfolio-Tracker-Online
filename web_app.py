@@ -4079,6 +4079,20 @@ def api_historical(ticker):
         'precios': [round(p, 2) for p in historico['Close'].tolist()]
     }
     
+    # Añadir volumen si está disponible
+    if 'Volume' in historico.columns:
+        import math
+        volumen_lista = []
+        for v in historico['Volume'].tolist():
+            try:
+                if v is None or (isinstance(v, float) and math.isnan(v)):
+                    volumen_lista.append(0)
+                else:
+                    volumen_lista.append(int(v))
+            except:
+                volumen_lista.append(0)
+        data['volumen'] = volumen_lista
+    
     # Obtener nombre del activo
     try:
         import yfinance as yf

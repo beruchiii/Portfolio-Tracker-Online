@@ -206,6 +206,10 @@
                             <input type="checkbox" id="macd-toggle" class="rounded">
                             <span class="text-xs text-orange-400">MACD</span>
                         </label>
+                        <label class="flex items-center gap-1 cursor-pointer" title="Volumen de operaciones - Confirma movimientos de precio">
+                            <input type="checkbox" id="volume-toggle" class="rounded">
+                            <span class="text-xs text-emerald-400">Vol</span>
+                        </label>
                     </div>
                     
                     <div class="w-px h-6 bg-gray-600"></div>
@@ -282,6 +286,32 @@
                             <span class="font-semibold text-white">Análisis MACD</span>
                         </div>
                         <div id="macd-analysis-content" class="space-y-2 text-sm">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gráfico Volumen -->
+                <div id="volume-container" class="hidden mt-4">
+                    <div class="h-32 relative bg-gray-900/50 rounded-lg p-2">
+                        <canvas id="volume-chart"></canvas>
+                    </div>
+                    <div class="flex items-center justify-between mt-1 text-xs text-gray-500">
+                        <span>Volumen de operaciones</span>
+                        <div class="flex gap-4">
+                            <span class="text-emerald-400">█ Subida</span>
+                            <span class="text-red-400">█ Bajada</span>
+                            <span class="text-gray-400">― Media 20d</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Panel de Análisis Volumen -->
+                    <div id="volume-analysis" class="mt-3 bg-gray-900/70 rounded-lg p-4 border border-gray-700">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-emerald-400">📈</span>
+                            <span class="font-semibold text-white">Análisis de Volumen</span>
+                        </div>
+                        <div id="volume-analysis-content" class="space-y-2 text-sm">
                             <!-- Se llena dinámicamente -->
                         </div>
                     </div>
@@ -921,6 +951,8 @@
             document.getElementById('rsi-container').classList.add('hidden');
             document.getElementById('macd-toggle').checked = false;
             document.getElementById('macd-container').classList.add('hidden');
+            document.getElementById('volume-toggle').checked = false;
+            document.getElementById('volume-container').classList.add('hidden');
             document.getElementById('alerts-container').innerHTML = ''; // Limpiar todas las alertas
         }
 
@@ -2167,6 +2199,302 @@
         // Event listener para MACD toggle
         document.getElementById('macd-toggle').addEventListener('change', function() {
             toggleMACD(this.checked);
+        });
+
+        // =====================
+        // VOLUMEN
+        // =====================
+        
+        let volumeChart = null;
+        
+        function toggleVolume(enabled) {
+            const container = document.getElementById('volume-container');
+            
+            if (enabled && window.chartData && window.chartData.volumen) {
+                container.classList.remove('hidden');
+                renderVolumeChart();
+            } else if (enabled && (!window.chartData || !window.chartData.volumen)) {
+                alert('No hay datos de volumen disponibles para este activo');
+                document.getElementById('volume-toggle').checked = false;
+            } else {
+                container.classList.add('hidden');
+                if (volumeChart) {
+                    volumeChart.destroy();
+                    volumeChart = null;
+                }
+            }
+        }
+        
+        function calcularMediaVolumen(volumenes, periodo = 20) {
+            const media = [];
+            for (let i = 0; i < volumenes.length; i++) {
+                if (i < periodo - 1) {
+                    media.push(null);
+                } else {
+                    let suma = 0;
+                    for (let j = i - periodo + 1; j <= i; j++) {
+                        suma += volumenes[j];
+                    }
+                    media.push(suma / periodo);
+                }
+            }
+            return media;
+        }
+        
+        function renderVolumeChart() {
+            if (!window.chartData || !window.chartData.volumen) return;
+            
+            const volumenes = window.chartData.volumen;
+            const precios = window.chartData.precios;
+            const mediaVol = calcularMediaVolumen(volumenes, 20);
+            
+            // Colores según si el precio subió o bajó
+            const colores = [];
+            for (let i = 0; i < precios.length; i++) {
+                if (i === 0) {
+                    colores.push('rgba(16, 185, 129, 0.6)'); // Verde
+                } else {
+                    colores.push(precios[i] >= precios[i-1] 
+                        ? 'rgba(16, 185, 129, 0.6)'  // Verde - subió
+                        : 'rgba(239, 68, 68, 0.6)'); // Rojo - bajó
+                }
+            }
+            
+            if (volumeChart) volumeChart.destroy();
+            
+            const ctx = document.getElementById('volume-chart').getContext('2d');
+            
+            volumeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: window.chartData.fechas,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Volumen',
+                            data: volumenes,
+                            backgroundColor: colores,
+                            borderColor: colores,
+                            borderWidth: 0,
+                            order: 2
+                        },
+                        {
+                            type: 'line',
+                            label: 'Media 20d',
+                            data: mediaVol,
+                            borderColor: '#9ca3af',
+                            backgroundColor: 'transparent',
+                            tension: 0.1,
+                            pointRadius: 0,
+                            borderWidth: 1.5,
+                            borderDash: [3, 3],
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    if (value === null) return '';
+                                    return `${context.dataset.label}: ${formatearVolumen(value)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: false
+                        },
+                        y: {
+                            grid: { color: '#374151' },
+                            ticks: {
+                                color: '#9ca3af',
+                                callback: function(value) {
+                                    return formatearVolumen(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Generar análisis
+            analizarVolumen(volumenes, precios, mediaVol);
+        }
+        
+        function formatearVolumen(vol) {
+            if (vol >= 1000000000) return (vol / 1000000000).toFixed(1) + 'B';
+            if (vol >= 1000000) return (vol / 1000000).toFixed(1) + 'M';
+            if (vol >= 1000) return (vol / 1000).toFixed(1) + 'K';
+            return vol.toString();
+        }
+        
+        function analizarVolumen(volumenes, precios, mediaVol) {
+            const container = document.getElementById('volume-analysis-content');
+            if (!container) return;
+            
+            // Datos recientes (últimos 5 días)
+            const ultimos5Vol = volumenes.slice(-5);
+            const ultimos5Precio = precios.slice(-5);
+            const volActual = volumenes[volumenes.length - 1];
+            const mediaActual = mediaVol[mediaVol.length - 1];
+            const precioActual = precios[precios.length - 1];
+            const precioAnterior = precios[precios.length - 2];
+            
+            // Calcular promedios
+            const volPromedio = volumenes.reduce((a, b) => a + b, 0) / volumenes.length;
+            const volMax = Math.max(...volumenes);
+            const volMin = Math.min(...volumenes.filter(v => v > 0));
+            
+            // Tendencia de volumen (últimos 5 días)
+            let volumenCreciendo = 0;
+            for (let i = 1; i < ultimos5Vol.length; i++) {
+                if (ultimos5Vol[i] > ultimos5Vol[i-1]) volumenCreciendo++;
+            }
+            const tendenciaVol = volumenCreciendo >= 3 ? 'creciente' : volumenCreciendo <= 1 ? 'decreciente' : 'estable';
+            
+            // Volumen relativo a la media
+            const volRelativo = mediaActual ? (volActual / mediaActual) : 1;
+            const volSobreMedia = volRelativo > 1.5 ? 'muy alto' : volRelativo > 1 ? 'alto' : volRelativo < 0.5 ? 'muy bajo' : 'bajo';
+            
+            // Movimiento del precio
+            const precioSubio = precioActual > precioAnterior;
+            
+            let html = '';
+            
+            // 1. Volumen actual vs media
+            const volIcon = volSobreMedia.includes('alto') ? '🔥' : '💤';
+            const volColor = volSobreMedia.includes('alto') ? 'text-emerald-400' : 'text-yellow-400';
+            
+            html += `
+                <div class="flex items-start gap-2">
+                    <span>${volIcon}</span>
+                    <div>
+                        <span class="text-gray-300">Volumen actual:</span>
+                        <span class="${volColor} font-semibold ml-1">${volSobreMedia.toUpperCase()}</span>
+                        <span class="text-gray-500 ml-1">(${(volRelativo * 100).toFixed(0)}% de la media)</span>
+                        <p class="text-gray-500 text-xs mt-1">
+                            ${volSobreMedia.includes('alto')
+                                ? 'El volumen está por encima de lo normal. Hay más interés/actividad en este activo de lo habitual.'
+                                : 'El volumen está por debajo de lo normal. Poca actividad en el activo.'}
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            // 2. Tendencia del volumen
+            const tendIcon = tendenciaVol === 'creciente' ? '📈' : tendenciaVol === 'decreciente' ? '📉' : '➡️';
+            
+            html += `
+                <div class="flex items-start gap-2 mt-3">
+                    <span>${tendIcon}</span>
+                    <div>
+                        <span class="text-gray-300">Tendencia (5 días):</span>
+                        <span class="font-semibold ml-1 ${tendenciaVol === 'creciente' ? 'text-emerald-400' : tendenciaVol === 'decreciente' ? 'text-red-400' : 'text-gray-400'}">
+                            ${tendenciaVol.toUpperCase()}
+                        </span>
+                        <p class="text-gray-500 text-xs mt-1">
+                            ${tendenciaVol === 'creciente' 
+                                ? 'El volumen ha ido aumentando los últimos días. Mayor interés de los inversores.'
+                                : tendenciaVol === 'decreciente'
+                                    ? 'El volumen ha ido disminuyendo. Menos interés o consolidación.'
+                                    : 'El volumen se mantiene estable.'}
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            // 3. Confirmación de movimiento
+            let confirmacion = '';
+            let confirmIcon = '';
+            let confirmColor = '';
+            
+            if (precioSubio && volSobreMedia.includes('alto')) {
+                confirmacion = 'SUBIDA CONFIRMADA';
+                confirmIcon = '✅';
+                confirmColor = 'text-green-400';
+            } else if (!precioSubio && volSobreMedia.includes('alto')) {
+                confirmacion = 'BAJADA CONFIRMADA';
+                confirmIcon = '🚨';
+                confirmColor = 'text-red-400';
+            } else if (precioSubio && volSobreMedia.includes('bajo')) {
+                confirmacion = 'SUBIDA DÉBIL';
+                confirmIcon = '⚠️';
+                confirmColor = 'text-yellow-400';
+            } else {
+                confirmacion = 'BAJADA DÉBIL';
+                confirmIcon = '💤';
+                confirmColor = 'text-gray-400';
+            }
+            
+            html += `
+                <div class="flex items-start gap-2 mt-3">
+                    <span>${confirmIcon}</span>
+                    <div>
+                        <span class="text-gray-300">Señal precio+volumen:</span>
+                        <span class="${confirmColor} font-semibold ml-1">${confirmacion}</span>
+                        <p class="text-gray-500 text-xs mt-1">
+                            ${precioSubio && volSobreMedia.includes('alto')
+                                ? '💪 El precio sube con volumen alto. Los compradores están activos. Señal alcista fuerte.'
+                                : !precioSubio && volSobreMedia.includes('alto')
+                                    ? '⚠️ El precio baja con volumen alto. Los vendedores están activos. Señal bajista fuerte.'
+                                    : precioSubio && volSobreMedia.includes('bajo')
+                                        ? '🤔 El precio sube pero con poco volumen. La subida puede no ser sostenible.'
+                                        : '😴 El precio baja con poco volumen. Puede ser solo una corrección menor.'}
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            // 4. Resumen
+            let resumen = '';
+            let resumenColor = '';
+            let resumenIcon = '';
+            
+            if (precioSubio && volSobreMedia.includes('alto') && tendenciaVol === 'creciente') {
+                resumen = 'FUERTE INTERÉS COMPRADOR - Precio subiendo con volumen alto y creciente. Muy buena señal alcista.';
+                resumenColor = 'text-green-400 bg-green-500/10 border-green-500/30';
+                resumenIcon = '🚀';
+            } else if (!precioSubio && volSobreMedia.includes('alto') && tendenciaVol === 'creciente') {
+                resumen = 'PRESIÓN VENDEDORA - Precio bajando con volumen alto y creciente. Señal de precaución.';
+                resumenColor = 'text-red-400 bg-red-500/10 border-red-500/30';
+                resumenIcon = '🛑';
+            } else if (volSobreMedia.includes('bajo') && tendenciaVol === 'decreciente') {
+                resumen = 'POCO INTERÉS - Volumen bajo y decreciente. El activo está en fase de consolidación o poco seguido.';
+                resumenColor = 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
+                resumenIcon = '😴';
+            } else {
+                resumen = 'SEÑALES MIXTAS - El volumen no confirma claramente el movimiento del precio. Esperar más confirmación.';
+                resumenColor = 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+                resumenIcon = '🤔';
+            }
+            
+            html += `
+                <div class="mt-4 p-3 rounded-lg border ${resumenColor}">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">${resumenIcon}</span>
+                        <span class="font-semibold">Resumen:</span>
+                    </div>
+                    <p class="mt-1 text-sm">${resumen}</p>
+                </div>
+                <p class="text-gray-600 text-xs mt-3 italic">
+                    💡 El volumen confirma movimientos: subidas con alto volumen son más fiables que con bajo volumen.
+                    Picos de volumen suelen indicar cambios de tendencia o eventos importantes.
+                </p>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        // Event listener para Volumen toggle
+        document.getElementById('volume-toggle').addEventListener('change', function() {
+            toggleVolume(this.checked);
         });
 
         // =====================

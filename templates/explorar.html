@@ -217,6 +217,14 @@
                             <input type="checkbox" id="rsi-toggle" class="rounded">
                             <span class="text-xs text-cyan-400">RSI</span>
                         </label>
+                        <label class="flex items-center gap-1 cursor-pointer" title="MACD (12,26,9) - Cruces indican cambio de tendencia">
+                            <input type="checkbox" id="macd-toggle" class="rounded">
+                            <span class="text-xs text-orange-400">MACD</span>
+                        </label>
+                        <label class="flex items-center gap-1 cursor-pointer" title="Volumen de operaciones">
+                            <input type="checkbox" id="volume-toggle" class="rounded">
+                            <span class="text-xs text-emerald-400">Vol</span>
+                        </label>
                     </div>
                     
                     <div class="w-px h-6 bg-gray-600"></div>
@@ -250,6 +258,58 @@
                         <div class="flex gap-4">
                             <span class="text-red-400">Sobrecompra &gt;70</span>
                             <span class="text-green-400">Sobreventa &lt;30</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gráfico MACD -->
+                <div id="macd-container" class="hidden mt-4">
+                    <div class="h-40 relative bg-gray-900/50 rounded-lg p-2">
+                        <canvas id="macd-chart"></canvas>
+                    </div>
+                    <div class="flex items-center justify-between mt-1 text-xs text-gray-500">
+                        <span>MACD (12, 26, 9)</span>
+                        <div class="flex gap-4">
+                            <span class="text-blue-400">● MACD</span>
+                            <span class="text-orange-400">● Signal</span>
+                            <span class="text-gray-400">█ Histograma</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Panel de Análisis MACD -->
+                    <div id="macd-analysis" class="mt-3 bg-gray-900/70 rounded-lg p-4 border border-gray-700">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-orange-400">📊</span>
+                            <span class="font-semibold text-white">Análisis MACD</span>
+                        </div>
+                        <div id="macd-analysis-content" class="space-y-2 text-sm">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gráfico Volumen -->
+                <div id="volume-container" class="hidden mt-4">
+                    <div class="h-32 relative bg-gray-900/50 rounded-lg p-2">
+                        <canvas id="volume-chart"></canvas>
+                    </div>
+                    <div class="flex items-center justify-between mt-1 text-xs text-gray-500">
+                        <span>Volumen de operaciones</span>
+                        <div class="flex gap-4">
+                            <span class="text-emerald-400">█ Subida</span>
+                            <span class="text-red-400">█ Bajada</span>
+                            <span class="text-gray-400">― Media 20d</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Panel de Análisis Volumen -->
+                    <div id="volume-analysis" class="mt-3 bg-gray-900/70 rounded-lg p-4 border border-gray-700">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-emerald-400">📈</span>
+                            <span class="font-semibold text-white">Análisis de Volumen</span>
+                        </div>
+                        <div id="volume-analysis-content" class="space-y-2 text-sm">
+                            <!-- Se llena dinámicamente -->
                         </div>
                     </div>
                 </div>
@@ -462,7 +522,8 @@
                     isin: isin,
                     nombre: result.data.nombre || ticker,
                     precios: result.data.precios,
-                    fechas: result.data.fechas
+                    fechas: result.data.fechas,
+                    volumen: result.data.volumen || null
                 };
                 
                 // Mostrar resultado
@@ -601,7 +662,8 @@
                 if (result.success && result.data.precios) {
                     window.chartData = {
                         precios: result.data.precios,
-                        fechas: result.data.fechas
+                        fechas: result.data.fechas,
+                        volumen: result.data.volumen || null
                     };
                     
                     renderChart(result.data.fechas, result.data.precios, periodLabel);
@@ -622,6 +684,10 @@
             document.getElementById('bollinger-toggle').checked = false;
             document.getElementById('rsi-toggle').checked = false;
             document.getElementById('rsi-container').classList.add('hidden');
+            document.getElementById('macd-toggle').checked = false;
+            document.getElementById('macd-container').classList.add('hidden');
+            document.getElementById('volume-toggle').checked = false;
+            document.getElementById('volume-container').classList.add('hidden');
             document.getElementById('alerts-container').innerHTML = '';
         }
         
@@ -880,6 +946,325 @@
         
         document.getElementById('rsi-toggle').addEventListener('change', function() {
             toggleRSI(this.checked);
+        });
+        
+        // =====================
+        // MACD
+        // =====================
+        
+        let macdChart = null;
+        
+        function calcularEMA(precios, periodo) {
+            const ema = [];
+            const multiplicador = 2 / (periodo + 1);
+            
+            let suma = 0;
+            for (let i = 0; i < periodo && i < precios.length; i++) {
+                suma += precios[i];
+            }
+            ema.push(suma / Math.min(periodo, precios.length));
+            
+            for (let i = 1; i < precios.length; i++) {
+                if (i < periodo) {
+                    suma = 0;
+                    for (let j = 0; j <= i; j++) suma += precios[j];
+                    ema.push(suma / (i + 1));
+                } else {
+                    ema.push((precios[i] - ema[i - 1]) * multiplicador + ema[i - 1]);
+                }
+            }
+            return ema;
+        }
+        
+        function calcularMACD(precios, rapido = 12, lento = 26, signal = 9) {
+            const ema12 = calcularEMA(precios, rapido);
+            const ema26 = calcularEMA(precios, lento);
+            
+            const macdLine = [];
+            for (let i = 0; i < precios.length; i++) {
+                macdLine.push(i < lento - 1 ? null : ema12[i] - ema26[i]);
+            }
+            
+            const macdValidos = macdLine.filter(v => v !== null);
+            const signalEMA = calcularEMA(macdValidos, signal);
+            
+            const signalLine = [];
+            let signalIndex = 0;
+            for (let i = 0; i < precios.length; i++) {
+                if (macdLine[i] === null) {
+                    signalLine.push(null);
+                } else {
+                    signalLine.push(signalIndex < signal - 1 ? null : signalEMA[signalIndex]);
+                    signalIndex++;
+                }
+            }
+            
+            const histograma = [];
+            for (let i = 0; i < precios.length; i++) {
+                histograma.push(macdLine[i] === null || signalLine[i] === null ? null : macdLine[i] - signalLine[i]);
+            }
+            
+            return { macdLine, signalLine, histograma };
+        }
+        
+        function toggleMACD(enabled) {
+            const container = document.getElementById('macd-container');
+            if (enabled && window.chartData) {
+                container.classList.remove('hidden');
+                renderMACDChart();
+            } else {
+                container.classList.add('hidden');
+                if (macdChart) { macdChart.destroy(); macdChart = null; }
+            }
+        }
+        
+        function renderMACDChart() {
+            if (!window.chartData) return;
+            
+            const { macdLine, signalLine, histograma } = calcularMACD(window.chartData.precios);
+            if (macdChart) macdChart.destroy();
+            
+            const ctx = document.getElementById('macd-chart').getContext('2d');
+            const histColores = histograma.map(v => v === null ? 'transparent' : v >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)');
+            
+            macdChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: window.chartData.fechas,
+                    datasets: [
+                        { type: 'bar', label: 'Histograma', data: histograma, backgroundColor: histColores, borderWidth: 0, order: 2 },
+                        { type: 'line', label: 'MACD', data: macdLine, borderColor: '#3b82f6', backgroundColor: 'transparent', tension: 0.1, pointRadius: 0, borderWidth: 2, order: 1 },
+                        { type: 'line', label: 'Signal', data: signalLine, borderColor: '#f97316', backgroundColor: 'transparent', tension: 0.1, pointRadius: 0, borderWidth: 1.5, borderDash: [3, 3], order: 0 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af', callback: v => v.toFixed(2) } }
+                    }
+                }
+            });
+            
+            analizarMACD(macdLine, signalLine, histograma);
+        }
+        
+        function analizarMACD(macdLine, signalLine, histograma) {
+            const container = document.getElementById('macd-analysis-content');
+            if (!container) return;
+            
+            let macdActual = null, signalActual = null, histActual = null, histAnterior = null;
+            for (let i = macdLine.length - 1; i >= 0; i--) {
+                if (macdActual === null && macdLine[i] !== null) {
+                    macdActual = macdLine[i]; signalActual = signalLine[i]; histActual = histograma[i];
+                } else if (macdActual !== null && histAnterior === null && histograma[i] !== null) {
+                    histAnterior = histograma[i]; break;
+                }
+            }
+            
+            if (macdActual === null) { container.innerHTML = '<p class="text-gray-400">No hay suficientes datos</p>'; return; }
+            
+            // Detectar último cruce
+            let ultimoCruce = null, tipoCruce = null, diasDesdeCruce = 0;
+            for (let i = macdLine.length - 1; i > 0; i--) {
+                if (macdLine[i] === null || signalLine[i] === null || macdLine[i-1] === null || signalLine[i-1] === null) continue;
+                const arriba = macdLine[i] > signalLine[i], arribaAntes = macdLine[i-1] > signalLine[i-1];
+                if (arriba && !arribaAntes) { ultimoCruce = window.chartData.fechas[i]; tipoCruce = 'alcista'; diasDesdeCruce = macdLine.length - 1 - i; break; }
+                if (!arriba && arribaAntes) { ultimoCruce = window.chartData.fechas[i]; tipoCruce = 'bajista'; diasDesdeCruce = macdLine.length - 1 - i; break; }
+            }
+            
+            const tendencia = macdActual > signalActual ? 'alcista' : 'bajista';
+            const momentumCreciendo = histActual > histAnterior;
+            const sobreCero = macdActual > 0;
+            
+            let html = `
+                <div class="flex items-start gap-2">
+                    <span>${tendencia === 'alcista' ? '📈' : '📉'}</span>
+                    <div>
+                        <span class="text-gray-300">Tendencia:</span>
+                        <span class="${tendencia === 'alcista' ? 'text-green-400' : 'text-red-400'} font-semibold ml-1">${tendencia.toUpperCase()}</span>
+                        <p class="text-gray-500 text-xs mt-1">${tendencia === 'alcista' ? 'MACD por encima de Signal → impulso alcista' : 'MACD por debajo de Signal → impulso bajista'}</p>
+                    </div>
+                </div>
+            `;
+            
+            if (tipoCruce) {
+                html += `
+                    <div class="flex items-start gap-2 mt-3">
+                        <span>${tipoCruce === 'alcista' ? '✨' : '⚠️'}</span>
+                        <div>
+                            <span class="text-gray-300">Último cruce:</span>
+                            <span class="${tipoCruce === 'alcista' ? 'text-green-400' : 'text-red-400'} font-semibold ml-1">${tipoCruce === 'alcista' ? 'DORADO' : 'MORTAL'}</span>
+                            <span class="text-gray-500 ml-1">(${ultimoCruce}, hace ${diasDesdeCruce} días)</span>
+                            <p class="text-gray-500 text-xs mt-1">${tipoCruce === 'alcista' ? 'Señal de compra' : 'Señal de venta'}${diasDesdeCruce <= 5 ? ' - ¡Reciente!' : ''}</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `
+                <div class="flex items-start gap-2 mt-3">
+                    <span>${momentumCreciendo ? '🚀' : '🐌'}</span>
+                    <div>
+                        <span class="text-gray-300">Momentum:</span>
+                        <span class="${momentumCreciendo ? 'text-green-400' : 'text-red-400'} font-semibold ml-1">${momentumCreciendo ? 'ACELERANDO' : 'DESACELERANDO'}</span>
+                    </div>
+                </div>
+                <div class="flex items-start gap-2 mt-3">
+                    <span>${sobreCero ? '☀️' : '🌙'}</span>
+                    <div>
+                        <span class="text-gray-300">Zona:</span>
+                        <span class="${sobreCero ? 'text-green-400' : 'text-yellow-400'} font-semibold ml-1">${sobreCero ? 'ALCISTA' : 'BAJISTA'}</span>
+                    </div>
+                </div>
+            `;
+            
+            // Resumen
+            let resumen, color, icon;
+            if (tendencia === 'alcista' && sobreCero && momentumCreciendo) {
+                resumen = 'FUERTE SEÑAL ALCISTA'; color = 'text-green-400 bg-green-500/10 border-green-500/30'; icon = '✅';
+            } else if (tendencia === 'bajista' && !sobreCero && !momentumCreciendo) {
+                resumen = 'FUERTE SEÑAL BAJISTA'; color = 'text-red-400 bg-red-500/10 border-red-500/30'; icon = '🛑';
+            } else {
+                resumen = 'SEÑALES MIXTAS'; color = 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30'; icon = '⚠️';
+            }
+            
+            html += `<div class="mt-4 p-3 rounded-lg border ${color}"><span class="text-lg">${icon}</span> <span class="font-semibold">${resumen}</span></div>`;
+            container.innerHTML = html;
+        }
+        
+        document.getElementById('macd-toggle').addEventListener('change', function() {
+            toggleMACD(this.checked);
+        });
+        
+        // =====================
+        // VOLUMEN
+        // =====================
+        
+        let volumeChart = null;
+        
+        function toggleVolume(enabled) {
+            const container = document.getElementById('volume-container');
+            if (enabled && window.chartData && window.chartData.volumen) {
+                container.classList.remove('hidden');
+                renderVolumeChart();
+            } else if (enabled) {
+                alert('No hay datos de volumen disponibles para este activo');
+                document.getElementById('volume-toggle').checked = false;
+            } else {
+                container.classList.add('hidden');
+                if (volumeChart) { volumeChart.destroy(); volumeChart = null; }
+            }
+        }
+        
+        function renderVolumeChart() {
+            if (!window.chartData || !window.chartData.volumen) return;
+            
+            const volumenes = window.chartData.volumen;
+            const precios = window.chartData.precios;
+            
+            // Media móvil 20 días
+            const mediaVol = [];
+            for (let i = 0; i < volumenes.length; i++) {
+                if (i < 19) { mediaVol.push(null); }
+                else {
+                    let suma = 0;
+                    for (let j = i - 19; j <= i; j++) suma += volumenes[j];
+                    mediaVol.push(suma / 20);
+                }
+            }
+            
+            // Colores según precio
+            const colores = precios.map((p, i) => i === 0 || p >= precios[i-1] ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)');
+            
+            if (volumeChart) volumeChart.destroy();
+            const ctx = document.getElementById('volume-chart').getContext('2d');
+            
+            volumeChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: window.chartData.fechas,
+                    datasets: [
+                        { type: 'bar', label: 'Volumen', data: volumenes, backgroundColor: colores, borderWidth: 0, order: 2 },
+                        { type: 'line', label: 'Media 20d', data: mediaVol, borderColor: '#9ca3af', backgroundColor: 'transparent', tension: 0.1, pointRadius: 0, borderWidth: 1.5, borderDash: [3, 3], order: 1 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af', callback: v => v >= 1e9 ? (v/1e9).toFixed(1)+'B' : v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1e3 ? (v/1e3).toFixed(1)+'K' : v } }
+                    }
+                }
+            });
+            
+            analizarVolumen(volumenes, precios, mediaVol);
+        }
+        
+        function analizarVolumen(volumenes, precios, mediaVol) {
+            const container = document.getElementById('volume-analysis-content');
+            if (!container) return;
+            
+            const volActual = volumenes[volumenes.length - 1];
+            const mediaActual = mediaVol[mediaVol.length - 1];
+            const precioActual = precios[precios.length - 1];
+            const precioAnterior = precios[precios.length - 2];
+            
+            const volRelativo = mediaActual ? volActual / mediaActual : 1;
+            const volAlto = volRelativo > 1;
+            const precioSubio = precioActual > precioAnterior;
+            
+            // Tendencia volumen últimos 5 días
+            const ultimos5 = volumenes.slice(-5);
+            let creciendo = 0;
+            for (let i = 1; i < ultimos5.length; i++) if (ultimos5[i] > ultimos5[i-1]) creciendo++;
+            const tendencia = creciendo >= 3 ? 'creciente' : creciendo <= 1 ? 'decreciente' : 'estable';
+            
+            let html = `
+                <div class="flex items-start gap-2">
+                    <span>${volAlto ? '🔥' : '💤'}</span>
+                    <div>
+                        <span class="text-gray-300">Volumen:</span>
+                        <span class="${volAlto ? 'text-emerald-400' : 'text-yellow-400'} font-semibold ml-1">${volAlto ? 'ALTO' : 'BAJO'}</span>
+                        <span class="text-gray-500 ml-1">(${(volRelativo * 100).toFixed(0)}% de la media)</span>
+                    </div>
+                </div>
+                <div class="flex items-start gap-2 mt-3">
+                    <span>${tendencia === 'creciente' ? '📈' : tendencia === 'decreciente' ? '📉' : '➡️'}</span>
+                    <div>
+                        <span class="text-gray-300">Tendencia 5d:</span>
+                        <span class="font-semibold ml-1 ${tendencia === 'creciente' ? 'text-emerald-400' : tendencia === 'decreciente' ? 'text-red-400' : 'text-gray-400'}">${tendencia.toUpperCase()}</span>
+                    </div>
+                </div>
+            `;
+            
+            // Señal
+            let señal, señalIcon, señalColor;
+            if (precioSubio && volAlto) { señal = 'SUBIDA CONFIRMADA'; señalIcon = '✅'; señalColor = 'text-green-400'; }
+            else if (!precioSubio && volAlto) { señal = 'BAJADA CONFIRMADA'; señalIcon = '🚨'; señalColor = 'text-red-400'; }
+            else if (precioSubio) { señal = 'SUBIDA DÉBIL'; señalIcon = '⚠️'; señalColor = 'text-yellow-400'; }
+            else { señal = 'BAJADA DÉBIL'; señalIcon = '💤'; señalColor = 'text-gray-400'; }
+            
+            html += `
+                <div class="flex items-start gap-2 mt-3">
+                    <span>${señalIcon}</span>
+                    <div>
+                        <span class="text-gray-300">Señal:</span>
+                        <span class="${señalColor} font-semibold ml-1">${señal}</span>
+                        <p class="text-gray-500 text-xs mt-1">${precioSubio && volAlto ? 'Precio sube con volumen alto → fiable' : !precioSubio && volAlto ? 'Precio baja con volumen alto → precaución' : precioSubio ? 'Subida con poco volumen → puede revertir' : 'Bajada con poco volumen → corrección menor'}</p>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        document.getElementById('volume-toggle').addEventListener('change', function() {
+            toggleVolume(this.checked);
         });
         
         // Bollinger

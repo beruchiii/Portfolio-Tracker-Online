@@ -27,9 +27,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Google Charts para Sankey -->
     <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
-    <!-- D3.js para Sankey alternativo -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
     <!-- amCharts 5 para mapa mundial -->
     <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
     <script src="https://cdn.amcharts.com/lib/5/map.js"></script>
@@ -479,23 +476,16 @@
 
             <!-- Diagrama Sankey de Diversificación -->
             <div class="bg-gray-800 rounded-xl border border-gray-700 mb-8 overflow-hidden">
-                <div class="px-6 pt-4 pb-2 flex items-center justify-between">
+                <div class="px-6 pt-4 pb-2">
                     <h3 class="text-lg font-semibold flex items-center gap-2">
                         <span>🌊</span> Diversificación por Sectores
                     </h3>
-                    <div class="flex gap-2">
-                        <button onclick="cambiarTipoSankey('google')" id="btn-sankey-google" class="px-3 py-1 text-xs rounded bg-blue-600 text-white">Google Charts</button>
-                        <button onclick="cambiarTipoSankey('d3')" id="btn-sankey-d3" class="px-3 py-1 text-xs rounded bg-gray-600 text-gray-300 hover:bg-gray-500">D3.js</button>
-                    </div>
                 </div>
                 <div id="sankey-loader" class="flex items-center justify-center py-8">
                     <div class="loader"></div>
                 </div>
                 <div id="sankey-content" class="hidden">
-                    <!-- Google Charts Sankey -->
-                    <div id="sankey-chart-google" style="width: 100%; height: 380px;"></div>
-                    <!-- D3.js Sankey -->
-                    <div id="sankey-chart-d3" class="hidden" style="width: 100%; height: 380px;"></div>
+                    <div id="sankey-chart" style="width: 100%; height: 380px;"></div>
                     
                     <!-- Resumen de diversificación -->
                     <div id="sankey-resumen" class="mx-6 mb-6 pt-4 border-t border-gray-700">
@@ -3038,39 +3028,13 @@
         // =====================
         
         let sankeyChartLoaded = false;
-        let sankeyData = null;
-        let tipoSankeyActual = 'google';
+        let sankeyDataCache = null;
         
         // Cargar Google Charts
         google.charts.load('current', {'packages':['sankey']});
         google.charts.setOnLoadCallback(function() {
             sankeyChartLoaded = true;
         });
-        
-        function cambiarTipoSankey(tipo) {
-            tipoSankeyActual = tipo;
-            
-            // Actualizar botones
-            document.getElementById('btn-sankey-google').className = tipo === 'google' 
-                ? 'px-3 py-1 text-xs rounded bg-blue-600 text-white' 
-                : 'px-3 py-1 text-xs rounded bg-gray-600 text-gray-300 hover:bg-gray-500';
-            document.getElementById('btn-sankey-d3').className = tipo === 'd3' 
-                ? 'px-3 py-1 text-xs rounded bg-blue-600 text-white' 
-                : 'px-3 py-1 text-xs rounded bg-gray-600 text-gray-300 hover:bg-gray-500';
-            
-            // Mostrar/ocultar contenedores
-            document.getElementById('sankey-chart-google').classList.toggle('hidden', tipo !== 'google');
-            document.getElementById('sankey-chart-d3').classList.toggle('hidden', tipo !== 'd3');
-            
-            // Renderizar el tipo seleccionado
-            if (sankeyData) {
-                if (tipo === 'google') {
-                    renderSankeyGoogle(sankeyData.sankey);
-                } else {
-                    renderSankeyD3(sankeyData.sankey);
-                }
-            }
-        }
         
         async function cargarSankey() {
             const loader = document.getElementById('sankey-loader');
@@ -3091,7 +3055,7 @@
                     return;
                 }
                 
-                sankeyData = result.data;
+                sankeyDataCache = result.data;
                 
                 // Esperar a que Google Charts esté listo
                 if (!sankeyChartLoaded) {
@@ -3104,9 +3068,6 @@
                         }, 100);
                     });
                 }
-                
-                // Renderizar Google Charts por defecto
-                renderSankeyGoogle(result.data.sankey);
                 
                 // Llenar el resumen
                 document.getElementById('sankey-valor-total').textContent = formatCurrency(result.data.valor_total);
@@ -3137,8 +3098,16 @@
                     categoriasContainer.appendChild(badge);
                 });
                 
+                // Mostrar contenido primero
                 loader.classList.add('hidden');
                 content.classList.remove('hidden');
+                
+                // Esperar un frame para que el contenedor tenga dimensiones correctas
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        renderSankeyGoogle(result.data.sankey);
+                    }, 50);
+                });
                 
             } catch (error) {
                 console.error('Error cargando Sankey:', error);
@@ -3148,6 +3117,13 @@
         }
         
         function renderSankeyGoogle(sankeyDataArray) {
+            const container = document.getElementById('sankey-chart');
+            if (!container || container.offsetWidth === 0) {
+                // Si el contenedor no tiene ancho, reintentar
+                setTimeout(() => renderSankeyGoogle(sankeyDataArray), 100);
+                return;
+            }
+            
             const data = new google.visualization.DataTable();
             data.addColumn('string', 'From');
             data.addColumn('string', 'To');
@@ -3224,117 +3200,8 @@
                 backgroundColor: 'transparent'
             };
             
-            const chart = new google.visualization.Sankey(document.getElementById('sankey-chart-google'));
+            const chart = new google.visualization.Sankey(container);
             chart.draw(data, options);
-        }
-        
-        function renderSankeyD3(sankeyDataArray) {
-            const container = document.getElementById('sankey-chart-d3');
-            container.innerHTML = '';
-            
-            const width = container.offsetWidth || 1000;
-            const height = 380;
-            
-            // Colores
-            const colores = {
-                'Portfolio': '#6366f1',
-                'Global/Diversificado': '#3b82f6',
-                'Oro/Materias Primas': '#f59e0b',
-                'Tecnología': '#10b981',
-                'Mercados Emergentes': '#8b5cf6',
-                'Small Caps': '#ec4899',
-                'Crypto': '#f97316',
-                'Renta Fija': '#06b6d4',
-                'Inmobiliario': '#84cc16',
-                'Dividendos': '#22c55e'
-            };
-            
-            // Preparar datos para D3 Sankey
-            const nodes = [];
-            const nodeMap = {};
-            const links = [];
-            
-            sankeyDataArray.forEach(([source, target, value]) => {
-                if (!nodeMap[source]) {
-                    nodeMap[source] = nodes.length;
-                    nodes.push({ name: source });
-                }
-                if (!nodeMap[target]) {
-                    nodeMap[target] = nodes.length;
-                    nodes.push({ name: target });
-                }
-                links.push({
-                    source: nodeMap[source],
-                    target: nodeMap[target],
-                    value: value
-                });
-            });
-            
-            // Crear SVG
-            const svg = d3.select(container)
-                .append('svg')
-                .attr('width', width)
-                .attr('height', height);
-            
-            // Crear Sankey
-            const sankey = d3.sankey()
-                .nodeWidth(20)
-                .nodePadding(15)
-                .extent([[1, 5], [width - 1, height - 5]]);
-            
-            const graph = sankey({
-                nodes: nodes.map(d => Object.assign({}, d)),
-                links: links.map(d => Object.assign({}, d))
-            });
-            
-            // Función para obtener color
-            function getColor(name) {
-                const nombreBase = name.replace(/\s*\([^)]*\)\s*$/, '').trim();
-                return colores[nombreBase] || '#4b5563';
-            }
-            
-            // Dibujar links
-            svg.append('g')
-                .attr('fill', 'none')
-                .attr('stroke-opacity', 0.5)
-                .selectAll('path')
-                .data(graph.links)
-                .join('path')
-                .attr('d', d3.sankeyLinkHorizontal())
-                .attr('stroke', d => getColor(d.source.name))
-                .attr('stroke-width', d => Math.max(1, d.width))
-                .style('mix-blend-mode', 'lighten')
-                .append('title')
-                .text(d => `${d.source.name} → ${d.target.name}\n${formatCurrency(d.value)}`);
-            
-            // Dibujar nodos
-            svg.append('g')
-                .selectAll('rect')
-                .data(graph.nodes)
-                .join('rect')
-                .attr('x', d => d.x0)
-                .attr('y', d => d.y0)
-                .attr('height', d => d.y1 - d.y0)
-                .attr('width', d => d.x1 - d.x0)
-                .attr('fill', d => getColor(d.name))
-                .attr('rx', 3)
-                .append('title')
-                .text(d => `${d.name}\n${formatCurrency(d.value)}`);
-            
-            // Etiquetas
-            svg.append('g')
-                .attr('font-family', 'Inter')
-                .attr('font-size', 11)
-                .attr('font-weight', 'bold')
-                .selectAll('text')
-                .data(graph.nodes)
-                .join('text')
-                .attr('x', d => d.x0 < width / 2 ? d.x1 + 6 : d.x0 - 6)
-                .attr('y', d => (d.y1 + d.y0) / 2)
-                .attr('dy', '0.35em')
-                .attr('text-anchor', d => d.x0 < width / 2 ? 'start' : 'end')
-                .attr('fill', '#ffffff')
-                .text(d => d.name);
         }
 
         // =====================

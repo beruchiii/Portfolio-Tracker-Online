@@ -2110,12 +2110,12 @@
                 const precio = fav.precio_actual ? fav.precio_actual.toFixed(2) + '€' : '-';
                 const cambio = fav.cambio_desde_agregado;
                 const cambioClass = cambio > 0 ? 'text-green-400' : cambio < 0 ? 'text-red-400' : 'text-gray-400';
-                const cambioText = cambio !== null ? `${cambio >= 0 ? '+' : ''}${cambio.toFixed(2)}%` : '-';
+                const cambioText = cambio !== null && cambio !== undefined ? `${cambio >= 0 ? '+' : ''}${cambio.toFixed(2)}%` : '-';
                 const cambioDiario = fav.cambio_diario;
                 const cambioDiarioClass = cambioDiario > 0 ? 'text-green-400' : cambioDiario < 0 ? 'text-red-400' : 'text-gray-400';
-                const cambioDiarioText = cambioDiario !== null && cambioDiario !== undefined ? `${cambioDiario >= 0 ? '+' : ''}${cambioDiario.toFixed(2)}%` : '';
+                const cambioDiarioText = cambioDiario !== null && cambioDiario !== undefined ? `${cambioDiario >= 0 ? '+' : ''}${cambioDiario.toFixed(2)}%` : '-';
                 
-                const fechaAgregado = fav.fecha_agregado ? new Date(fav.fecha_agregado).toLocaleDateString('es-ES') : '';
+                const fechaAgregado = fav.fecha_agregado ? new Date(fav.fecha_agregado).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
                 
                 return `
                     <div class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition cursor-pointer group relative" onclick="buscarRapido('${fav.ticker || fav.isin}')">
@@ -2134,14 +2134,22 @@
                             </div>
                         </div>
                         
-                        <div class="flex items-end justify-between">
+                        <div class="flex items-end justify-between mb-2">
                             <div>
                                 <div class="text-lg font-bold">${precio}</div>
-                                ${cambioDiarioText ? `<div class="text-xs ${cambioDiarioClass}">Hoy: ${cambioDiarioText}</div>` : ''}
                             </div>
                             <div class="text-right">
-                                <div class="text-sm ${cambioClass}" title="Desde ${fechaAgregado}">${cambioText}</div>
-                                <div class="text-xs text-gray-500">desde seguimiento</div>
+                                <div class="text-sm ${cambioDiarioClass}">Hoy: ${cambioDiarioText}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="pt-2 border-t border-gray-600/50">
+                            <div class="flex justify-between items-center">
+                                <div class="text-xs text-gray-500">📅 ${fechaAgregado}</div>
+                                <div class="text-right">
+                                    <span class="text-xs ${cambioClass}">${cambioText}</span>
+                                    <span class="text-xs text-gray-500 ml-1">total</span>
+                                </div>
                             </div>
                         </div>
                         

@@ -202,6 +202,10 @@
                             <input type="checkbox" id="rsi-toggle" class="rounded">
                             <span class="text-xs text-cyan-400">RSI</span>
                         </label>
+                        <label class="flex items-center gap-1 cursor-pointer" title="MACD (12,26,9) - Cruces indican cambio de tendencia">
+                            <input type="checkbox" id="macd-toggle" class="rounded">
+                            <span class="text-xs text-orange-400">MACD</span>
+                        </label>
                     </div>
                     
                     <div class="w-px h-6 bg-gray-600"></div>
@@ -253,6 +257,21 @@
                         <div class="flex gap-4">
                             <span class="text-red-400">Sobrecompra &gt;70</span>
                             <span class="text-green-400">Sobreventa &lt;30</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Gráfico MACD -->
+                <div id="macd-container" class="hidden mt-4">
+                    <div class="h-40 relative bg-gray-900/50 rounded-lg p-2">
+                        <canvas id="macd-chart"></canvas>
+                    </div>
+                    <div class="flex items-center justify-between mt-1 text-xs text-gray-500">
+                        <span>MACD (12, 26, 9)</span>
+                        <div class="flex gap-4">
+                            <span class="text-blue-400">● MACD</span>
+                            <span class="text-orange-400">● Signal</span>
+                            <span class="text-gray-400">█ Histograma</span>
                         </div>
                     </div>
                 </div>
@@ -889,6 +908,8 @@
             document.getElementById('bollinger-toggle').checked = false;
             document.getElementById('rsi-toggle').checked = false;
             document.getElementById('rsi-container').classList.add('hidden');
+            document.getElementById('macd-toggle').checked = false;
+            document.getElementById('macd-container').classList.add('hidden');
             document.getElementById('alerts-container').innerHTML = ''; // Limpiar todas las alertas
         }
 
@@ -1720,6 +1741,248 @@
         // Event listener para RSI toggle
         document.getElementById('rsi-toggle').addEventListener('change', function() {
             toggleRSI(this.checked);
+        });
+
+        // =====================
+        // MACD (Moving Average Convergence Divergence)
+        // =====================
+        
+        let macdChart = null;
+        
+        function calcularEMA(precios, periodo) {
+            const ema = [];
+            const multiplicador = 2 / (periodo + 1);
+            
+            // Primer valor = SMA
+            let suma = 0;
+            for (let i = 0; i < periodo && i < precios.length; i++) {
+                suma += precios[i];
+            }
+            ema.push(suma / Math.min(periodo, precios.length));
+            
+            // Resto de valores con EMA
+            for (let i = 1; i < precios.length; i++) {
+                if (i < periodo) {
+                    // Seguir calculando SMA hasta tener suficientes datos
+                    suma = 0;
+                    for (let j = 0; j <= i; j++) {
+                        suma += precios[j];
+                    }
+                    ema.push(suma / (i + 1));
+                } else {
+                    const valorEMA = (precios[i] - ema[i - 1]) * multiplicador + ema[i - 1];
+                    ema.push(valorEMA);
+                }
+            }
+            
+            return ema;
+        }
+        
+        function calcularMACD(precios, rapido = 12, lento = 26, signal = 9) {
+            const ema12 = calcularEMA(precios, rapido);
+            const ema26 = calcularEMA(precios, lento);
+            
+            // MACD Line = EMA12 - EMA26
+            const macdLine = [];
+            for (let i = 0; i < precios.length; i++) {
+                if (i < lento - 1) {
+                    macdLine.push(null);
+                } else {
+                    macdLine.push(ema12[i] - ema26[i]);
+                }
+            }
+            
+            // Signal Line = EMA9 del MACD
+            const macdValidos = macdLine.filter(v => v !== null);
+            const signalEMA = calcularEMA(macdValidos, signal);
+            
+            const signalLine = [];
+            let signalIndex = 0;
+            for (let i = 0; i < precios.length; i++) {
+                if (macdLine[i] === null) {
+                    signalLine.push(null);
+                } else {
+                    if (signalIndex < signal - 1) {
+                        signalLine.push(null);
+                    } else {
+                        signalLine.push(signalEMA[signalIndex]);
+                    }
+                    signalIndex++;
+                }
+            }
+            
+            // Histograma = MACD - Signal
+            const histograma = [];
+            for (let i = 0; i < precios.length; i++) {
+                if (macdLine[i] === null || signalLine[i] === null) {
+                    histograma.push(null);
+                } else {
+                    histograma.push(macdLine[i] - signalLine[i]);
+                }
+            }
+            
+            return { macdLine, signalLine, histograma };
+        }
+        
+        function toggleMACD(enabled) {
+            const container = document.getElementById('macd-container');
+            
+            if (enabled && window.chartData) {
+                container.classList.remove('hidden');
+                renderMACDChart();
+            } else {
+                container.classList.add('hidden');
+                if (macdChart) {
+                    macdChart.destroy();
+                    macdChart = null;
+                }
+            }
+        }
+        
+        function renderMACDChart() {
+            if (!window.chartData) return;
+            
+            const { macdLine, signalLine, histograma } = calcularMACD(window.chartData.precios);
+            
+            if (macdChart) macdChart.destroy();
+            
+            const ctx = document.getElementById('macd-chart').getContext('2d');
+            
+            // Colores del histograma (verde si positivo, rojo si negativo)
+            const histogramaColores = histograma.map(v => {
+                if (v === null) return 'transparent';
+                return v >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)';
+            });
+            
+            macdChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: window.chartData.fechas,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Histograma',
+                            data: histograma,
+                            backgroundColor: histogramaColores,
+                            borderColor: histogramaColores,
+                            borderWidth: 0,
+                            order: 2
+                        },
+                        {
+                            type: 'line',
+                            label: 'MACD',
+                            data: macdLine,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'transparent',
+                            tension: 0.1,
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            order: 1
+                        },
+                        {
+                            type: 'line',
+                            label: 'Signal',
+                            data: signalLine,
+                            borderColor: '#f97316',
+                            backgroundColor: 'transparent',
+                            tension: 0.1,
+                            pointRadius: 0,
+                            borderWidth: 1.5,
+                            borderDash: [3, 3],
+                            order: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    if (value === null) return '';
+                                    return `${context.dataset.label}: ${value.toFixed(4)}`;
+                                }
+                            }
+                        },
+                        annotation: {
+                            annotations: {
+                                zeroLine: {
+                                    type: 'line',
+                                    yMin: 0,
+                                    yMax: 0,
+                                    borderColor: 'rgba(156, 163, 175, 0.3)',
+                                    borderWidth: 1
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            display: false
+                        },
+                        y: {
+                            grid: { color: '#374151' },
+                            ticks: {
+                                color: '#9ca3af',
+                                callback: function(value) {
+                                    return value.toFixed(2);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Detectar y mostrar cruces MACD
+            detectarCrucesMACD(macdLine, signalLine);
+        }
+        
+        function detectarCrucesMACD(macdLine, signalLine) {
+            // Buscar el último cruce
+            let ultimoCruce = null;
+            let tipoCruce = null;
+            
+            for (let i = macdLine.length - 1; i > 0; i--) {
+                if (macdLine[i] === null || signalLine[i] === null || 
+                    macdLine[i-1] === null || signalLine[i-1] === null) continue;
+                
+                const macdArriba = macdLine[i] > signalLine[i];
+                const macdArribaAntes = macdLine[i-1] > signalLine[i-1];
+                
+                if (macdArriba && !macdArribaAntes) {
+                    ultimoCruce = window.chartData.fechas[i];
+                    tipoCruce = 'alcista';
+                    break;
+                } else if (!macdArriba && macdArribaAntes) {
+                    ultimoCruce = window.chartData.fechas[i];
+                    tipoCruce = 'bajista';
+                    break;
+                }
+            }
+            
+            if (ultimoCruce && tipoCruce) {
+                // Añadir badge de alerta
+                const alertasContainer = document.getElementById('chart-alertas');
+                if (alertasContainer) {
+                    const existingMACD = alertasContainer.querySelector('.macd-alert');
+                    if (existingMACD) existingMACD.remove();
+                    
+                    const badge = document.createElement('div');
+                    badge.className = `macd-alert px-3 py-1 rounded-full text-xs font-medium ${tipoCruce === 'alcista' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`;
+                    badge.innerHTML = tipoCruce === 'alcista' 
+                        ? `📈 MACD Alcista (${ultimoCruce})`
+                        : `📉 MACD Bajista (${ultimoCruce})`;
+                    alertasContainer.appendChild(badge);
+                }
+            }
+        }
+        
+        // Event listener para MACD toggle
+        document.getElementById('macd-toggle').addEventListener('change', function() {
+            toggleMACD(this.checked);
         });
 
         // =====================

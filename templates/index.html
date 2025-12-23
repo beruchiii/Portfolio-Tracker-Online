@@ -475,19 +475,21 @@
             </div>
 
             <!-- Diagrama Sankey de Diversificación -->
-            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8">
-                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <span>🌊</span> Diversificación por Sectores
-                    <span class="text-xs text-gray-500 font-normal ml-2">(Portfolio → Categoría → Activo)</span>
-                </h3>
+            <div class="bg-gray-800 rounded-xl border border-gray-700 mb-8 overflow-hidden">
+                <div class="p-6 pb-2">
+                    <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
+                        <span>🌊</span> Diversificación por Sectores
+                        <span class="text-xs text-gray-500 font-normal ml-2">(Portfolio → Categoría → Activo)</span>
+                    </h3>
+                </div>
                 <div id="sankey-loader" class="flex items-center justify-center py-8">
                     <div class="loader"></div>
                 </div>
                 <div id="sankey-content" class="hidden">
-                    <div id="sankey-chart" style="width: 100%; height: 400px;"></div>
+                    <div id="sankey-chart" style="width: 100%; height: 600px; margin: 0 -10px;"></div>
                     
                     <!-- Resumen de diversificación -->
-                    <div id="sankey-resumen" class="mt-4 pt-4 border-t border-gray-700">
+                    <div id="sankey-resumen" class="mx-6 mb-6 pt-4 border-t border-gray-700">
                         <div class="flex flex-wrap gap-4 justify-between items-start">
                             <!-- Stats rápidas -->
                             <div class="flex gap-6 text-sm">
@@ -512,7 +514,7 @@
                         </div>
                     </div>
                 </div>
-                <div id="sankey-empty" class="hidden text-center py-8 text-gray-500">
+                <div id="sankey-empty" class="hidden text-center py-8 px-6 text-gray-500">
                     <p>No hay suficientes datos para mostrar el diagrama de diversificación</p>
                 </div>
             </div>
@@ -3153,18 +3155,19 @@
             });
             
             const options = {
-                height: 400,
+                height: 600,
                 sankey: {
                     node: {
                         colors: nodeColors,
                         label: {
                             fontName: 'Inter',
-                            fontSize: 11,
+                            fontSize: 13,
                             color: '#e5e7eb',
                             bold: true
                         },
-                        nodePadding: 15,
-                        width: 12
+                        nodePadding: 30,
+                        width: 20,
+                        interactivity: true
                     },
                     link: {
                         colorMode: 'gradient',

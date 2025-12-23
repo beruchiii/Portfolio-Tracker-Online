@@ -6,6 +6,7 @@ Dashboard interactivo para seguimiento de cartera
 import os
 import sys
 import json
+import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
 from functools import wraps

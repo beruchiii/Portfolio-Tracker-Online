@@ -274,6 +274,17 @@
                             <span class="text-gray-400">█ Histograma</span>
                         </div>
                     </div>
+                    
+                    <!-- Panel de Análisis MACD -->
+                    <div id="macd-analysis" class="mt-3 bg-gray-900/70 rounded-lg p-4 border border-gray-700">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-orange-400">📊</span>
+                            <span class="font-semibold text-white">Análisis MACD</span>
+                        </div>
+                        <div id="macd-analysis-content" class="space-y-2 text-sm">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Zona de Alertas y Avisos (Cruces SMA, Bollinger, etc.) -->
@@ -1938,12 +1949,16 @@
             
             // Detectar y mostrar cruces MACD
             detectarCrucesMACD(macdLine, signalLine);
+            
+            // Generar análisis en texto
+            analizarMACD(macdLine, signalLine, histograma);
         }
         
         function detectarCrucesMACD(macdLine, signalLine) {
             // Buscar el último cruce
             let ultimoCruce = null;
             let tipoCruce = null;
+            let diasDesdeCruce = 0;
             
             for (let i = macdLine.length - 1; i > 0; i--) {
                 if (macdLine[i] === null || signalLine[i] === null || 
@@ -1955,10 +1970,12 @@
                 if (macdArriba && !macdArribaAntes) {
                     ultimoCruce = window.chartData.fechas[i];
                     tipoCruce = 'alcista';
+                    diasDesdeCruce = macdLine.length - 1 - i;
                     break;
                 } else if (!macdArriba && macdArribaAntes) {
                     ultimoCruce = window.chartData.fechas[i];
                     tipoCruce = 'bajista';
+                    diasDesdeCruce = macdLine.length - 1 - i;
                     break;
                 }
             }
@@ -1978,6 +1995,173 @@
                     alertasContainer.appendChild(badge);
                 }
             }
+            
+            return { ultimoCruce, tipoCruce, diasDesdeCruce };
+        }
+        
+        function analizarMACD(macdLine, signalLine, histograma) {
+            const container = document.getElementById('macd-analysis-content');
+            if (!container) return;
+            
+            // Obtener valores actuales (últimos valores no nulos)
+            let macdActual = null, signalActual = null, histActual = null;
+            let macdAnterior = null, histAnterior = null;
+            
+            for (let i = macdLine.length - 1; i >= 0; i--) {
+                if (macdActual === null && macdLine[i] !== null) {
+                    macdActual = macdLine[i];
+                    signalActual = signalLine[i];
+                    histActual = histograma[i];
+                } else if (macdActual !== null && macdAnterior === null && macdLine[i] !== null) {
+                    macdAnterior = macdLine[i];
+                    histAnterior = histograma[i];
+                    break;
+                }
+            }
+            
+            if (macdActual === null) {
+                container.innerHTML = '<p class="text-gray-400">No hay suficientes datos para analizar</p>';
+                return;
+            }
+            
+            // Detectar cruce reciente
+            const { ultimoCruce, tipoCruce, diasDesdeCruce } = detectarCrucesMACD(macdLine, signalLine);
+            
+            // Construir análisis
+            let html = '';
+            
+            // 1. Tendencia actual
+            const tendencia = macdActual > signalActual ? 'alcista' : 'bajista';
+            const tendenciaColor = tendencia === 'alcista' ? 'text-green-400' : 'text-red-400';
+            const tendenciaIcon = tendencia === 'alcista' ? '📈' : '📉';
+            
+            html += `
+                <div class="flex items-start gap-2">
+                    <span>${tendenciaIcon}</span>
+                    <div>
+                        <span class="text-gray-300">Tendencia actual:</span>
+                        <span class="${tendenciaColor} font-semibold ml-1">${tendencia.toUpperCase()}</span>
+                        <p class="text-gray-500 text-xs mt-1">
+                            ${tendencia === 'alcista' 
+                                ? 'La línea MACD (azul) está por encima de la Signal (naranja). Esto indica que el impulso a corto plazo es más fuerte que a largo plazo → tendencia alcista.' 
+                                : 'La línea MACD (azul) está por debajo de la Signal (naranja). Esto indica que el impulso a corto plazo es más débil que a largo plazo → tendencia bajista.'}
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            // 2. Último cruce
+            if (tipoCruce) {
+                const cruceReciente = diasDesdeCruce <= 5;
+                html += `
+                    <div class="flex items-start gap-2 mt-3">
+                        <span>${tipoCruce === 'alcista' ? '✨' : '⚠️'}</span>
+                        <div>
+                            <span class="text-gray-300">Último cruce:</span>
+                            <span class="${tipoCruce === 'alcista' ? 'text-green-400' : 'text-red-400'} font-semibold ml-1">
+                                ${tipoCruce === 'alcista' ? 'CRUCE DORADO' : 'CRUCE MORTAL'}
+                            </span>
+                            <span class="text-gray-500 ml-1">(${ultimoCruce}, hace ${diasDesdeCruce} días)</span>
+                            <p class="text-gray-500 text-xs mt-1">
+                                ${tipoCruce === 'alcista' 
+                                    ? cruceReciente 
+                                        ? '🔥 ¡Cruce alcista reciente! La línea MACD cruzó hacia arriba la Signal. Históricamente esto es una señal de COMPRA.' 
+                                        : 'El MACD cruzó hacia arriba la Signal. Esta fue una señal de compra, pero ya pasaron varios días.'
+                                    : cruceReciente
+                                        ? '🚨 ¡Cruce bajista reciente! La línea MACD cruzó hacia abajo la Signal. Históricamente esto es una señal de VENTA o precaución.'
+                                        : 'El MACD cruzó hacia abajo la Signal. Esta fue una señal de venta, pero ya pasaron varios días.'}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // 3. Histograma (momentum)
+            const momentumCreciendo = histActual > histAnterior;
+            const histPositivo = histActual > 0;
+            
+            html += `
+                <div class="flex items-start gap-2 mt-3">
+                    <span>${momentumCreciendo ? '🚀' : '🐌'}</span>
+                    <div>
+                        <span class="text-gray-300">Momentum:</span>
+                        <span class="${momentumCreciendo ? 'text-green-400' : 'text-red-400'} font-semibold ml-1">
+                            ${momentumCreciendo ? 'ACELERANDO' : 'DESACELERANDO'}
+                        </span>
+                        <p class="text-gray-500 text-xs mt-1">
+                            ${histPositivo 
+                                ? momentumCreciendo 
+                                    ? 'El histograma verde está creciendo → la fuerza alcista está aumentando.' 
+                                    : 'El histograma verde está disminuyendo → la fuerza alcista se está debilitando. Posible cambio de tendencia próximo.'
+                                : momentumCreciendo
+                                    ? 'El histograma rojo se está reduciendo → la presión vendedora está disminuyendo. Posible rebote próximo.'
+                                    : 'El histograma rojo está creciendo → la presión vendedora está aumentando.'}
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            // 4. Posición respecto a línea cero
+            const sobreCero = macdActual > 0;
+            html += `
+                <div class="flex items-start gap-2 mt-3">
+                    <span>${sobreCero ? '☀️' : '🌙'}</span>
+                    <div>
+                        <span class="text-gray-300">Zona:</span>
+                        <span class="${sobreCero ? 'text-green-400' : 'text-yellow-400'} font-semibold ml-1">
+                            ${sobreCero ? 'TERRITORIO ALCISTA' : 'TERRITORIO BAJISTA'}
+                        </span>
+                        <p class="text-gray-500 text-xs mt-1">
+                            ${sobreCero 
+                                ? 'El MACD está por encima de 0. Esto confirma que la tendencia general es alcista.' 
+                                : 'El MACD está por debajo de 0. Esto indica que la tendencia general todavía es bajista, aunque puede estar cambiando.'}
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            // 5. Resumen / Recomendación
+            let recomendacion = '';
+            let recomendacionColor = '';
+            let recomendacionIcon = '';
+            
+            if (tendencia === 'alcista' && sobreCero && momentumCreciendo) {
+                recomendacion = 'FUERTE SEÑAL ALCISTA - Todos los indicadores MACD son positivos. Buen momento para mantener o considerar compra.';
+                recomendacionColor = 'text-green-400 bg-green-500/10 border-green-500/30';
+                recomendacionIcon = '✅';
+            } else if (tendencia === 'bajista' && !sobreCero && !momentumCreciendo) {
+                recomendacion = 'FUERTE SEÑAL BAJISTA - Todos los indicadores MACD son negativos. Precaución, considerar reducir exposición.';
+                recomendacionColor = 'text-red-400 bg-red-500/10 border-red-500/30';
+                recomendacionIcon = '🛑';
+            } else if (tendencia === 'alcista' && !momentumCreciendo) {
+                recomendacion = 'ALCISTA PERO DEBILITÁNDOSE - La tendencia es alcista pero el momentum disminuye. Vigilar posible cambio.';
+                recomendacionColor = 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
+                recomendacionIcon = '⚠️';
+            } else if (tendencia === 'bajista' && momentumCreciendo) {
+                recomendacion = 'BAJISTA PERO RECUPERÁNDOSE - La tendencia es bajista pero la presión vendedora disminuye. Posible rebote.';
+                recomendacionColor = 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
+                recomendacionIcon = '👀';
+            } else {
+                recomendacion = 'SEÑALES MIXTAS - Los indicadores no están alineados. Esperar confirmación antes de actuar.';
+                recomendacionColor = 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+                recomendacionIcon = '🤔';
+            }
+            
+            html += `
+                <div class="mt-4 p-3 rounded-lg border ${recomendacionColor}">
+                    <div class="flex items-center gap-2">
+                        <span class="text-lg">${recomendacionIcon}</span>
+                        <span class="font-semibold">Resumen:</span>
+                    </div>
+                    <p class="mt-1 text-sm">${recomendacion}</p>
+                </div>
+                <p class="text-gray-600 text-xs mt-3 italic">
+                    ⚠️ El MACD es un indicador de tendencia/momentum. Funciona mejor en mercados con tendencia clara. 
+                    En mercados laterales puede dar señales falsas. Siempre combinar con otros análisis.
+                </p>
+            `;
+            
+            container.innerHTML = html;
         }
         
         // Event listener para MACD toggle

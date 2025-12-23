@@ -905,28 +905,72 @@ def api_check_alertas():
 def api_favoritos():
     """Obtiene la lista de favoritos con precios actualizados"""
     favoritos = cargar_favoritos()
+    favoritos_actualizados = False
     
     # Actualizar precios de cada favorito
     for fav in favoritos:
         try:
             ticker = fav.get('ticker') or fav.get('isin')
-            resultado = price_fetcher.obtener_precio(ticker, fav.get('isin'))
+            isin = fav.get('isin')
+            resultado = price_fetcher.obtener_precio(ticker, isin)
+            
             if resultado and resultado.get('precio'):
-                fav['precio_actual'] = resultado['precio']
+                precio_actual = resultado['precio']
+                fav['precio_actual'] = precio_actual
+                
+                # Si no tiene precio_al_agregar, guardarlo ahora
+                if not fav.get('precio_al_agregar'):
+                    fav['precio_al_agregar'] = precio_actual
+                    favoritos_actualizados = True
                 
                 # Calcular cambio desde que se agregó
                 precio_agregado = fav.get('precio_al_agregar')
                 if precio_agregado and precio_agregado > 0:
-                    fav['cambio_desde_agregado'] = ((resultado['precio'] - precio_agregado) / precio_agregado) * 100
+                    fav['cambio_desde_agregado'] = ((precio_actual - precio_agregado) / precio_agregado) * 100
                 else:
                     fav['cambio_desde_agregado'] = None
                     
-                # Cambio diario si está disponible
-                fav['cambio_diario'] = resultado.get('cambio_pct')
+                # Cambio diario - calcular desde datos históricos (igual que en explorar)
+                cambio_diario = None
+                try:
+                    # Intentar obtener últimos 5 días de histórico
+                    import yfinance as yf
+                    
+                    # Primero intentar con ticker
+                    ticker_yf = ticker if ticker and not ticker.startswith('IE') else None
+                    
+                    if ticker_yf:
+                        stock = yf.Ticker(ticker_yf)
+                        hist = stock.history(period='5d')
+                        if len(hist) >= 2:
+                            precio_ayer = float(hist['Close'].iloc[-2])
+                            precio_hoy = float(hist['Close'].iloc[-1])
+                            cambio_diario = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                    
+                    # Si no funcionó y tenemos ISIN, intentar con JustETF
+                    if cambio_diario is None and isin:
+                        from src.scrapers import JustETFScraper
+                        scraper = JustETFScraper()
+                        historico = scraper.obtener_historico(isin, periodo='1m')
+                        if historico and len(historico.get('precios', [])) >= 2:
+                            precios = historico['precios']
+                            precio_ayer = precios[-2]
+                            precio_hoy = precios[-1]
+                            cambio_diario = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                except Exception as e:
+                    print(f"Error calculando cambio diario para {fav.get('nombre')}: {e}")
+                
+                fav['cambio_diario'] = cambio_diario
+                
         except Exception as e:
             print(f"Error obteniendo precio de favorito {fav.get('nombre')}: {e}")
             fav['precio_actual'] = None
             fav['cambio_desde_agregado'] = None
+            fav['cambio_diario'] = None
+    
+    # Guardar si se actualizaron precios_al_agregar
+    if favoritos_actualizados:
+        guardar_favoritos(favoritos)
     
     return jsonify({'success': True, 'data': favoritos})
 

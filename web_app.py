@@ -2010,15 +2010,22 @@ def api_portfolio_sankey():
                 'industry': industry
             })
         
-        # Construir datos del Sankey
+        # Construir datos del Sankey CON PORCENTAJES EN LAS ETIQUETAS
         # Nivel 1: Portfolio → Categoría
         for cat, cat_data in categorias.items():
             peso = (cat_data['valor'] / valor_total) * 100
             if peso >= 0.5:  # Solo incluir si es >= 0.5%
-                sankey_data.append(['Portfolio', cat, cat_data['valor']])
+                cat_label = f"{cat} ({peso:.1f}%)"
+                sankey_data.append(['Portfolio', cat_label, cat_data['valor']])
         
         # Agrupar por sector dentro de cada categoría
         for cat, cat_data in categorias.items():
+            peso_cat = (cat_data['valor'] / valor_total) * 100
+            if peso_cat < 0.5:
+                continue
+                
+            cat_label = f"{cat} ({peso_cat:.1f}%)"
+            
             sectores = {}
             for pos in cat_data['posiciones']:
                 sector = pos['sector']
@@ -2035,20 +2042,22 @@ def api_portfolio_sankey():
                     peso = (sector_data['valor'] / valor_total) * 100
                     if peso >= 0.5:
                         # Evitar nodos duplicados
-                        sector_name = f"{sector} " if sector == cat else sector
-                        sankey_data.append([cat, sector_name, sector_data['valor']])
+                        sector_label = f"{sector} ({peso:.1f}%)" if sector != cat else f"{sector}  ({peso:.1f}%)"
+                        sankey_data.append([cat_label, sector_label, sector_data['valor']])
                         
                         # Nivel 3: Sector → Activo
                         for pos in sector_data['posiciones']:
                             peso_pos = (pos['valor'] / valor_total) * 100
                             if peso_pos >= 0.3:
-                                sankey_data.append([sector_name, pos['ticker'], pos['valor']])
+                                ticker_label = f"{pos['ticker']} ({peso_pos:.1f}%)"
+                                sankey_data.append([sector_label, ticker_label, pos['valor']])
             else:
                 # Solo un sector igual a la categoría, ir directo a activos
                 for pos in cat_data['posiciones']:
                     peso_pos = (pos['valor'] / valor_total) * 100
                     if peso_pos >= 0.3:
-                        sankey_data.append([cat, pos['ticker'], pos['valor']])
+                        ticker_label = f"{pos['ticker']} ({peso_pos:.1f}%)"
+                        sankey_data.append([cat_label, ticker_label, pos['valor']])
         
         # Crear resumen de categorías
         resumen = []
@@ -2066,7 +2075,9 @@ def api_portfolio_sankey():
             'data': {
                 'sankey': sankey_data,
                 'resumen': resumen,
-                'valor_total': round(valor_total, 2)
+                'valor_total': round(valor_total, 2),
+                'num_posiciones': len(posiciones_actualizadas),
+                'num_categorias': len(categorias)
             }
         })
         

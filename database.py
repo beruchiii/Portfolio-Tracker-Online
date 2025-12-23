@@ -167,6 +167,31 @@ class Target(db.Model):
         }
 
 
+class Favorito(db.Model):
+    """Modelo para favoritos / watchlist"""
+    __tablename__ = 'favoritos'
+    
+    id = db.Column(db.String(50), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True, index=True)
+    ticker = db.Column(db.String(20), index=True)
+    isin = db.Column(db.String(20), index=True)
+    nombre = db.Column(db.String(200))
+    notas = db.Column(db.Text)
+    fecha_agregado = db.Column(db.DateTime, default=datetime.utcnow)
+    precio_al_agregar = db.Column(db.Float)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ticker': self.ticker,
+            'isin': self.isin,
+            'nombre': self.nombre,
+            'notas': self.notas,
+            'fecha_agregado': self.fecha_agregado.isoformat() if self.fecha_agregado else None,
+            'precio_al_agregar': self.precio_al_agregar
+        }
+
+
 class ActivoNuevo(db.Model):
     """Modelo para activos planificados (no en cartera aún)"""
     __tablename__ = 'activos_nuevos'

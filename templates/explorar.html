@@ -63,6 +63,37 @@
 
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Sección Favoritos -->
+        <div id="favoritos-section" class="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold flex items-center gap-2">
+                    <span>⭐</span> Mis Favoritos
+                </h2>
+                <button onclick="toggleFavoritosSection()" class="text-gray-400 hover:text-white transition">
+                    <svg id="favoritos-toggle-icon" class="w-5 h-5 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div id="favoritos-content">
+                <div id="favoritos-loading" class="text-center py-4 text-gray-400">
+                    <div class="loader mx-auto mb-2"></div>
+                    Cargando favoritos...
+                </div>
+                
+                <div id="favoritos-empty" class="hidden text-center py-8 text-gray-500">
+                    <div class="text-4xl mb-2">⭐</div>
+                    <p>No tienes favoritos aún</p>
+                    <p class="text-sm mt-1">Busca activos y márcalos con la estrella para seguirlos</p>
+                </div>
+                
+                <div id="favoritos-grid" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+        </div>
+        
         <!-- Buscador -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 p-6 mb-6">
             <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
@@ -110,9 +141,16 @@
                         <h2 id="activo-nombre" class="text-2xl font-bold">-</h2>
                         <p id="activo-ticker" class="text-gray-400">-</p>
                     </div>
-                    <div class="text-right">
-                        <div id="activo-precio" class="text-3xl font-bold">-</div>
-                        <div id="activo-cambio" class="text-sm">-</div>
+                    <div class="flex items-center gap-4">
+                        <button id="btn-favorito" onclick="toggleFavorito()" class="p-2 rounded-lg border border-gray-600 hover:bg-gray-700 transition" title="Añadir a favoritos">
+                            <svg id="icon-favorito" class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+                            </svg>
+                        </button>
+                        <div class="text-right">
+                            <div id="activo-precio" class="text-3xl font-bold">-</div>
+                            <div id="activo-cambio" class="text-sm">-</div>
+                        </div>
                     </div>
                 </div>
                 
@@ -551,6 +589,9 @@
                 // Luego cargar estadísticas (con fallback a datos del gráfico)
                 cargarEstadisticas(ticker);
                 
+                // Verificar si está en favoritos
+                verificarFavorito();
+                
             } catch (error) {
                 console.error('Error:', error);
                 document.getElementById('loading').classList.add('hidden');
@@ -679,16 +720,41 @@
             
             document.getElementById('chart-loader').classList.add('hidden');
             
-            // Limpiar indicadores
+            // Limpiar alertas previas
+            document.getElementById('alerts-container').innerHTML = '';
+            
+            // Resetear SMAs y BB (no se activan por defecto)
             document.querySelectorAll('.sma-toggle').forEach(cb => cb.checked = false);
             document.getElementById('bollinger-toggle').checked = false;
-            document.getElementById('rsi-toggle').checked = false;
-            document.getElementById('rsi-container').classList.add('hidden');
-            document.getElementById('macd-toggle').checked = false;
-            document.getElementById('macd-container').classList.add('hidden');
-            document.getElementById('volume-toggle').checked = false;
-            document.getElementById('volume-container').classList.add('hidden');
-            document.getElementById('alerts-container').innerHTML = '';
+            
+            // Activar indicadores por defecto: RSI, MACD, Volumen
+            document.getElementById('rsi-toggle').checked = true;
+            toggleRSI(true);
+            
+            document.getElementById('macd-toggle').checked = true;
+            toggleMACD(true);
+            
+            if (window.chartData && window.chartData.volumen) {
+                document.getElementById('volume-toggle').checked = true;
+                toggleVolume(true);
+            } else {
+                document.getElementById('volume-toggle').checked = false;
+                document.getElementById('volume-container').classList.add('hidden');
+            }
+            
+            // Activar S/R y Correlación por defecto (asegurar que estén ocultos primero)
+            setTimeout(() => {
+                const srPanel = document.getElementById('sr-panel');
+                const corrPanel = document.getElementById('correlacion-panel');
+                
+                // Si están ocultos, mostrarlos
+                if (srPanel && srPanel.classList.contains('hidden')) {
+                    toggleSoportesResistencias();
+                }
+                if (corrPanel && corrPanel.classList.contains('hidden')) {
+                    toggleCorrelacion();
+                }
+            }, 500);
         }
         
         function renderChart(fechas, precios, periodLabel = '1A') {
@@ -1998,6 +2064,232 @@
                 tipoSelect.addEventListener('change', calcularPrecioObjetivo);
             }
         });
+        
+        // =====================
+        // FAVORITOS
+        // =====================
+        
+        let esFavoritoActual = false;
+        let favoritosColapsado = false;
+        
+        // Cargar favoritos al inicio
+        document.addEventListener('DOMContentLoaded', cargarFavoritos);
+        
+        async function cargarFavoritos() {
+            const loading = document.getElementById('favoritos-loading');
+            const empty = document.getElementById('favoritos-empty');
+            const grid = document.getElementById('favoritos-grid');
+            
+            loading.classList.remove('hidden');
+            empty.classList.add('hidden');
+            grid.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/api/favoritos');
+                const result = await response.json();
+                
+                loading.classList.add('hidden');
+                
+                if (result.success && result.data.length > 0) {
+                    renderizarFavoritos(result.data);
+                    grid.classList.remove('hidden');
+                } else {
+                    empty.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Error cargando favoritos:', error);
+                loading.classList.add('hidden');
+                empty.classList.remove('hidden');
+            }
+        }
+        
+        function renderizarFavoritos(favoritos) {
+            const grid = document.getElementById('favoritos-grid');
+            
+            grid.innerHTML = favoritos.map(fav => {
+                const precio = fav.precio_actual ? fav.precio_actual.toFixed(2) + '€' : '-';
+                const cambio = fav.cambio_desde_agregado;
+                const cambioClass = cambio > 0 ? 'text-green-400' : cambio < 0 ? 'text-red-400' : 'text-gray-400';
+                const cambioText = cambio !== null ? `${cambio >= 0 ? '+' : ''}${cambio.toFixed(2)}%` : '-';
+                const cambioDiario = fav.cambio_diario;
+                const cambioDiarioClass = cambioDiario > 0 ? 'text-green-400' : cambioDiario < 0 ? 'text-red-400' : 'text-gray-400';
+                const cambioDiarioText = cambioDiario !== null && cambioDiario !== undefined ? `${cambioDiario >= 0 ? '+' : ''}${cambioDiario.toFixed(2)}%` : '';
+                
+                const fechaAgregado = fav.fecha_agregado ? new Date(fav.fecha_agregado).toLocaleDateString('es-ES') : '';
+                
+                return `
+                    <div class="bg-gray-700/50 rounded-lg p-4 hover:bg-gray-700 transition cursor-pointer group relative" onclick="buscarRapido('${fav.ticker || fav.isin}')">
+                        <button onclick="event.stopPropagation(); eliminarFavoritoDirecto('${fav.id}')" 
+                            class="absolute top-2 right-2 p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition"
+                            title="Eliminar de favoritos">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                        
+                        <div class="flex items-start justify-between mb-2">
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-semibold text-white truncate" title="${fav.nombre}">${fav.nombre}</h3>
+                                <p class="text-xs text-gray-400">${fav.ticker || fav.isin || ''}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-end justify-between">
+                            <div>
+                                <div class="text-lg font-bold">${precio}</div>
+                                ${cambioDiarioText ? `<div class="text-xs ${cambioDiarioClass}">Hoy: ${cambioDiarioText}</div>` : ''}
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm ${cambioClass}" title="Desde ${fechaAgregado}">${cambioText}</div>
+                                <div class="text-xs text-gray-500">desde seguimiento</div>
+                            </div>
+                        </div>
+                        
+                        ${fav.notas ? `<div class="mt-2 text-xs text-gray-400 truncate" title="${fav.notas}">📝 ${fav.notas}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function toggleFavoritosSection() {
+            const content = document.getElementById('favoritos-content');
+            const icon = document.getElementById('favoritos-toggle-icon');
+            
+            favoritosColapsado = !favoritosColapsado;
+            
+            if (favoritosColapsado) {
+                content.classList.add('hidden');
+                icon.style.transform = 'rotate(-90deg)';
+            } else {
+                content.classList.remove('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+        
+        async function eliminarFavoritoDirecto(id) {
+            if (!confirm('¿Eliminar de favoritos?')) return;
+            
+            try {
+                const response = await fetch(`/api/favoritos/${id}`, { method: 'DELETE' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    cargarFavoritos();
+                    mostrarToast('Eliminado de favoritos', 'info');
+                }
+            } catch (error) {
+                mostrarToast('Error al eliminar', 'error');
+            }
+        }
+        
+        async function verificarFavorito() {
+            if (!activoActual) return;
+            
+            try {
+                const response = await fetch('/api/favoritos/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticker: activoActual.ticker,
+                        isin: activoActual.isin
+                    })
+                });
+                const result = await response.json();
+                
+                esFavoritoActual = result.es_favorito;
+                actualizarIconoFavorito();
+            } catch (error) {
+                console.error('Error verificando favorito:', error);
+            }
+        }
+        
+        function actualizarIconoFavorito() {
+            const icon = document.getElementById('icon-favorito');
+            const btn = document.getElementById('btn-favorito');
+            
+            if (esFavoritoActual) {
+                icon.classList.remove('text-gray-400');
+                icon.classList.add('text-yellow-400');
+                icon.setAttribute('fill', 'currentColor');
+                btn.title = 'Quitar de favoritos';
+            } else {
+                icon.classList.remove('text-yellow-400');
+                icon.classList.add('text-gray-400');
+                icon.setAttribute('fill', 'none');
+                btn.title = 'Añadir a favoritos';
+            }
+        }
+        
+        async function toggleFavorito() {
+            if (!activoActual) return;
+            
+            try {
+                if (esFavoritoActual) {
+                    // Quitar de favoritos - primero obtener el ID
+                    const listResponse = await fetch('/api/favoritos');
+                    const listResult = await listResponse.json();
+                    
+                    if (listResult.success) {
+                        const fav = listResult.data.find(f => 
+                            f.ticker === activoActual.ticker || f.isin === activoActual.isin
+                        );
+                        
+                        if (fav) {
+                            await fetch(`/api/favoritos/${fav.id}`, { method: 'DELETE' });
+                            esFavoritoActual = false;
+                            actualizarIconoFavorito();
+                            cargarFavoritos(); // Refrescar lista
+                            mostrarToast('Eliminado de favoritos', 'info');
+                        }
+                    }
+                } else {
+                    // Añadir a favoritos
+                    const response = await fetch('/api/favoritos', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            ticker: activoActual.ticker,
+                            isin: activoActual.isin,
+                            nombre: activoActual.nombre
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        esFavoritoActual = true;
+                        actualizarIconoFavorito();
+                        cargarFavoritos(); // Refrescar lista
+                        mostrarToast('Añadido a favoritos ⭐', 'success');
+                    } else {
+                        mostrarToast(result.error || 'Error al añadir', 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Error con favorito:', error);
+                mostrarToast('Error al procesar favorito', 'error');
+            }
+        }
+        
+        function mostrarToast(mensaje, tipo = 'info') {
+            // Crear toast
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg z-50 transition-all duration-300 ${
+                tipo === 'success' ? 'bg-green-600' : 
+                tipo === 'error' ? 'bg-red-600' : 'bg-blue-600'
+            } text-white`;
+            toast.textContent = mensaje;
+            document.body.appendChild(toast);
+            
+            // Animar entrada
+            setTimeout(() => toast.style.opacity = '1', 10);
+            
+            // Remover después de 3 segundos
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
     </script>
     
     <!-- Modal Crear Alerta -->

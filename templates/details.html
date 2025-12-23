@@ -944,16 +944,41 @@
             // Ejecutar análisis de rendimiento (rentabilidad anual y heatmap)
             ejecutarAnalisisRendimiento();
             
-            // Resetear checkboxes de indicadores y limpiar alertas
+            // Limpiar alertas previas
+            document.getElementById('alerts-container').innerHTML = '';
+            
+            // Resetear SMAs y BB (no se activan por defecto)
             document.querySelectorAll('.sma-toggle').forEach(cb => cb.checked = false);
             document.getElementById('bollinger-toggle').checked = false;
-            document.getElementById('rsi-toggle').checked = false;
-            document.getElementById('rsi-container').classList.add('hidden');
-            document.getElementById('macd-toggle').checked = false;
-            document.getElementById('macd-container').classList.add('hidden');
-            document.getElementById('volume-toggle').checked = false;
-            document.getElementById('volume-container').classList.add('hidden');
-            document.getElementById('alerts-container').innerHTML = ''; // Limpiar todas las alertas
+            
+            // Activar indicadores por defecto: RSI, MACD, Volumen
+            document.getElementById('rsi-toggle').checked = true;
+            toggleRSI(true);
+            
+            document.getElementById('macd-toggle').checked = true;
+            toggleMACD(true);
+            
+            if (window.chartData.volumen) {
+                document.getElementById('volume-toggle').checked = true;
+                toggleVolume(true);
+            } else {
+                document.getElementById('volume-toggle').checked = false;
+                document.getElementById('volume-container').classList.add('hidden');
+            }
+            
+            // Activar S/R y Correlación por defecto (asegurar que estén ocultos primero)
+            setTimeout(() => {
+                const srPanel = document.getElementById('sr-panel');
+                const corrPanel = document.getElementById('correlacion-panel');
+                
+                // Si están ocultos, mostrarlos
+                if (srPanel && srPanel.classList.contains('hidden')) {
+                    toggleSoportesResistencias();
+                }
+                if (corrPanel && corrPanel.classList.contains('hidden')) {
+                    toggleCorrelacion();
+                }
+            }, 500);
         }
 
         // =====================

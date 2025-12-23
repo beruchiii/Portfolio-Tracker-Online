@@ -40,7 +40,7 @@ if USE_DATABASE:
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
-    from database import db, Posicion, Aportacion, Alerta, Target, ActivoNuevo, TelegramConfig, Usuario, migrar_datos_a_usuario
+    from database import db, Posicion, Aportacion, Alerta, Target, ActivoNuevo, TelegramConfig, Usuario, Favorito, migrar_datos_a_usuario
     db.init_app(app)
     
     with app.app_context():
@@ -149,6 +149,7 @@ DATA_DIR = Path(__file__).parent / "data"
 PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
 CACHE_FILE = DATA_DIR / "price_cache.json"
 ALERTS_FILE = DATA_DIR / "alerts.json"
+FAVORITES_FILE = DATA_DIR / "favorites.json"
 
 # Duración del caché en minutos
 CACHE_DURATION_MINUTES = 15
@@ -258,6 +259,114 @@ def guardar_alertas(alertas, user_id=None):
         DATA_DIR.mkdir(exist_ok=True)
         with open(ALERTS_FILE, 'w') as f:
             json.dump(alertas, f, indent=2)
+
+
+# =============================================================================
+# FAVORITOS / WATCHLIST
+# =============================================================================
+
+def cargar_favoritos(user_id=None):
+    """Carga los favoritos desde archivo o BD"""
+    if USE_DATABASE:
+        if user_id is None:
+            user_id = session.get('user_id')
+        
+        if user_id:
+            favoritos = Favorito.query.filter_by(user_id=user_id).order_by(Favorito.fecha_agregado.desc()).all()
+        else:
+            favoritos = Favorito.query.order_by(Favorito.fecha_agregado.desc()).all()
+        return [f.to_dict() for f in favoritos]
+    
+    if FAVORITES_FILE.exists():
+        try:
+            with open(FAVORITES_FILE, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+    return []
+
+def guardar_favoritos(favoritos, user_id=None):
+    """Guarda los favoritos en archivo o BD"""
+    if USE_DATABASE:
+        if user_id is None:
+            user_id = session.get('user_id')
+        
+        # Solo eliminar favoritos del usuario actual
+        if user_id:
+            Favorito.query.filter_by(user_id=user_id).delete()
+        
+        for fav_data in favoritos:
+            favorito = Favorito(
+                id=fav_data.get('id'),
+                user_id=user_id,
+                ticker=fav_data.get('ticker'),
+                isin=fav_data.get('isin'),
+                nombre=fav_data.get('nombre'),
+                notas=fav_data.get('notas', ''),
+                fecha_agregado=fav_data.get('fecha_agregado')
+            )
+            db.session.add(favorito)
+        db.session.commit()
+    else:
+        DATA_DIR.mkdir(exist_ok=True)
+        with open(FAVORITES_FILE, 'w') as f:
+            json.dump(favoritos, f, indent=2)
+
+def agregar_favorito(ticker, isin=None, nombre=None, notas=''):
+    """Agrega un activo a favoritos"""
+    favoritos = cargar_favoritos()
+    
+    # Verificar si ya existe
+    for fav in favoritos:
+        if fav.get('ticker') == ticker or (isin and fav.get('isin') == isin):
+            return False  # Ya existe
+    
+    nuevo_fav = {
+        'id': str(uuid.uuid4()),
+        'ticker': ticker,
+        'isin': isin,
+        'nombre': nombre or ticker,
+        'notas': notas,
+        'fecha_agregado': datetime.now().isoformat()
+    }
+    
+    favoritos.append(nuevo_fav)
+    guardar_favoritos(favoritos)
+    return True
+
+def eliminar_favorito(favorito_id=None, ticker=None):
+    """Elimina un favorito por ID o ticker"""
+    favoritos = cargar_favoritos()
+    
+    favoritos_filtrados = []
+    eliminado = False
+    
+    for fav in favoritos:
+        if favorito_id and fav.get('id') == favorito_id:
+            eliminado = True
+            continue
+        if ticker and (fav.get('ticker') == ticker or fav.get('isin') == ticker):
+            eliminado = True
+            continue
+        favoritos_filtrados.append(fav)
+    
+    if eliminado:
+        guardar_favoritos(favoritos_filtrados)
+    
+    return eliminado
+
+def es_favorito(ticker=None, isin=None):
+    """Verifica si un activo está en favoritos"""
+    favoritos = cargar_favoritos()
+    
+    for fav in favoritos:
+        if ticker and fav.get('ticker') == ticker:
+            return True
+        if isin and fav.get('isin') == isin:
+            return True
+    
+    return False
+
 
 def verificar_alertas():
     """Verifica si alguna alerta se ha disparado"""
@@ -784,6 +893,129 @@ def api_check_alertas():
             pass
     
     return jsonify({'success': True, 'data': cumplidas})
+
+
+# =============================================================================
+# FAVORITOS / WATCHLIST
+# =============================================================================
+
+@app.route('/api/favoritos')
+@login_required
+def api_favoritos():
+    """Obtiene la lista de favoritos con precios actualizados"""
+    favoritos = cargar_favoritos()
+    
+    # Actualizar precios de cada favorito
+    for fav in favoritos:
+        try:
+            ticker = fav.get('ticker') or fav.get('isin')
+            resultado = price_fetcher.obtener_precio(ticker, fav.get('isin'))
+            if resultado and resultado.get('precio'):
+                fav['precio_actual'] = resultado['precio']
+                
+                # Calcular cambio desde que se agregó
+                precio_agregado = fav.get('precio_al_agregar')
+                if precio_agregado and precio_agregado > 0:
+                    fav['cambio_desde_agregado'] = ((resultado['precio'] - precio_agregado) / precio_agregado) * 100
+                else:
+                    fav['cambio_desde_agregado'] = None
+                    
+                # Cambio diario si está disponible
+                fav['cambio_diario'] = resultado.get('cambio_pct')
+        except Exception as e:
+            print(f"Error obteniendo precio de favorito {fav.get('nombre')}: {e}")
+            fav['precio_actual'] = None
+            fav['cambio_desde_agregado'] = None
+    
+    return jsonify({'success': True, 'data': favoritos})
+
+
+@app.route('/api/favoritos', methods=['POST'])
+@login_required
+def api_agregar_favorito():
+    """Agrega un activo a favoritos"""
+    data = request.json
+    
+    ticker = data.get('ticker')
+    isin = data.get('isin')
+    nombre = data.get('nombre')
+    notas = data.get('notas', '')
+    
+    if not ticker and not isin:
+        return jsonify({'success': False, 'error': 'Se requiere ticker o ISIN'})
+    
+    # Verificar si ya existe
+    if es_favorito(ticker, isin):
+        return jsonify({'success': False, 'error': 'Ya está en favoritos'})
+    
+    # Obtener precio actual para guardar
+    precio_actual = None
+    try:
+        resultado = price_fetcher.obtener_precio(ticker or isin, isin)
+        if resultado and resultado.get('precio'):
+            precio_actual = resultado['precio']
+            if not nombre:
+                nombre = resultado.get('nombre', ticker or isin)
+    except:
+        pass
+    
+    favoritos = cargar_favoritos()
+    
+    nuevo_fav = {
+        'id': str(uuid.uuid4()),
+        'ticker': ticker,
+        'isin': isin,
+        'nombre': nombre or ticker or isin,
+        'notas': notas,
+        'fecha_agregado': datetime.now().isoformat(),
+        'precio_al_agregar': precio_actual
+    }
+    
+    favoritos.append(nuevo_fav)
+    guardar_favoritos(favoritos)
+    
+    return jsonify({'success': True, 'data': nuevo_fav})
+
+
+@app.route('/api/favoritos/<favorito_id>', methods=['DELETE'])
+@login_required
+def api_eliminar_favorito(favorito_id):
+    """Elimina un favorito por ID"""
+    if eliminar_favorito(favorito_id=favorito_id):
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'Favorito no encontrado'})
+
+
+@app.route('/api/favoritos/check', methods=['POST'])
+@login_required
+def api_check_favorito():
+    """Verifica si un activo está en favoritos"""
+    data = request.json
+    ticker = data.get('ticker')
+    isin = data.get('isin')
+    
+    return jsonify({
+        'success': True,
+        'es_favorito': es_favorito(ticker, isin)
+    })
+
+
+@app.route('/api/favoritos/<favorito_id>/notas', methods=['PUT'])
+@login_required
+def api_actualizar_notas_favorito(favorito_id):
+    """Actualiza las notas de un favorito"""
+    data = request.json
+    notas = data.get('notas', '')
+    
+    favoritos = cargar_favoritos()
+    
+    for fav in favoritos:
+        if fav.get('id') == favorito_id:
+            fav['notas'] = notas
+            guardar_favoritos(favoritos)
+            return jsonify({'success': True})
+    
+    return jsonify({'success': False, 'error': 'Favorito no encontrado'})
 
 
 # =============================================================================

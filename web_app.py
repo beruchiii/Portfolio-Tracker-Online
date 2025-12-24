@@ -2110,18 +2110,56 @@ def api_portfolio_heatmap():
             cambio_pct = 0
             datos_encontrados = False
             
-            # 1. SIEMPRE intentar Yahoo Finance primero (si hay ticker)
-            if pos_original.ticker:
+            # Para ETFs europeos (ISIN IE/LU/DE), priorizar JustETF
+            es_etf_europeo = pos_original.isin and pos_original.isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL']
+            
+            # 1. Si es ETF europeo, intentar JustETF primero
+            if es_etf_europeo and pos_original.isin:
+                print(f"[Heatmap] ETF europeo detectado, usando JustETF para {pos_original.isin}...")
+                try:
+                    justetf_periodo = justetf_periods.get(periodo, '1mo')
+                    historico = justetf.obtener_historico(pos_original.isin, justetf_periodo)
+                    
+                    if historico and historico.get('precios') and len(historico['precios']) > 1:
+                        precios = historico['precios']
+                        fechas = historico.get('fechas', [])
+                        
+                        # Encontrar precio de inicio según período
+                        if periodo == 'ytd':
+                            year_start = f"{datetime.now().year}-01"
+                            precio_inicio = precios[0]
+                            for i, fecha in enumerate(fechas):
+                                if fecha.startswith(year_start):
+                                    precio_inicio = precios[i]
+                                    break
+                        elif periodo == '1m':
+                            precio_inicio = precios[0]
+                        elif periodo == '1w':
+                            idx = max(0, len(precios) - 5)
+                            precio_inicio = precios[idx]
+                        else:  # 1d
+                            precio_inicio = precios[-2] if len(precios) >= 2 else precios[0]
+                        
+                        precio_actual = precios[-1]
+                        if precio_inicio > 0:
+                            cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
+                            datos_encontrados = True
+                            print(f"[Heatmap] JustETF OK para {pos_original.isin}: {cambio_pct:.2f}%")
+                except Exception as e:
+                    print(f"[Heatmap] JustETF error para {pos_original.isin}: {e}")
+            
+            # 2. Si no es ETF europeo o JustETF falló, intentar Yahoo Finance
+            if not datos_encontrados and pos_original.ticker:
                 try:
                     ticker = yf.Ticker(pos_original.ticker)
                     
                     if periodo == '1d':
                         hist = ticker.history(period='5d')
                         if not hist.empty and len(hist) >= 2:
-                            precio_anterior = hist['Close'].iloc[-2]
-                            precio_actual = pos_actual.precio_actual
-                            if precio_anterior > 0 and precio_actual > 0:
-                                cambio_pct = ((precio_actual - precio_anterior) / precio_anterior) * 100
+                            precio_anterior = float(hist['Close'].iloc[-2])
+                            precio_hoy = float(hist['Close'].iloc[-1])
+                            if precio_anterior > 0 and precio_hoy > 0:
+                                cambio_pct = ((precio_hoy - precio_anterior) / precio_anterior) * 100
                                 datos_encontrados = True
                                 print(f"[Heatmap] Yahoo OK para {pos_original.ticker}: {cambio_pct:.2f}%")
                     else:
@@ -2132,10 +2170,10 @@ def api_portfolio_heatmap():
                             hist = ticker.history(period=f'{days_back}d')
                         
                         if not hist.empty and len(hist) > 0:
-                            precio_inicio = hist['Close'].iloc[0]
-                            precio_actual = pos_actual.precio_actual
-                            if precio_inicio > 0 and precio_actual > 0:
-                                cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
+                            precio_inicio = float(hist['Close'].iloc[0])
+                            precio_fin = float(hist['Close'].iloc[-1])
+                            if precio_inicio > 0 and precio_fin > 0:
+                                cambio_pct = ((precio_fin - precio_inicio) / precio_inicio) * 100
                                 datos_encontrados = True
                                 print(f"[Heatmap] Yahoo OK para {pos_original.ticker}: {cambio_pct:.2f}%")
                 except Exception as e:

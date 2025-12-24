@@ -2905,11 +2905,13 @@
             // Crear mapa
             const chart = root.container.children.push(
                 am5map.MapChart.new(root, {
-                    panX: "rotateX",
-                    panY: "rotateY",
+                    panX: "translateX",
+                    panY: "translateY",
                     projection: am5map.geoNaturalEarth1(),
                     homeZoomLevel: 1,
-                    homeGeoPoint: { longitude: 10, latitude: 30 }
+                    homeGeoPoint: { longitude: 10, latitude: 30 },
+                    minZoomLevel: 1,
+                    maxZoomLevel: 10
                 })
             );
             
@@ -3128,13 +3130,41 @@
                 return;
             }
             
-            const altura = alturaRecomendada || 380;
+            const containerWidth = container.offsetWidth;
+            const isMobile = containerWidth < 500;
+            const isSmallMobile = containerWidth < 380;
+            
+            // Ajustar altura según dispositivo
+            let altura = alturaRecomendada || 380;
+            if (isMobile) {
+                altura = Math.max(altura, 450); // Más altura en móvil para que quepa mejor
+            }
             
             const data = new google.visualization.DataTable();
             data.addColumn('string', 'From');
             data.addColumn('string', 'To');
             data.addColumn('number', 'Weight');
-            data.addRows(sankeyDataArray);
+            
+            // En móvil, acortar nombres largos
+            const processedData = sankeyDataArray.map(row => {
+                let from = row[0];
+                let to = row[1];
+                
+                if (isMobile) {
+                    // Acortar nombres > 20 caracteres
+                    const maxLen = isSmallMobile ? 15 : 20;
+                    if (from.length > maxLen) {
+                        from = from.substring(0, maxLen - 2) + '..';
+                    }
+                    if (to.length > maxLen) {
+                        to = to.substring(0, maxLen - 2) + '..';
+                    }
+                }
+                
+                return [from, to, row[2]];
+            });
+            
+            data.addRows(processedData);
             
             // Colores personalizados para las categorías
             const colores = {
@@ -3175,17 +3205,22 @@
             // Generar colores para los nodos basándose en el nombre base (sin porcentaje)
             const nodeColors = [];
             const uniqueNodes = new Set();
-            sankeyDataArray.forEach(row => {
+            processedData.forEach(row => {
                 uniqueNodes.add(row[0]);
                 uniqueNodes.add(row[1]);
             });
             
             uniqueNodes.forEach(node => {
                 // Extraer nombre base sin el porcentaje
-                const nombreBase = node.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                const nombreBase = node.replace(/\s*\([^)]*\)\s*$/, '').replace(/\.\.$/,'').trim();
                 const color = colores[nombreBase] || colores[node] || '#4b5563';
                 nodeColors.push(color);
             });
+            
+            // Ajustar tamaños según dispositivo
+            const fontSize = isSmallMobile ? 9 : (isMobile ? 10 : 11);
+            const nodePadding = isSmallMobile ? 8 : (isMobile ? 10 : 12);
+            const nodeWidth = isSmallMobile ? 10 : (isMobile ? 12 : 15);
             
             const options = {
                 height: altura,
@@ -3194,12 +3229,12 @@
                         colors: nodeColors,
                         label: {
                             fontName: 'Inter',
-                            fontSize: 11,
+                            fontSize: fontSize,
                             color: '#ffffff',
                             bold: true
                         },
-                        nodePadding: 12,
-                        width: 15,
+                        nodePadding: nodePadding,
+                        width: nodeWidth,
                         interactivity: true
                     },
                     link: {

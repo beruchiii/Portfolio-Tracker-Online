@@ -32,7 +32,17 @@
             padding: 2px;
             height: calc(100vh - 60px);
             width: 100vw;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
         }
+        
+        /* Ajuste para móvil con menú inferior */
+        @media (max-width: 768px) {
+            .heatmap-container {
+                height: calc(100vh - 110px - env(safe-area-inset-bottom));
+            }
+        }
+        
         .heatmap-cell {
             display: flex;
             flex-direction: column;
@@ -48,9 +58,17 @@
             z-index: 10;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
+        @media (max-width: 768px) {
+            .heatmap-cell:hover {
+                transform: none;
+            }
+        }
         .heatmap-cell .ticker {
             font-weight: 700;
             text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            text-align: center;
+            padding: 0 2px;
+            word-break: break-word;
         }
         .heatmap-cell .change {
             font-weight: 600;
@@ -94,6 +112,13 @@
             border-bottom: 1px solid #374151;
         }
         
+        @media (max-width: 768px) {
+            .header-bar {
+                height: 50px;
+                padding: 0 8px;
+            }
+        }
+        
         .period-btn {
             padding: 8px 16px;
             border-radius: 8px;
@@ -101,6 +126,12 @@
             transition: all 0.2s;
             border: none;
             cursor: pointer;
+        }
+        @media (max-width: 768px) {
+            .period-btn {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
         }
         .period-btn.active {
             background: #3b82f6;
@@ -114,15 +145,34 @@
             background: #4b5563;
         }
         
-        .fullscreen-btn {
+        .fullscreen-btn, .zoom-btn {
             background: #374151;
             padding: 8px 12px;
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s;
+            border: none;
+            color: white;
         }
-        .fullscreen-btn:hover {
+        .fullscreen-btn:hover, .zoom-btn:hover {
             background: #4b5563;
+        }
+        .zoom-btn {
+            padding: 6px 10px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .zoom-controls {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .zoom-level {
+            font-size: 12px;
+            color: #9ca3af;
+            min-width: 40px;
+            text-align: center;
         }
         
         .loading-overlay {
@@ -184,55 +234,31 @@
 <body>
     <!-- Header -->
     <div class="header-bar">
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 md:gap-4">
             <a href="/" class="text-gray-400 hover:text-white transition">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
             </a>
-            <h1 class="text-lg font-bold">🔥 Mapa de Calor</h1>
+            <h1 class="text-sm md:text-lg font-bold">🔥 Heatmap</h1>
         </div>
         
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-1 md:gap-2">
             <button class="period-btn active" data-period="1d" onclick="changePeriod('1d')">Hoy</button>
-            <button class="period-btn" data-period="1w" onclick="changePeriod('1w')">Semana</button>
+            <button class="period-btn hidden sm:block" data-period="1w" onclick="changePeriod('1w')">Sem</button>
             <button class="period-btn" data-period="1m" onclick="changePeriod('1m')">Mes</button>
             <button class="period-btn" data-period="ytd" onclick="changePeriod('ytd')">YTD</button>
         </div>
         
-        <div class="flex items-center gap-4">
-            <div class="legend hidden md:flex">
-                <div class="legend-item">
-                    <div class="legend-color gain-high"></div>
-                    <span>&gt;3%</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color gain-medium"></div>
-                    <span>1-3%</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color gain-low"></div>
-                    <span>0-1%</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color neutral"></div>
-                    <span>0%</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color loss-low"></div>
-                    <span>0 a -1%</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color loss-medium"></div>
-                    <span>-1 a -3%</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color loss-high"></div>
-                    <span>&lt;-3%</span>
-                </div>
+        <div class="flex items-center gap-2">
+            <!-- Zoom Controls -->
+            <div class="zoom-controls">
+                <button class="zoom-btn" onclick="zoomOut()" title="Reducir">−</button>
+                <span class="zoom-level" id="zoom-level">100%</span>
+                <button class="zoom-btn" onclick="zoomIn()" title="Ampliar">+</button>
             </div>
             
-            <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Pantalla completa">
+            <button class="fullscreen-btn hidden md:block" onclick="toggleFullscreen()" title="Pantalla completa">
                 <svg id="fullscreen-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
                 </svg>
@@ -254,6 +280,9 @@
     <script>
         let currentPeriod = '1d';
         let heatmapData = [];
+        let zoomLevel = 100;
+        const MIN_ZOOM = 50;
+        const MAX_ZOOM = 200;
         
         // Cambiar período
         function changePeriod(period) {
@@ -262,6 +291,28 @@
                 btn.classList.toggle('active', btn.dataset.period === period);
             });
             loadHeatmap();
+        }
+        
+        // Funciones de Zoom
+        function zoomIn() {
+            if (zoomLevel < MAX_ZOOM) {
+                zoomLevel += 25;
+                applyZoom();
+            }
+        }
+        
+        function zoomOut() {
+            if (zoomLevel > MIN_ZOOM) {
+                zoomLevel -= 25;
+                applyZoom();
+            }
+        }
+        
+        function applyZoom() {
+            document.getElementById('zoom-level').textContent = zoomLevel + '%';
+            if (heatmapData.length > 0) {
+                renderHeatmap(heatmapData);
+            }
         }
         
         // Toggle fullscreen
@@ -374,12 +425,26 @@
             const container = document.getElementById('heatmap');
             const containerRect = container.getBoundingClientRect();
             
-            // Calcular layout
-            const cells = calculateTreemapLayout(data, containerRect.width - 4, containerRect.height - 4);
+            // Aplicar zoom al tamaño del contenedor interno
+            const scale = zoomLevel / 100;
+            const effectiveWidth = containerRect.width * scale;
+            const effectiveHeight = containerRect.height * scale;
+            
+            // Calcular layout con tamaño escalado
+            const cells = calculateTreemapLayout(data, effectiveWidth - 4, effectiveHeight - 4);
             
             // Limpiar contenedor
             container.innerHTML = '';
-            container.style.position = 'relative';
+            
+            // Crear contenedor interno para scroll
+            const innerContainer = document.createElement('div');
+            innerContainer.style.cssText = `
+                position: relative;
+                width: ${effectiveWidth}px;
+                height: ${effectiveHeight}px;
+                min-width: 100%;
+                min-height: 100%;
+            `;
             
             // Crear celdas
             cells.forEach(cell => {
@@ -394,15 +459,15 @@
                     cursor: default;
                 `;
                 
-                // Calcular tamaño de fuente según tamaño de celda
+                // Calcular tamaño de fuente según tamaño de celda (ajustado por zoom)
                 const minDim = Math.min(cell.width, cell.height);
-                const tickerSize = Math.max(10, Math.min(32, minDim / 4));
-                const changeSize = Math.max(8, Math.min(24, minDim / 5));
-                const showCategory = cell.height > 60 && cell.width > 80;
+                const tickerSize = Math.max(8, Math.min(28 * scale, minDim / 4));
+                const changeSize = Math.max(7, Math.min(20 * scale, minDim / 5));
+                const showCategory = cell.height > 50 && cell.width > 70;
                 
                 // Acortar nombre si es muy largo
                 let nombreMostrar = cell.nombre || cell.ticker;
-                const maxChars = Math.max(8, Math.floor(cell.width / 12));
+                const maxChars = Math.max(6, Math.floor(cell.width / (10 / scale)));
                 if (nombreMostrar.length > maxChars) {
                     nombreMostrar = nombreMostrar.substring(0, maxChars - 2) + '..';
                 }
@@ -418,8 +483,17 @@
                 div.addEventListener('mousemove', (e) => moveTooltip(e));
                 div.addEventListener('mouseleave', hideTooltip);
                 
-                container.appendChild(div);
+                // Touch events para móvil
+                div.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    showTooltip(e.touches[0], cell);
+                });
+                div.addEventListener('touchend', hideTooltip);
+                
+                innerContainer.appendChild(div);
             });
+            
+            container.appendChild(innerContainer);
         }
         
         // Tooltip functions

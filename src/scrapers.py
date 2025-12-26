@@ -18,6 +18,253 @@ HEADERS = {
     'Connection': 'keep-alive',
 }
 
+# Cache global para cambios diarios (evitar múltiples requests)
+_cambio_diario_cache: Dict[str, Dict[str, Any]] = {}
+_cache_timestamp: Optional[datetime] = None
+_CACHE_DURATION_MINUTES = 15
+
+
+def obtener_cambio_diario_yahoo(ticker_o_isin: str, es_isin: bool = False) -> Optional[float]:
+    """
+    Obtiene el cambio diario usando Yahoo Finance de forma robusta.
+    
+    Usa previousClose de fast_info que es más fiable que calcular
+    desde el histórico (que falla en festivos).
+    
+    Args:
+        ticker_o_isin: Ticker de Yahoo o ISIN
+        es_isin: True si es ISIN (para intentar buscar ticker)
+        
+    Returns:
+        float: Cambio porcentual (ej: 0.58 para +0.58%)
+        None: Si no se puede obtener
+    """
+    global _cambio_diario_cache, _cache_timestamp
+    
+    cache_key = ticker_o_isin
+    
+    # Verificar caché
+    if _cache_timestamp and (datetime.now() - _cache_timestamp).total_seconds() < _CACHE_DURATION_MINUTES * 60:
+        if cache_key in _cambio_diario_cache:
+            return _cambio_diario_cache[cache_key].get('cambio')
+    
+    try:
+        import yfinance as yf
+        
+        stock = yf.Ticker(ticker_o_isin)
+        info = stock.fast_info
+        
+        # Método 1: Usar previousClose y lastPrice de fast_info
+        last_price = getattr(info, 'last_price', None)
+        prev_close = getattr(info, 'previous_close', None)
+        
+        if last_price and prev_close and prev_close > 0:
+            cambio = ((last_price - prev_close) / prev_close) * 100
+            
+            # Guardar en caché
+            _cambio_diario_cache[cache_key] = {'cambio': cambio}
+            _cache_timestamp = datetime.now()
+            
+            print(f"[Yahoo fast_info] {ticker_o_isin}: {cambio:.2f}%")
+            return cambio
+        
+        # Método 2: Fallback al histórico pero verificando fechas
+        hist = stock.history(period='5d')
+        if not hist.empty and len(hist) >= 2:
+            # Verificar que los dos últimos días son consecutivos (máx 4 días de diferencia por fines de semana)
+            fecha_hoy = hist.index[-1]
+            fecha_ayer = hist.index[-2]
+            dias_diferencia = (fecha_hoy - fecha_ayer).days
+            
+            if dias_diferencia <= 4:  # Permitir hasta 4 días (viernes a lunes + festivo)
+                precio_ayer = float(hist['Close'].iloc[-2])
+                precio_hoy = float(hist['Close'].iloc[-1])
+                
+                if precio_ayer > 0:
+                    cambio = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                    
+                    _cambio_diario_cache[cache_key] = {'cambio': cambio}
+                    _cache_timestamp = datetime.now()
+                    
+                    print(f"[Yahoo history] {ticker_o_isin}: {cambio:.2f}% (gap: {dias_diferencia} días)")
+                    return cambio
+            else:
+                print(f"[Yahoo] Gap de {dias_diferencia} días detectado para {ticker_o_isin}, datos no fiables")
+                
+    except Exception as e:
+        print(f"[Yahoo] Error para {ticker_o_isin}: {e}")
+    
+    return None
+
+
+def obtener_cambio_diario_justetf(isin: str) -> Optional[float]:
+    """
+    Obtiene el cambio diario (%) de JustETF.
+    
+    NOTA: JustETF carga el dato con JavaScript, así que esta función
+    intenta obtenerlo de fuentes alternativas o del histórico.
+    
+    Para la mejor precisión, usamos múltiples métodos:
+    1. API de JustETF (si disponible)
+    2. Yahoo Finance con ISIN
+    3. Histórico de JustETF (último recurso)
+    
+    Returns:
+        float: Cambio porcentual (ej: 0.58 para +0.58%)
+        None: Si no se puede obtener
+    """
+    global _cambio_diario_cache, _cache_timestamp
+    
+    # Verificar caché
+    if _cache_timestamp and (datetime.now() - _cache_timestamp).total_seconds() < _CACHE_DURATION_MINUTES * 60:
+        if isin in _cambio_diario_cache:
+            return _cambio_diario_cache[isin].get('cambio')
+    
+    # Método 1: Intentar obtener de la API de JustETF
+    cambio = _obtener_cambio_api_justetf(isin)
+    if cambio is not None:
+        _cambio_diario_cache[isin] = {'cambio': cambio}
+        _cache_timestamp = datetime.now()
+        return cambio
+    
+    # Método 2: Intentar Yahoo Finance con el ISIN
+    cambio = obtener_cambio_diario_yahoo(isin)
+    if cambio is not None:
+        _cambio_diario_cache[isin] = {'cambio': cambio}
+        _cache_timestamp = datetime.now()
+        return cambio
+    
+    # Método 3: Histórico de JustETF (menos preciso pero funciona)
+    cambio = _obtener_cambio_historico_justetf(isin)
+    if cambio is not None:
+        _cambio_diario_cache[isin] = {'cambio': cambio}
+        _cache_timestamp = datetime.now()
+        return cambio
+    
+    return None
+
+
+def _obtener_cambio_api_justetf(isin: str) -> Optional[float]:
+    """Intenta obtener cambio diario de la API de JustETF"""
+    try:
+        # Intentar la API de performance
+        url = f"https://www.justetf.com/api/etfs/{isin}/performance-chart"
+        params = {
+            'locale': 'es',
+            'currency': 'EUR',
+            'valuesType': 'MARKET_VALUE',
+            'dateFrom': (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d'),
+            'dateTo': datetime.now().strftime('%Y-%m-%d')
+        }
+        
+        response = requests.get(url, params=params, headers=HEADERS, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            series = data.get('series', [])
+            
+            if series and len(series) >= 2:
+                # Obtener últimos dos puntos
+                ultimo = series[-1]
+                penultimo = series[-2]
+                
+                precio_hoy = ultimo.get('value', {}).get('raw', 0)
+                precio_ayer = penultimo.get('value', {}).get('raw', 0)
+                
+                if precio_ayer > 0:
+                    cambio = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                    print(f"[JustETF API] {isin}: {cambio:.2f}%")
+                    return cambio
+                    
+    except Exception as e:
+        print(f"[JustETF API] Error para {isin}: {e}")
+    
+    return None
+
+
+def _obtener_cambio_historico_justetf(isin: str) -> Optional[float]:
+    """Obtiene cambio diario del histórico de JustETF"""
+    try:
+        scraper = JustETFScraper()
+        historico = scraper.obtener_historico(isin, periodo='1mo')
+        
+        if historico and historico.get('precios') and len(historico['precios']) >= 2:
+            precios = historico['precios']
+            fechas = historico.get('fechas', [])
+            
+            # Verificar que las fechas son consecutivas (máx 4 días)
+            if len(fechas) >= 2:
+                try:
+                    fecha_hoy = datetime.strptime(fechas[-1], '%Y-%m-%d')
+                    fecha_ayer = datetime.strptime(fechas[-2], '%Y-%m-%d')
+                    dias_diferencia = (fecha_hoy - fecha_ayer).days
+                    
+                    if dias_diferencia > 4:
+                        print(f"[JustETF histórico] Gap de {dias_diferencia} días para {isin}")
+                        return None
+                except:
+                    pass
+            
+            precio_ayer = precios[-2]
+            precio_hoy = precios[-1]
+            
+            if precio_ayer > 0:
+                cambio = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                print(f"[JustETF histórico] {isin}: {cambio:.2f}%")
+                return cambio
+                
+    except Exception as e:
+        print(f"[JustETF histórico] Error para {isin}: {e}")
+    
+    return None
+
+
+def _parsear_cambio_porcentual(texto: str) -> Optional[float]:
+    """
+    Parsea texto de cambio porcentual.
+    
+    Ejemplos:
+        "+0,58%" -> 0.58
+        "-0,85%" -> -0.85
+        "0,00%" -> 0.0
+    """
+    try:
+        if not texto:
+            return None
+        
+        limpio = texto.strip()
+        limpio = limpio.replace('%', '').strip()
+        limpio = limpio.replace('+', '')
+        limpio = limpio.replace(',', '.')
+        limpio = limpio.replace(' ', '')
+        
+        return float(limpio)
+    except (ValueError, AttributeError):
+        return None
+
+
+def obtener_cambios_diarios_batch(isins: list) -> Dict[str, Optional[float]]:
+    """
+    Obtiene cambios diarios para múltiples ISINs.
+    
+    Args:
+        isins: Lista de códigos ISIN
+        
+    Returns:
+        Dict con {isin: cambio_porcentual}
+    """
+    resultados = {}
+    
+    for isin in isins:
+        try:
+            cambio = obtener_cambio_diario_justetf(isin)
+            resultados[isin] = cambio
+        except Exception as e:
+            print(f"[Batch] Error para {isin}: {e}")
+            resultados[isin] = None
+    
+    return resultados
+
 
 class MorningstarScraper:
     """Scraper para obtener precios de Morningstar"""
@@ -614,7 +861,7 @@ class JustETFScraper:
                             
                             if fecha and precio:
                                 fechas.append(fecha)
-                                precios.append(round(float(precio), 4))  # 4 decimales para mejor precisión
+                                precios.append(round(float(precio), 2))
                     
                     if fechas and precios:
                         print(f"[justETF] API OK: {len(fechas)} puntos extraídos (precio actual: {precios[-1]}€)")

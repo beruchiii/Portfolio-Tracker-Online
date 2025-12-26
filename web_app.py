@@ -162,66 +162,62 @@ CACHE_DURATION_MINUTES = 15
 
 def obtener_cambio_diario_unificado(ticker: str, isin: str = None) -> float:
     """
-    Obtiene el cambio diario usando la MISMA lógica que funciona en la página explorar.
-    Replica exactamente el comportamiento de /api/historical + cálculo de explorar.html
+    Obtiene el cambio diario EXACTAMENTE como lo hace /api/historical:
+    Yahoo Finance acepta ISINs como ticker directamente.
     
     Returns:
         float: Porcentaje de cambio diario, o None si no se puede calcular
     """
     try:
+        # Usar ticker o isin como identificador (igual que /api/historical)
+        identificador = ticker if ticker else isin
+        if not identificador or identificador in ['null', 'undefined', 'none', '']:
+            print(f"[CambioDiario] Sin identificador válido")
+            return None
+            
+        print(f"[CambioDiario] Procesando identificador={identificador}, isin={isin}")
+        
         precios = []
         
-        # Detectar si el ticker es realmente un ISIN (para casos donde no hay ticker real)
-        es_isin_como_ticker = ticker and len(ticker) == 12 and ticker[:2].isalpha() and ticker[2:].replace('-','').isalnum()
+        # 1. Intentar Yahoo Finance primero (igual que /api/historical línea 4365-4371)
+        # Yahoo acepta ISINs directamente como ticker
+        try:
+            hist = price_fetcher.obtener_historico(identificador, '1y')
+            if hist is not None and not hist.empty and len(hist) >= 2:
+                precios = hist['Close'].tolist()
+                print(f"[CambioDiario] Yahoo OK: {len(precios)} precios, últimos: {precios[-2]:.4f} -> {precios[-1]:.4f}")
+        except Exception as e:
+            print(f"[CambioDiario] Yahoo error: {e}")
         
-        # Si no tenemos isin pero ticker parece ISIN, usarlo como ISIN
-        if es_isin_como_ticker and not isin:
-            isin = ticker
-            ticker = None
-        
-        # Si ticker es igual al isin, no tenemos ticker real
-        if ticker == isin:
-            ticker = None
-            
-        print(f"[CambioDiario] Procesando ticker={ticker}, isin={isin}")
-        
-        # 1. Si tenemos ISIN, usar JustETF (igual que /api/historical cuando no hay datos de Yahoo)
-        if isin:
+        # 2. Si Yahoo no tiene datos y hay ISIN, usar JustETF como fallback
+        if not precios and isin:
             try:
                 from src.scrapers import JustETFScraper
                 justetf = JustETFScraper()
-                # Usar '1y' como en explorar.html línea 550
                 historico = justetf.obtener_historico(isin, '1y')
                 if historico and historico.get('precios') and len(historico['precios']) >= 2:
                     precios = historico['precios']
-                    print(f"[CambioDiario] JustETF OK para {isin}: {len(precios)} precios")
+                    print(f"[CambioDiario] JustETF OK: {len(precios)} precios, últimos: {precios[-2]:.4f} -> {precios[-1]:.4f}")
             except Exception as e:
-                print(f"[CambioDiario] JustETF error para {isin}: {e}")
+                print(f"[CambioDiario] JustETF error: {e}")
         
-        # 2. Si no hay precios de JustETF y tenemos ticker real, usar Yahoo Finance
-        if not precios and ticker:
-            try:
-                hist = price_fetcher.obtener_historico(ticker, '1y')
-                if hist is not None and not hist.empty and len(hist) >= 2:
-                    precios = hist['Close'].tolist()
-                    print(f"[CambioDiario] Yahoo OK para {ticker}: {len(precios)} precios")
-            except Exception as e:
-                print(f"[CambioDiario] Yahoo error para {ticker}: {e}")
-        
-        # Calcular cambio con los últimos 2 precios (IGUAL que en explorar.html líneas 575-577)
+        # Calcular cambio con los últimos 2 precios
         if precios and len(precios) >= 2:
             precio_actual = precios[-1]
             precio_anterior = precios[-2]
+            
             if precio_anterior > 0:
                 cambio = ((precio_actual - precio_anterior) / precio_anterior) * 100
-                print(f"[CambioDiario] Cambio: ({precio_actual:.4f} - {precio_anterior:.4f}) / {precio_anterior:.4f} = {cambio:.2f}%")
+                print(f"[CambioDiario] Resultado: {cambio:.2f}%")
                 return round(cambio, 2)
         
-        print(f"[CambioDiario] Sin datos suficientes para {ticker}/{isin}")
+        print(f"[CambioDiario] Sin datos suficientes")
         return None
         
     except Exception as e:
-        print(f"[CambioDiario] Error general para {ticker}/{isin}: {e}")
+        print(f"[CambioDiario] Error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -1000,7 +996,10 @@ def api_favoritos():
                     fav['cambio_desde_agregado'] = None
                     
                 # Cambio diario - usar función unificada (misma lógica que explorar)
-                fav['cambio_diario'] = obtener_cambio_diario_unificado(ticker, isin)
+                print(f"[Favoritos] Calculando cambio diario para {fav.get('nombre')} - ticker={ticker}, isin={isin}")
+                cambio_diario = obtener_cambio_diario_unificado(ticker, isin)
+                print(f"[Favoritos] Cambio diario obtenido: {cambio_diario}")
+                fav['cambio_diario'] = cambio_diario
                 
         except Exception as e:
             print(f"Error obteniendo precio de favorito {fav.get('nombre')}: {e}")

@@ -162,14 +162,14 @@ CACHE_DURATION_MINUTES = 15
 
 def obtener_cambio_diario_unificado(ticker: str, isin: str = None) -> float:
     """
-    Obtiene el cambio diario EXACTAMENTE como lo hace /api/historical:
-    Yahoo Finance acepta ISINs como ticker directamente.
+    Obtiene el cambio diario (últimos 2 días de trading).
+    Usa periodo corto (5d) para obtener datos precisos del día.
     
     Returns:
         float: Porcentaje de cambio diario, o None si no se puede calcular
     """
     try:
-        # Usar ticker o isin como identificador (igual que /api/historical)
+        # Usar ticker o isin como identificador
         identificador = ticker if ticker else isin
         if not identificador or identificador in ['null', 'undefined', 'none', '']:
             print(f"[CambioDiario] Sin identificador válido")
@@ -179,13 +179,14 @@ def obtener_cambio_diario_unificado(ticker: str, isin: str = None) -> float:
         
         precios = []
         
-        # 1. Intentar Yahoo Finance primero (igual que /api/historical línea 4365-4371)
-        # Yahoo acepta ISINs directamente como ticker
+        # 1. Intentar Yahoo Finance con periodo corto (5d) para datos precisos del día
         try:
-            hist = price_fetcher.obtener_historico(identificador, '1y')
+            import yfinance as yf
+            stock = yf.Ticker(identificador)
+            hist = stock.history(period='5d')
             if hist is not None and not hist.empty and len(hist) >= 2:
                 precios = hist['Close'].tolist()
-                print(f"[CambioDiario] Yahoo OK: {len(precios)} precios, últimos: {precios[-2]:.4f} -> {precios[-1]:.4f}")
+                print(f"[CambioDiario] Yahoo 5d OK: {len(precios)} precios, últimos: {precios[-2]:.4f} -> {precios[-1]:.4f}")
         except Exception as e:
             print(f"[CambioDiario] Yahoo error: {e}")
         
@@ -194,7 +195,7 @@ def obtener_cambio_diario_unificado(ticker: str, isin: str = None) -> float:
             try:
                 from src.scrapers import JustETFScraper
                 justetf = JustETFScraper()
-                historico = justetf.obtener_historico(isin, '1y')
+                historico = justetf.obtener_historico(isin, '1mo')  # 1 mes para tener suficientes datos
                 if historico and historico.get('precios') and len(historico['precios']) >= 2:
                     precios = historico['precios']
                     print(f"[CambioDiario] JustETF OK: {len(precios)} precios, últimos: {precios[-2]:.4f} -> {precios[-1]:.4f}")

@@ -157,6 +157,70 @@ CACHE_DURATION_MINUTES = 15
 
 
 # =============================================================================
+# FUNCIÓN AUXILIAR PARA CAMBIO DIARIO (misma lógica que explorar)
+# =============================================================================
+
+def obtener_cambio_diario_unificado(ticker: str, isin: str = None) -> float:
+    """
+    Obtiene el cambio diario usando la MISMA lógica que funciona en la página explorar.
+    Calcula (precio_actual - precio_anterior) / precio_anterior * 100
+    usando los últimos 2 precios del histórico.
+    
+    Returns:
+        float: Porcentaje de cambio diario, o None si no se puede calcular
+    """
+    try:
+        precios = []
+        
+        # 1. Para ETFs europeos (ISIN IE/LU/DE/FR/NL), usar JustETF primero
+        es_etf_europeo = isin and isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL']
+        
+        if es_etf_europeo:
+            try:
+                from src.scrapers import JustETFScraper
+                justetf = JustETFScraper()
+                historico = justetf.obtener_historico(isin, '1mo')
+                if historico and historico.get('precios') and len(historico['precios']) >= 2:
+                    precios = historico['precios']
+            except Exception as e:
+                print(f"[CambioDiario] JustETF error para {isin}: {e}")
+        
+        # 2. Si no hay precios y hay ticker válido, usar Yahoo Finance
+        if not precios and ticker and not ticker.startswith('IE'):
+            try:
+                hist = price_fetcher.obtener_historico(ticker, '1mo')
+                if hist is not None and not hist.empty and len(hist) >= 2:
+                    precios = hist['Close'].tolist()
+            except Exception as e:
+                print(f"[CambioDiario] Yahoo error para {ticker}: {e}")
+        
+        # 3. Si aún no hay precios y hay ISIN (no ETF europeo), intentar JustETF como fallback
+        if not precios and isin:
+            try:
+                from src.scrapers import JustETFScraper
+                justetf = JustETFScraper()
+                historico = justetf.obtener_historico(isin, '1mo')
+                if historico and historico.get('precios') and len(historico['precios']) >= 2:
+                    precios = historico['precios']
+            except Exception as e:
+                print(f"[CambioDiario] JustETF fallback error para {isin}: {e}")
+        
+        # Calcular cambio con los últimos 2 precios (IGUAL que en explorar.html líneas 575-577)
+        if precios and len(precios) >= 2:
+            precio_actual = precios[-1]
+            precio_anterior = precios[-2]
+            if precio_anterior > 0:
+                cambio = ((precio_actual - precio_anterior) / precio_anterior) * 100
+                return round(cambio, 2)
+        
+        return None
+        
+    except Exception as e:
+        print(f"[CambioDiario] Error general para {ticker}/{isin}: {e}")
+        return None
+
+
+# =============================================================================
 # AUTENTICACIÓN
 # =============================================================================
 
@@ -930,37 +994,8 @@ def api_favoritos():
                 else:
                     fav['cambio_desde_agregado'] = None
                     
-                # Cambio diario - calcular desde datos históricos (igual que en explorar)
-                cambio_diario = None
-                try:
-                    # Intentar obtener últimos 5 días de histórico
-                    import yfinance as yf
-                    
-                    # Primero intentar con ticker
-                    ticker_yf = ticker if ticker and not ticker.startswith('IE') else None
-                    
-                    if ticker_yf:
-                        stock = yf.Ticker(ticker_yf)
-                        hist = stock.history(period='5d')
-                        if len(hist) >= 2:
-                            precio_ayer = float(hist['Close'].iloc[-2])
-                            precio_hoy = float(hist['Close'].iloc[-1])
-                            cambio_diario = ((precio_hoy - precio_ayer) / precio_ayer) * 100
-                    
-                    # Si no funcionó y tenemos ISIN, intentar con JustETF
-                    if cambio_diario is None and isin:
-                        from src.scrapers import JustETFScraper
-                        scraper = JustETFScraper()
-                        historico = scraper.obtener_historico(isin, periodo='1m')
-                        if historico and len(historico.get('precios', [])) >= 2:
-                            precios = historico['precios']
-                            precio_ayer = precios[-2]
-                            precio_hoy = precios[-1]
-                            cambio_diario = ((precio_hoy - precio_ayer) / precio_ayer) * 100
-                except Exception as e:
-                    print(f"Error calculando cambio diario para {fav.get('nombre')}: {e}")
-                
-                fav['cambio_diario'] = cambio_diario
+                # Cambio diario - usar función unificada (misma lógica que explorar)
+                fav['cambio_diario'] = obtener_cambio_diario_unificado(ticker, isin)
                 
         except Exception as e:
             print(f"Error obteniendo precio de favorito {fav.get('nombre')}: {e}")
@@ -2110,59 +2145,58 @@ def api_portfolio_heatmap():
             cambio_pct = 0
             datos_encontrados = False
             
-            # Para ETFs europeos (ISIN IE/LU/DE), priorizar JustETF
-            es_etf_europeo = pos_original.isin and pos_original.isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL']
-            
-            # 1. Si es ETF europeo, intentar JustETF primero
-            if es_etf_europeo and pos_original.isin:
-                print(f"[Heatmap] ETF europeo detectado, usando JustETF para {pos_original.isin}...")
-                try:
-                    justetf_periodo = justetf_periods.get(periodo, '1mo')
-                    historico = justetf.obtener_historico(pos_original.isin, justetf_periodo)
-                    
-                    if historico and historico.get('precios') and len(historico['precios']) > 1:
-                        precios = historico['precios']
-                        fechas = historico.get('fechas', [])
+            # Para periodo '1d', usar la función unificada (misma lógica que explorar)
+            if periodo == '1d':
+                cambio = obtener_cambio_diario_unificado(pos_original.ticker, pos_original.isin)
+                if cambio is not None:
+                    cambio_pct = cambio
+                    datos_encontrados = True
+                    print(f"[Heatmap 1d] OK para {pos_original.ticker or pos_original.isin}: {cambio_pct:.2f}%")
+            else:
+                # Para otros periodos, mantener la lógica existente
+                # Para ETFs europeos (ISIN IE/LU/DE), priorizar JustETF
+                es_etf_europeo = pos_original.isin and pos_original.isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL']
+                
+                # 1. Si es ETF europeo, intentar JustETF primero
+                if es_etf_europeo and pos_original.isin:
+                    print(f"[Heatmap] ETF europeo detectado, usando JustETF para {pos_original.isin}...")
+                    try:
+                        justetf_periodo = justetf_periods.get(periodo, '1mo')
+                        historico = justetf.obtener_historico(pos_original.isin, justetf_periodo)
                         
-                        # Encontrar precio de inicio según período
-                        if periodo == 'ytd':
-                            year_start = f"{datetime.now().year}-01"
-                            precio_inicio = precios[0]
-                            for i, fecha in enumerate(fechas):
-                                if fecha.startswith(year_start):
-                                    precio_inicio = precios[i]
-                                    break
-                        elif periodo == '1m':
-                            precio_inicio = precios[0]
-                        elif periodo == '1w':
-                            idx = max(0, len(precios) - 5)
-                            precio_inicio = precios[idx]
-                        else:  # 1d
-                            precio_inicio = precios[-2] if len(precios) >= 2 else precios[0]
-                        
-                        precio_actual = precios[-1]
-                        if precio_inicio > 0:
-                            cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
-                            datos_encontrados = True
-                            print(f"[Heatmap] JustETF OK para {pos_original.isin}: {cambio_pct:.2f}%")
-                except Exception as e:
-                    print(f"[Heatmap] JustETF error para {pos_original.isin}: {e}")
-            
-            # 2. Si no es ETF europeo o JustETF falló, intentar Yahoo Finance
-            if not datos_encontrados and pos_original.ticker:
-                try:
-                    ticker = yf.Ticker(pos_original.ticker)
-                    
-                    if periodo == '1d':
-                        hist = ticker.history(period='5d')
-                        if not hist.empty and len(hist) >= 2:
-                            precio_anterior = float(hist['Close'].iloc[-2])
-                            precio_hoy = float(hist['Close'].iloc[-1])
-                            if precio_anterior > 0 and precio_hoy > 0:
-                                cambio_pct = ((precio_hoy - precio_anterior) / precio_anterior) * 100
+                        if historico and historico.get('precios') and len(historico['precios']) > 1:
+                            precios = historico['precios']
+                            fechas = historico.get('fechas', [])
+                            
+                            # Encontrar precio de inicio según período
+                            if periodo == 'ytd':
+                                year_start = f"{datetime.now().year}-01"
+                                precio_inicio = precios[0]
+                                for i, fecha in enumerate(fechas):
+                                    if fecha.startswith(year_start):
+                                        precio_inicio = precios[i]
+                                        break
+                            elif periodo == '1m':
+                                precio_inicio = precios[0]
+                            elif periodo == '1w':
+                                idx = max(0, len(precios) - 5)
+                                precio_inicio = precios[idx]
+                            else:
+                                precio_inicio = precios[-2] if len(precios) >= 2 else precios[0]
+                            
+                            precio_actual = precios[-1]
+                            if precio_inicio > 0:
+                                cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
                                 datos_encontrados = True
-                                print(f"[Heatmap] Yahoo OK para {pos_original.ticker}: {cambio_pct:.2f}%")
-                    else:
+                                print(f"[Heatmap] JustETF OK para {pos_original.isin}: {cambio_pct:.2f}%")
+                    except Exception as e:
+                        print(f"[Heatmap] JustETF error para {pos_original.isin}: {e}")
+                
+                # 2. Si no es ETF europeo o JustETF falló, intentar Yahoo Finance
+                if not datos_encontrados and pos_original.ticker:
+                    try:
+                        ticker = yf.Ticker(pos_original.ticker)
+                        
                         if periodo == 'ytd':
                             start_date = datetime(datetime.now().year, 1, 1)
                             hist = ticker.history(start=start_date)
@@ -2176,48 +2210,45 @@ def api_portfolio_heatmap():
                                 cambio_pct = ((precio_fin - precio_inicio) / precio_inicio) * 100
                                 datos_encontrados = True
                                 print(f"[Heatmap] Yahoo OK para {pos_original.ticker}: {cambio_pct:.2f}%")
-                except Exception as e:
-                    print(f"[Heatmap] Yahoo error para {pos_original.ticker}: {e}")
-            
-            # 2. Fallback a justETF si Yahoo no devolvió datos Y hay ISIN
-            if not datos_encontrados and pos_original.isin:
-                print(f"[Heatmap] Yahoo sin datos, intentando justETF para {pos_original.isin}...")
-                try:
-                    justetf_periodo = justetf_periods.get(periodo, '1mo')
-                    historico = justetf.obtener_historico(pos_original.isin, justetf_periodo)
-                    
-                    if historico and historico.get('precios') and len(historico['precios']) > 1:
-                        precios = historico['precios']
-                        fechas = historico['fechas']
+                    except Exception as e:
+                        print(f"[Heatmap] Yahoo error para {pos_original.ticker}: {e}")
+                
+                # 3. Fallback a justETF si Yahoo no devolvió datos Y hay ISIN
+                if not datos_encontrados and pos_original.isin:
+                    print(f"[Heatmap] Yahoo sin datos, intentando justETF para {pos_original.isin}...")
+                    try:
+                        justetf_periodo = justetf_periods.get(periodo, '1mo')
+                        historico = justetf.obtener_historico(pos_original.isin, justetf_periodo)
                         
-                        # Encontrar precio de inicio según período
-                        if periodo == 'ytd':
-                            # Buscar precio más cercano al 1 de enero
-                            year_start = f"{datetime.now().year}-01"
-                            precio_inicio = precios[0]
-                            for i, fecha in enumerate(fechas):
-                                if fecha.startswith(year_start):
-                                    precio_inicio = precios[i]
-                                    break
-                        elif periodo == '1m':
-                            precio_inicio = precios[0]
-                        elif periodo == '1w':
-                            # Últimos 5 días de mercado aprox
-                            idx = max(0, len(precios) - 5)
-                            precio_inicio = precios[idx]
-                        else:  # 1d
-                            # Penúltimo precio
-                            precio_inicio = precios[-2] if len(precios) >= 2 else precios[0]
-                        
-                        precio_actual = precios[-1]
-                        if precio_inicio > 0:
-                            cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
-                            datos_encontrados = True
-                            print(f"[Heatmap] justETF OK para {pos_original.isin}: {cambio_pct:.2f}%")
-                    else:
-                        print(f"[Heatmap] justETF sin datos para {pos_original.isin}")
-                except Exception as e:
-                    print(f"[Heatmap] justETF error para {pos_original.isin}: {e}")
+                        if historico and historico.get('precios') and len(historico['precios']) > 1:
+                            precios = historico['precios']
+                            fechas = historico['fechas']
+                            
+                            # Encontrar precio de inicio según período
+                            if periodo == 'ytd':
+                                year_start = f"{datetime.now().year}-01"
+                                precio_inicio = precios[0]
+                                for i, fecha in enumerate(fechas):
+                                    if fecha.startswith(year_start):
+                                        precio_inicio = precios[i]
+                                        break
+                            elif periodo == '1m':
+                                precio_inicio = precios[0]
+                            elif periodo == '1w':
+                                idx = max(0, len(precios) - 5)
+                                precio_inicio = precios[idx]
+                            else:
+                                precio_inicio = precios[-2] if len(precios) >= 2 else precios[0]
+                            
+                            precio_actual = precios[-1]
+                            if precio_inicio > 0:
+                                cambio_pct = ((precio_actual - precio_inicio) / precio_inicio) * 100
+                                datos_encontrados = True
+                                print(f"[Heatmap] justETF OK para {pos_original.isin}: {cambio_pct:.2f}%")
+                        else:
+                            print(f"[Heatmap] justETF sin datos para {pos_original.isin}")
+                    except Exception as e:
+                        print(f"[Heatmap] justETF error para {pos_original.isin}: {e}")
             
             # Calcular peso en cartera
             peso = (pos_actual.valor_actual / valor_total * 100) if valor_total > 0 else 0

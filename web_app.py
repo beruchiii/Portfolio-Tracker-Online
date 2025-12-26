@@ -4369,6 +4369,28 @@ def api_historical(ticker):
     
     historico = None
     fuente = 'yahoo'
+    cambio_diario = None  # Nuevo: cambio diario calculado correctamente
+    
+    # Determinar si es ETF europeo
+    es_etf_europeo = isin and isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL', 'GB']
+    
+    # Calcular cambio diario usando la lógica mejorada
+    try:
+        from src.scrapers import obtener_cambio_diario_justetf, obtener_cambio_diario_yahoo
+        
+        if es_etf_europeo and isin:
+            # Para ETFs europeos, usar JustETF
+            cambio_diario = obtener_cambio_diario_justetf(isin)
+            if cambio_diario is not None:
+                print(f"[Historical] Cambio diario de JustETF: {cambio_diario:.2f}%")
+        
+        if cambio_diario is None and ticker and ticker not in ['null', 'undefined', 'none', '']:
+            # Para otros activos, usar Yahoo
+            cambio_diario = obtener_cambio_diario_yahoo(ticker)
+            if cambio_diario is not None:
+                print(f"[Historical] Cambio diario de Yahoo: {cambio_diario:.2f}%")
+    except Exception as e:
+        print(f"[Historical] Error calculando cambio diario: {e}")
     
     # 1. Intentar con Yahoo Finance si hay ticker válido
     if ticker and ticker not in ['null', 'undefined', 'none', '']:
@@ -4422,7 +4444,8 @@ def api_historical(ticker):
                     'data': {
                         'fechas': resultado['fechas'],
                         'precios': [round(p, 2) for p in resultado['precios']],
-                        'nombre': nombre_etf
+                        'nombre': nombre_etf,
+                        'cambio_diario': round(cambio_diario, 2) if cambio_diario is not None else None
                     },
                     'fuente': 'justetf'
                 })
@@ -4438,7 +4461,8 @@ def api_historical(ticker):
     # Convertir a formato para Chart.js
     data = {
         'fechas': [d.strftime('%Y-%m-%d') for d in historico.index],
-        'precios': [round(p, 2) for p in historico['Close'].tolist()]
+        'precios': [round(p, 2) for p in historico['Close'].tolist()],
+        'cambio_diario': round(cambio_diario, 2) if cambio_diario is not None else None
     }
     
     # Añadir volumen si está disponible

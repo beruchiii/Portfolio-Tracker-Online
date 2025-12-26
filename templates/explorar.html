@@ -573,8 +573,15 @@
                 document.getElementById('activo-ticker').textContent = `${ticker}${isin ? ' • ' + isin : ''}`;
                 
                 const precioActual = result.data.precios[result.data.precios.length - 1];
-                const precioAnterior = result.data.precios[result.data.precios.length - 2] || precioActual;
-                const cambio = ((precioActual - precioAnterior) / precioAnterior) * 100;
+                // Usar cambio_diario del backend si está disponible (más preciso)
+                let cambio;
+                if (result.data.cambio_diario !== null && result.data.cambio_diario !== undefined) {
+                    cambio = result.data.cambio_diario;
+                } else {
+                    // Fallback: calcular desde histórico
+                    const precioAnterior = result.data.precios[result.data.precios.length - 2] || precioActual;
+                    cambio = ((precioActual - precioAnterior) / precioAnterior) * 100;
+                }
                 
                 document.getElementById('activo-precio').textContent = precioActual.toFixed(2) + '€';
                 document.getElementById('activo-cambio').innerHTML = `

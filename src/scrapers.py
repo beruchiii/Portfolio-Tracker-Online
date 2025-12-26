@@ -614,7 +614,7 @@ class JustETFScraper:
                             
                             if fecha and precio:
                                 fechas.append(fecha)
-                                precios.append(round(float(precio), 2))
+                                precios.append(round(float(precio), 4))  # 4 decimales para mejor precisión
                     
                     if fechas and precios:
                         print(f"[justETF] API OK: {len(fechas)} puntos extraídos (precio actual: {precios[-1]}€)")

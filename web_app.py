@@ -163,8 +163,7 @@ CACHE_DURATION_MINUTES = 15
 def obtener_cambio_diario_unificado(ticker: str, isin: str = None) -> float:
     """
     Obtiene el cambio diario usando la MISMA lógica que funciona en la página explorar.
-    Calcula (precio_actual - precio_anterior) / precio_anterior * 100
-    usando los últimos 2 precios del histórico.
+    Replica exactamente el comportamiento de /api/historical + cálculo de explorar.html
     
     Returns:
         float: Porcentaje de cambio diario, o None si no se puede calcular
@@ -172,38 +171,42 @@ def obtener_cambio_diario_unificado(ticker: str, isin: str = None) -> float:
     try:
         precios = []
         
-        # 1. Para ETFs europeos (ISIN IE/LU/DE/FR/NL), usar JustETF primero
-        es_etf_europeo = isin and isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL']
+        # Detectar si el ticker es realmente un ISIN (para casos donde no hay ticker real)
+        es_isin_como_ticker = ticker and len(ticker) == 12 and ticker[:2].isalpha() and ticker[2:].replace('-','').isalnum()
         
-        if es_etf_europeo:
+        # Si no tenemos isin pero ticker parece ISIN, usarlo como ISIN
+        if es_isin_como_ticker and not isin:
+            isin = ticker
+            ticker = None
+        
+        # Si ticker es igual al isin, no tenemos ticker real
+        if ticker == isin:
+            ticker = None
+            
+        print(f"[CambioDiario] Procesando ticker={ticker}, isin={isin}")
+        
+        # 1. Si tenemos ISIN, usar JustETF (igual que /api/historical cuando no hay datos de Yahoo)
+        if isin:
             try:
                 from src.scrapers import JustETFScraper
                 justetf = JustETFScraper()
-                historico = justetf.obtener_historico(isin, '1mo')
+                # Usar '1y' como en explorar.html línea 550
+                historico = justetf.obtener_historico(isin, '1y')
                 if historico and historico.get('precios') and len(historico['precios']) >= 2:
                     precios = historico['precios']
+                    print(f"[CambioDiario] JustETF OK para {isin}: {len(precios)} precios")
             except Exception as e:
                 print(f"[CambioDiario] JustETF error para {isin}: {e}")
         
-        # 2. Si no hay precios y hay ticker válido, usar Yahoo Finance
-        if not precios and ticker and not ticker.startswith('IE'):
+        # 2. Si no hay precios de JustETF y tenemos ticker real, usar Yahoo Finance
+        if not precios and ticker:
             try:
-                hist = price_fetcher.obtener_historico(ticker, '1mo')
+                hist = price_fetcher.obtener_historico(ticker, '1y')
                 if hist is not None and not hist.empty and len(hist) >= 2:
                     precios = hist['Close'].tolist()
+                    print(f"[CambioDiario] Yahoo OK para {ticker}: {len(precios)} precios")
             except Exception as e:
                 print(f"[CambioDiario] Yahoo error para {ticker}: {e}")
-        
-        # 3. Si aún no hay precios y hay ISIN (no ETF europeo), intentar JustETF como fallback
-        if not precios and isin:
-            try:
-                from src.scrapers import JustETFScraper
-                justetf = JustETFScraper()
-                historico = justetf.obtener_historico(isin, '1mo')
-                if historico and historico.get('precios') and len(historico['precios']) >= 2:
-                    precios = historico['precios']
-            except Exception as e:
-                print(f"[CambioDiario] JustETF fallback error para {isin}: {e}")
         
         # Calcular cambio con los últimos 2 precios (IGUAL que en explorar.html líneas 575-577)
         if precios and len(precios) >= 2:
@@ -211,8 +214,10 @@ def obtener_cambio_diario_unificado(ticker: str, isin: str = None) -> float:
             precio_anterior = precios[-2]
             if precio_anterior > 0:
                 cambio = ((precio_actual - precio_anterior) / precio_anterior) * 100
+                print(f"[CambioDiario] Cambio: ({precio_actual:.4f} - {precio_anterior:.4f}) / {precio_anterior:.4f} = {cambio:.2f}%")
                 return round(cambio, 2)
         
+        print(f"[CambioDiario] Sin datos suficientes para {ticker}/{isin}")
         return None
         
     except Exception as e:

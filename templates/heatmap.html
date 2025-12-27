@@ -248,6 +248,7 @@
             <button class="period-btn hidden sm:block" data-period="1w" onclick="changePeriod('1w')">Sem</button>
             <button class="period-btn" data-period="1m" onclick="changePeriod('1m')">Mes</button>
             <button class="period-btn" data-period="ytd" onclick="changePeriod('ytd')">YTD</button>
+            <span id="mensaje-cierre" class="hidden text-xs text-gray-400 ml-2"></span>
         </div>
         
         <div class="flex items-center gap-2">
@@ -510,6 +511,11 @@
                 ? `<div class="font-semibold text-yellow-400">Sin datos ⚠️</div>`
                 : `<div class="font-semibold ${data.cambio >= 0 ? 'text-green-400' : 'text-red-400'}">${data.cambio >= 0 ? '+' : ''}${data.cambio.toFixed(2)}%</div>`;
             
+            // Mostrar mensaje de cierre para periodo 1d
+            const mensajeCierreHtml = (currentPeriod === '1d' && mensajeCierre) 
+                ? `<div class="text-xs text-gray-500 mt-1">${mensajeCierre}</div>` 
+                : '';
+            
             tooltip.innerHTML = `
                 <div class="font-bold text-lg mb-2">${data.nombre}</div>
                 <div class="text-gray-400 text-sm mb-2">${data.ticker} · ${data.categoria || 'Sin categoría'}</div>
@@ -522,6 +528,7 @@
                     <div>
                         <div class="text-gray-400">${periodText}</div>
                         ${cambioHtml}
+                        ${mensajeCierreHtml}
                     </div>
                     <div>
                         <div class="text-gray-400">Cantidad</div>
@@ -556,6 +563,8 @@
         }
         
         // Cargar datos del heatmap
+        let mensajeCierre = null;
+        
         async function loadHeatmap() {
             document.getElementById('loading').classList.remove('hidden');
             
@@ -565,7 +574,11 @@
                 
                 if (result.success) {
                     heatmapData = result.data;
+                    mensajeCierre = result.mensaje_cierre;
                     renderHeatmap(heatmapData);
+                    
+                    // Actualizar mensaje de cierre en el header
+                    updateMensajeCierre();
                 } else {
                     console.error('Error:', result.error);
                 }
@@ -573,6 +586,18 @@
                 console.error('Error loading heatmap:', error);
             } finally {
                 document.getElementById('loading').classList.add('hidden');
+            }
+        }
+        
+        function updateMensajeCierre() {
+            const msgElement = document.getElementById('mensaje-cierre');
+            if (msgElement) {
+                if (currentPeriod === '1d' && mensajeCierre) {
+                    msgElement.textContent = mensajeCierre;
+                    msgElement.classList.remove('hidden');
+                } else {
+                    msgElement.classList.add('hidden');
+                }
             }
         }
         

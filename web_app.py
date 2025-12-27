@@ -2139,6 +2139,7 @@ def api_portfolio_heatmap():
         
         # Para periodo 1d, obtener cambios de JustETF en batch (más eficiente)
         cambios_justetf = {}
+        mensaje_cierre_global = None
         if periodo == '1d':
             isins_etf = [p.isin for p in portfolio.posiciones if p.isin and p.isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL', 'GB']]
             if isins_etf:
@@ -2147,6 +2148,24 @@ def api_portfolio_heatmap():
                     cambios_justetf = obtener_cambios_diarios_batch(isins_etf)
                 except Exception as e:
                     print(f"[Heatmap] Error en batch JustETF: {e}")
+            
+            # Generar mensaje de cierre global
+            from src.scrapers import obtener_cambio_diario_con_info
+            ahora = datetime.now()
+            es_fin_de_semana = ahora.weekday() >= 5
+            hora_actual = ahora.hour
+            fuera_horario = hora_actual < 8 or hora_actual >= 22
+            meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+            
+            if es_fin_de_semana or fuera_horario:
+                if es_fin_de_semana:
+                    dias_desde_viernes = ahora.weekday() - 4
+                    if dias_desde_viernes < 0:
+                        dias_desde_viernes += 7
+                    ultimo_dia = ahora - timedelta(days=dias_desde_viernes)
+                    mensaje_cierre_global = f"Al cierre: {ultimo_dia.day} {meses[ultimo_dia.month-1]} {ultimo_dia.year} · Mercado cerrado"
+                else:
+                    mensaje_cierre_global = f"Al cierre: {ahora.day} {meses[ahora.month-1]} {ahora.year} · Mercado cerrado"
         
         for pos_actual in posiciones_actualizadas:
             # Buscar posición original
@@ -2164,6 +2183,8 @@ def api_portfolio_heatmap():
             # PERIODO 1D: Usar JustETF directamente (dato más preciso)
             # ============================================================
             if periodo == '1d':
+                es_crypto = pos_original.categoria and 'crypto' in pos_original.categoria.lower()
+                
                 # 1. Para ETFs europeos: usar cambio directo de JustETF
                 if es_etf_europeo and pos_original.isin:
                     # Primero intentar del batch
@@ -2182,7 +2203,17 @@ def api_portfolio_heatmap():
                         except Exception as e:
                             print(f"[Heatmap] JustETF error para {pos_original.isin}: {e}")
                 
-                # 2. Para otros activos: usar Yahoo Finance con lógica mejorada
+                # 2. Si es crypto y el cambio es 0% (mercado cerrado), usar BTC-USD como aproximación
+                if es_crypto and datos_encontrados and cambio_pct == 0:
+                    try:
+                        cambio_btc = obtener_cambio_diario_yahoo('BTC-USD')
+                        if cambio_btc is not None and cambio_btc != 0:
+                            cambio_pct = cambio_btc
+                            print(f"[Heatmap] Crypto {pos_original.isin} mercado cerrado, usando BTC-USD: {cambio_pct:.2f}%")
+                    except Exception as e:
+                        print(f"[Heatmap] Error BTC-USD fallback: {e}")
+                
+                # 3. Para otros activos: usar Yahoo Finance con lógica mejorada
                 if not datos_encontrados and pos_original.ticker:
                     try:
                         cambio = obtener_cambio_diario_yahoo(pos_original.ticker)
@@ -2308,7 +2339,8 @@ def api_portfolio_heatmap():
             'success': True,
             'data': heatmap_data,
             'periodo': periodo,
-            'valor_total': round(valor_total, 2)
+            'valor_total': round(valor_total, 2),
+            'mensaje_cierre': mensaje_cierre_global
         })
         
     except Exception as e:

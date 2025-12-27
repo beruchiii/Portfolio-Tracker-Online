@@ -161,6 +161,10 @@ def obtener_cambio_diario_con_info(isin: str) -> Dict[str, Any]:
         'mensaje': ''
     }
     
+    fecha_ultimo = None
+    meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 
+            'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+    
     try:
         # Obtener datos del histórico para tener la fecha
         url = f"https://www.justetf.com/api/etfs/{isin}/performance-chart"
@@ -188,48 +192,71 @@ def obtener_cambio_diario_con_info(isin: str) -> Dict[str, Any]:
                 
                 if precio_ayer > 0:
                     resultado['cambio'] = ((precio_hoy - precio_ayer) / precio_ayer) * 100
-                
-                # Formatear fecha
-                if fecha_ultimo:
-                    try:
-                        fecha_obj = datetime.strptime(fecha_ultimo, '%Y-%m-%d')
-                        # Formato: "23 dic 2025"
-                        meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 
-                                'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-                        fecha_formateada = f"{fecha_obj.day} {meses[fecha_obj.month-1]} {fecha_obj.year}"
-                        resultado['fecha_cierre'] = fecha_formateada
-                        
-                        # Verificar si el mercado está cerrado
-                        ahora = datetime.now()
-                        es_fin_de_semana = ahora.weekday() >= 5  # Sábado=5, Domingo=6
-                        
-                        # Horario de gettex: 8:00-22:00 CET
-                        hora_actual = ahora.hour
-                        fuera_horario = hora_actual < 8 or hora_actual >= 22
-                        
-                        # Si la fecha del último dato es anterior a hoy, el mercado cerró
-                        fecha_hoy = ahora.strftime('%Y-%m-%d')
-                        mercado_cerrado = (fecha_ultimo < fecha_hoy) or es_fin_de_semana or fuera_horario
-                        resultado['mercado_cerrado'] = mercado_cerrado
-                        
-                        # Construir mensaje
-                        if mercado_cerrado:
-                            resultado['mensaje'] = f"Al cierre: {fecha_formateada} · Mercado cerrado"
-                        else:
-                            resultado['mensaje'] = f"Al cierre: {fecha_formateada}"
-                            
-                    except Exception as e:
-                        print(f"[Info] Error parseando fecha {fecha_ultimo}: {e}")
-                        resultado['fecha_cierre'] = fecha_ultimo
-                        resultado['mensaje'] = f"Al cierre: {fecha_ultimo}"
-        
-        # Si no obtuvimos cambio del histórico, intentar otros métodos
-        if resultado['cambio'] is None:
-            resultado['cambio'] = obtener_cambio_diario_justetf(isin)
-            
+                    print(f"[Info] JustETF histórico OK para {isin}: {resultado['cambio']:.2f}%")
+                    
     except Exception as e:
-        print(f"[Info] Error obteniendo info para {isin}: {e}")
+        print(f"[Info] Error obteniendo histórico JustETF para {isin}: {e}")
+    
+    # Si no obtuvimos cambio del histórico, intentar otros métodos
+    if resultado['cambio'] is None:
         resultado['cambio'] = obtener_cambio_diario_justetf(isin)
+        print(f"[Info] Usando fallback para {isin}: {resultado['cambio']}")
+    
+    # SIEMPRE generar mensaje de cierre
+    ahora = datetime.now()
+    es_fin_de_semana = ahora.weekday() >= 5  # Sábado=5, Domingo=6
+    hora_actual = ahora.hour
+    # Horario de gettex: 8:00-22:00 CET
+    fuera_horario = hora_actual < 8 or hora_actual >= 22
+    
+    # Si tenemos fecha del histórico de JustETF, usarla
+    if fecha_ultimo:
+        try:
+            fecha_obj = datetime.strptime(fecha_ultimo, '%Y-%m-%d')
+            fecha_formateada = f"{fecha_obj.day} {meses[fecha_obj.month-1]} {fecha_obj.year}"
+            resultado['fecha_cierre'] = fecha_formateada
+            
+            # Si la fecha del último dato es anterior a hoy, el mercado cerró
+            fecha_hoy = ahora.strftime('%Y-%m-%d')
+            mercado_cerrado = (fecha_ultimo < fecha_hoy) or es_fin_de_semana or fuera_horario
+            resultado['mercado_cerrado'] = mercado_cerrado
+            
+            if mercado_cerrado:
+                resultado['mensaje'] = f"Al cierre: {fecha_formateada} · Mercado cerrado"
+            else:
+                resultado['mensaje'] = f"Al cierre: {fecha_formateada}"
+        except Exception as e:
+            print(f"[Info] Error parseando fecha {fecha_ultimo}: {e}")
+    
+    # Si no tenemos fecha de JustETF, usar fecha de hoy o ayer según el día
+    if not resultado['mensaje']:
+        mercado_cerrado = es_fin_de_semana or fuera_horario
+        resultado['mercado_cerrado'] = mercado_cerrado
+        
+        # Si es fin de semana, el último día de mercado fue el viernes
+        if es_fin_de_semana:
+            # Calcular el viernes anterior
+            dias_desde_viernes = ahora.weekday() - 4  # viernes = 4
+            if dias_desde_viernes < 0:
+                dias_desde_viernes += 7
+            ultimo_dia_mercado = ahora - timedelta(days=dias_desde_viernes)
+            fecha_formateada = f"{ultimo_dia_mercado.day} {meses[ultimo_dia_mercado.month-1]} {ultimo_dia_mercado.year}"
+            resultado['fecha_cierre'] = fecha_formateada
+            resultado['mensaje'] = f"Al cierre: {fecha_formateada} · Mercado cerrado"
+        elif fuera_horario:
+            # Fuera de horario pero día laborable
+            if hora_actual < 8:
+                # Antes de apertura, mostrar cierre de ayer
+                ayer = ahora - timedelta(days=1)
+                fecha_formateada = f"{ayer.day} {meses[ayer.month-1]} {ayer.year}"
+            else:
+                # Después de cierre, mostrar cierre de hoy
+                fecha_formateada = f"{ahora.day} {meses[ahora.month-1]} {ahora.year}"
+            resultado['fecha_cierre'] = fecha_formateada
+            resultado['mensaje'] = f"Al cierre: {fecha_formateada} · Mercado cerrado"
+        else:
+            # Mercado abierto
+            resultado['mensaje'] = "Hoy"
     
     return resultado
 

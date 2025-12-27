@@ -932,16 +932,19 @@ def api_favoritos():
                     
                 # Cambio diario - usar JustETF para ETFs europeos (más preciso)
                 cambio_diario = None
+                mensaje_cierre = None
                 try:
                     es_etf_europeo = isin and isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL', 'GB']
                     
-                    # 1. Para ETFs europeos: usar JustETF directamente
+                    # 1. Para ETFs europeos: usar JustETF con info de cierre
                     if es_etf_europeo and isin:
-                        from src.scrapers import obtener_cambio_diario_justetf
-                        cambio = obtener_cambio_diario_justetf(isin)
-                        if cambio is not None:
-                            cambio_diario = cambio
-                            print(f"[Favoritos] JustETF directo para {isin}: {cambio_diario}%")
+                        from src.scrapers import obtener_cambio_diario_con_info
+                        info_cambio = obtener_cambio_diario_con_info(isin)
+                        if info_cambio:
+                            cambio_diario = info_cambio.get('cambio')
+                            mensaje_cierre = info_cambio.get('mensaje')
+                            if cambio_diario is not None:
+                                print(f"[Favoritos] JustETF para {isin}: {cambio_diario:.2f}% - {mensaje_cierre}")
                     
                     # 2. Si no es ETF europeo o JustETF falló, usar Yahoo Finance
                     if cambio_diario is None and ticker and not ticker.startswith('IE'):
@@ -954,6 +957,16 @@ def api_favoritos():
                         
                         if last_price and prev_close and prev_close > 0:
                             cambio_diario = ((last_price - prev_close) / prev_close) * 100
+                            # Construir mensaje para Yahoo
+                            from datetime import datetime
+                            ahora = datetime.now()
+                            es_fin_de_semana = ahora.weekday() >= 5
+                            hora_actual = ahora.hour
+                            # NYSE/NASDAQ: 9:30-16:00 EST (15:30-22:00 CET)
+                            fuera_horario = hora_actual < 15 or hora_actual >= 22
+                            mercado_cerrado = es_fin_de_semana or fuera_horario
+                            if mercado_cerrado:
+                                mensaje_cierre = "Mercado cerrado"
                             print(f"[Favoritos] Yahoo fast_info para {ticker}: {cambio_diario:.2f}%")
                         else:
                             # Fallback al método history
@@ -962,6 +975,9 @@ def api_favoritos():
                                 precio_ayer = float(hist['Close'].iloc[-2])
                                 precio_hoy = float(hist['Close'].iloc[-1])
                                 cambio_diario = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                                # Obtener fecha del último dato
+                                fecha_ultimo = hist.index[-1].strftime('%d %b %Y')
+                                mensaje_cierre = f"Al cierre: {fecha_ultimo}"
                     
                     # 3. Fallback final: JustETF histórico si tenemos ISIN
                     if cambio_diario is None and isin:
@@ -970,13 +986,17 @@ def api_favoritos():
                         historico = scraper.obtener_historico(isin, periodo='1m')
                         if historico and len(historico.get('precios', [])) >= 2:
                             precios = historico['precios']
+                            fechas = historico.get('fechas', [])
                             precio_ayer = precios[-2]
                             precio_hoy = precios[-1]
                             cambio_diario = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                            if fechas:
+                                mensaje_cierre = f"Al cierre: {fechas[-1]}"
                 except Exception as e:
                     print(f"Error calculando cambio diario para {fav.get('nombre')}: {e}")
                 
                 fav['cambio_diario'] = cambio_diario
+                fav['mensaje_cierre'] = mensaje_cierre
                 
         except Exception as e:
             print(f"Error obteniendo precio de favorito {fav.get('nombre')}: {e}")
@@ -4369,26 +4389,38 @@ def api_historical(ticker):
     
     historico = None
     fuente = 'yahoo'
-    cambio_diario = None  # Nuevo: cambio diario calculado correctamente
+    cambio_diario = None
+    mensaje_cierre = None
     
     # Determinar si es ETF europeo
     es_etf_europeo = isin and isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL', 'GB']
     
     # Calcular cambio diario usando la lógica mejorada
     try:
-        from src.scrapers import obtener_cambio_diario_justetf, obtener_cambio_diario_yahoo
+        from src.scrapers import obtener_cambio_diario_con_info, obtener_cambio_diario_yahoo
         
         if es_etf_europeo and isin:
-            # Para ETFs europeos, usar JustETF
-            cambio_diario = obtener_cambio_diario_justetf(isin)
-            if cambio_diario is not None:
-                print(f"[Historical] Cambio diario de JustETF: {cambio_diario:.2f}%")
+            # Para ETFs europeos, usar JustETF con info de cierre
+            info_cambio = obtener_cambio_diario_con_info(isin)
+            if info_cambio:
+                cambio_diario = info_cambio.get('cambio')
+                mensaje_cierre = info_cambio.get('mensaje')
+                if cambio_diario is not None:
+                    print(f"[Historical] Cambio diario de JustETF: {cambio_diario:.2f}% - {mensaje_cierre}")
         
         if cambio_diario is None and ticker and ticker not in ['null', 'undefined', 'none', '']:
             # Para otros activos, usar Yahoo
             cambio_diario = obtener_cambio_diario_yahoo(ticker)
             if cambio_diario is not None:
                 print(f"[Historical] Cambio diario de Yahoo: {cambio_diario:.2f}%")
+                # Determinar si mercado USA está cerrado
+                from datetime import datetime
+                ahora = datetime.now()
+                es_fin_de_semana = ahora.weekday() >= 5
+                hora_actual = ahora.hour
+                fuera_horario = hora_actual < 15 or hora_actual >= 22  # 15:30-22:00 CET
+                if es_fin_de_semana or fuera_horario:
+                    mensaje_cierre = "Mercado cerrado"
     except Exception as e:
         print(f"[Historical] Error calculando cambio diario: {e}")
     
@@ -4445,7 +4477,8 @@ def api_historical(ticker):
                         'fechas': resultado['fechas'],
                         'precios': [round(p, 2) for p in resultado['precios']],
                         'nombre': nombre_etf,
-                        'cambio_diario': round(cambio_diario, 2) if cambio_diario is not None else None
+                        'cambio_diario': round(cambio_diario, 2) if cambio_diario is not None else None,
+                        'mensaje_cierre': mensaje_cierre
                     },
                     'fuente': 'justetf'
                 })
@@ -4462,7 +4495,8 @@ def api_historical(ticker):
     data = {
         'fechas': [d.strftime('%Y-%m-%d') for d in historico.index],
         'precios': [round(p, 2) for p in historico['Close'].tolist()],
-        'cambio_diario': round(cambio_diario, 2) if cambio_diario is not None else None
+        'cambio_diario': round(cambio_diario, 2) if cambio_diario is not None else None,
+        'mensaje_cierre': mensaje_cierre
     }
     
     # Añadir volumen si está disponible

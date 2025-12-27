@@ -102,10 +102,9 @@ def obtener_cambio_diario_justetf(isin: str) -> Optional[float]:
     Obtiene el cambio diario (%) para ETFs europeos.
     
     Usa múltiples fuentes en orden de prioridad:
-    1. ariva.de (datos en tiempo real de L&S/Gettex/Tradegate)
-    2. API de JustETF
-    3. Yahoo Finance con ISIN
-    4. Histórico de JustETF (último recurso)
+    1. API de JustETF
+    2. Yahoo Finance con ISIN
+    3. Histórico de JustETF (último recurso)
     
     Returns:
         float: Cambio porcentual (ej: 0.58 para +0.58%)
@@ -113,37 +112,28 @@ def obtener_cambio_diario_justetf(isin: str) -> Optional[float]:
     """
     global _cambio_diario_cache, _cache_timestamp
     
-    # Verificar caché (5 minutos para datos en tiempo real)
-    cache_duration = 5  # minutos para tiempo real
-    if _cache_timestamp and (datetime.now() - _cache_timestamp).total_seconds() < cache_duration * 60:
+    # Verificar caché (15 minutos)
+    if _cache_timestamp and (datetime.now() - _cache_timestamp).total_seconds() < _CACHE_DURATION_MINUTES * 60:
         if isin in _cambio_diario_cache:
             cached = _cambio_diario_cache[isin].get('cambio')
             if cached is not None:
-                print(f"[Cache] {isin}: {cached:.2f}%")
                 return cached
     
-    # Método 1: ariva.de (tiempo real)
-    cambio = _obtener_cambio_ariva(isin)
-    if cambio is not None:
-        _cambio_diario_cache[isin] = {'cambio': cambio}
-        _cache_timestamp = datetime.now()
-        return cambio
-    
-    # Método 2: Intentar obtener de la API de JustETF
+    # Método 1: Intentar obtener de la API de JustETF
     cambio = _obtener_cambio_api_justetf(isin)
     if cambio is not None:
         _cambio_diario_cache[isin] = {'cambio': cambio}
         _cache_timestamp = datetime.now()
         return cambio
     
-    # Método 3: Intentar Yahoo Finance con el ISIN
+    # Método 2: Intentar Yahoo Finance con el ISIN
     cambio = obtener_cambio_diario_yahoo(isin)
     if cambio is not None:
         _cambio_diario_cache[isin] = {'cambio': cambio}
         _cache_timestamp = datetime.now()
         return cambio
     
-    # Método 4: Histórico de JustETF (menos preciso pero funciona)
+    # Método 3: Histórico de JustETF (menos preciso pero funciona)
     cambio = _obtener_cambio_historico_justetf(isin)
     if cambio is not None:
         _cambio_diario_cache[isin] = {'cambio': cambio}
@@ -153,59 +143,96 @@ def obtener_cambio_diario_justetf(isin: str) -> Optional[float]:
     return None
 
 
-def _obtener_cambio_ariva(isin: str) -> Optional[float]:
+def obtener_cambio_diario_con_info(isin: str) -> Dict[str, Any]:
     """
-    Obtiene el cambio diario en tiempo real de ariva.de
+    Obtiene el cambio diario con información adicional sobre fecha y estado del mercado.
     
-    ariva.de muestra datos de L&S, Gettex, Tradegate en tiempo real
-    y el cambio porcentual está directamente en el HTML.
+    Returns:
+        Dict con:
+        - cambio: float o None
+        - fecha_cierre: str (formato "23 dic 2025, 17:30")
+        - mercado_cerrado: bool
+        - mensaje: str (ej: "Al cierre: 23 dic 2025 · Mercado cerrado")
     """
-    import re
+    resultado = {
+        'cambio': None,
+        'fecha_cierre': None,
+        'mercado_cerrado': True,
+        'mensaje': ''
+    }
     
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-            'Accept': 'text/html,application/xhtml+xml',
-            'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
+        # Obtener datos del histórico para tener la fecha
+        url = f"https://www.justetf.com/api/etfs/{isin}/performance-chart"
+        params = {
+            'locale': 'es',
+            'currency': 'EUR',
+            'valuesType': 'MARKET_VALUE',
+            'dateFrom': (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d'),
+            'dateTo': datetime.now().strftime('%Y-%m-%d')
         }
         
-        # Buscar por ISIN directamente (ariva redirige automáticamente)
-        url = f"https://www.ariva.de/search/search.m?searchname={isin}"
-        
-        response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+        response = requests.get(url, params=params, headers=HEADERS, timeout=10)
         
         if response.status_code == 200:
-            html = response.text
+            data = response.json()
+            series = data.get('series', [])
             
-            # Buscar el cambio porcentual en el HTML
-            # Patrón: +6,89% o -1,23% (formato alemán con coma)
+            if series and len(series) >= 2:
+                ultimo = series[-1]
+                penultimo = series[-2]
+                
+                precio_hoy = ultimo.get('value', {}).get('raw', 0)
+                precio_ayer = penultimo.get('value', {}).get('raw', 0)
+                fecha_ultimo = ultimo.get('date', '')  # Formato: "2025-12-23"
+                
+                if precio_ayer > 0:
+                    resultado['cambio'] = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                
+                # Formatear fecha
+                if fecha_ultimo:
+                    try:
+                        fecha_obj = datetime.strptime(fecha_ultimo, '%Y-%m-%d')
+                        # Formato: "23 dic 2025"
+                        meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 
+                                'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+                        fecha_formateada = f"{fecha_obj.day} {meses[fecha_obj.month-1]} {fecha_obj.year}"
+                        resultado['fecha_cierre'] = fecha_formateada
+                        
+                        # Verificar si el mercado está cerrado
+                        ahora = datetime.now()
+                        es_fin_de_semana = ahora.weekday() >= 5  # Sábado=5, Domingo=6
+                        
+                        # Horario de gettex: 8:00-22:00 CET
+                        hora_actual = ahora.hour
+                        fuera_horario = hora_actual < 8 or hora_actual >= 22
+                        
+                        # Si la fecha del último dato es anterior a hoy, el mercado cerró
+                        fecha_hoy = ahora.strftime('%Y-%m-%d')
+                        mercado_cerrado = (fecha_ultimo < fecha_hoy) or es_fin_de_semana or fuera_horario
+                        resultado['mercado_cerrado'] = mercado_cerrado
+                        
+                        # Construir mensaje
+                        if mercado_cerrado:
+                            resultado['mensaje'] = f"Al cierre: {fecha_formateada} · Mercado cerrado"
+                        else:
+                            resultado['mensaje'] = f"Al cierre: {fecha_formateada}"
+                            
+                    except Exception as e:
+                        print(f"[Info] Error parseando fecha {fecha_ultimo}: {e}")
+                        resultado['fecha_cierre'] = fecha_ultimo
+                        resultado['mensaje'] = f"Al cierre: {fecha_ultimo}"
+        
+        # Si no obtuvimos cambio del histórico, intentar otros métodos
+        if resultado['cambio'] is None:
+            resultado['cambio'] = obtener_cambio_diario_justetf(isin)
             
-            # Patrón 1: Buscar directamente el porcentaje con signo después del precio
-            # El primer match suele ser el cambio diario principal
-            match = re.search(r'([+-]\d+[,\.]\d+)\s*%', html)
-            if match:
-                valor_str = match.group(1).replace(',', '.')
-                cambio = float(valor_str)
-                print(f"[Ariva] {isin}: {cambio:.2f}% (tiempo real)")
-                return cambio
-            
-            # Patrón 2: Si el formato es sin signo pero con color/clase
-            # Buscar números decimales seguidos de %
-            matches = re.findall(r'(\d+[,\.]\d+)\s*%', html)
-            if matches:
-                # El primer porcentaje significativo (> 0.01) suele ser el cambio
-                for m in matches[:5]:
-                    valor = float(m.replace(',', '.'))
-                    if 0.01 < valor < 50:  # Rango razonable para cambio diario
-                        # Verificar si hay indicador de subida/bajada cerca
-                        print(f"[Ariva] {isin}: posible cambio {valor:.2f}%")
-                        # No podemos determinar el signo, mejor pasar al siguiente método
-                        break
-                    
     except Exception as e:
-        print(f"[Ariva] Error para {isin}: {e}")
+        print(f"[Info] Error obteniendo info para {isin}: {e}")
+        resultado['cambio'] = obtener_cambio_diario_justetf(isin)
     
-    return None
+    return resultado
+
 
 
 def _obtener_cambio_api_justetf(isin: str) -> Optional[float]:

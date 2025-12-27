@@ -583,11 +583,14 @@
                     cambio = ((precioActual - precioAnterior) / precioAnterior) * 100;
                 }
                 
+                const mensajeCierre = result.data.mensaje_cierre || '';
+                
                 document.getElementById('activo-precio').textContent = precioActual.toFixed(2) + '€';
                 document.getElementById('activo-cambio').innerHTML = `
                     <span class="${cambio >= 0 ? 'text-green-400' : 'text-red-400'}">
-                        ${cambio >= 0 ? '+' : ''}${cambio.toFixed(2)}% hoy
+                        ${cambio >= 0 ? '+' : ''}${cambio.toFixed(2)}%
                     </span>
+                    <span class="text-gray-500 text-xs ml-1">${mensajeCierre || 'hoy'}</span>
                 `;
                 
                 // Cargar gráfico primero (para tener datos para estadísticas)
@@ -2121,6 +2124,7 @@
                 const cambioDiario = fav.cambio_diario;
                 const cambioDiarioClass = cambioDiario > 0 ? 'text-green-400' : cambioDiario < 0 ? 'text-red-400' : 'text-gray-400';
                 const cambioDiarioText = cambioDiario !== null && cambioDiario !== undefined ? `${cambioDiario >= 0 ? '+' : ''}${cambioDiario.toFixed(2)}%` : '-';
+                const mensajeCierre = fav.mensaje_cierre || '';
                 
                 const fechaAgregado = fav.fecha_agregado ? new Date(fav.fecha_agregado).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
                 
@@ -2146,7 +2150,8 @@
                                 <div class="text-lg font-bold">${precio}</div>
                             </div>
                             <div class="text-right">
-                                <div class="text-sm ${cambioDiarioClass}">Hoy: ${cambioDiarioText}</div>
+                                <div class="text-sm ${cambioDiarioClass}">${cambioDiarioText}</div>
+                                <div class="text-xs text-gray-500">${mensajeCierre || 'Hoy'}</div>
                             </div>
                         </div>
                         

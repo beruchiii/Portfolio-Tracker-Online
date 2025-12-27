@@ -99,15 +99,13 @@ def obtener_cambio_diario_yahoo(ticker_o_isin: str, es_isin: bool = False) -> Op
 
 def obtener_cambio_diario_justetf(isin: str) -> Optional[float]:
     """
-    Obtiene el cambio diario (%) de JustETF.
+    Obtiene el cambio diario (%) para ETFs europeos.
     
-    NOTA: JustETF carga el dato con JavaScript, así que esta función
-    intenta obtenerlo de fuentes alternativas o del histórico.
-    
-    Para la mejor precisión, usamos múltiples métodos:
-    1. API de JustETF (si disponible)
-    2. Yahoo Finance con ISIN
-    3. Histórico de JustETF (último recurso)
+    Usa múltiples fuentes en orden de prioridad:
+    1. ariva.de (datos en tiempo real de L&S/Gettex/Tradegate)
+    2. API de JustETF
+    3. Yahoo Finance con ISIN
+    4. Histórico de JustETF (último recurso)
     
     Returns:
         float: Cambio porcentual (ej: 0.58 para +0.58%)
@@ -115,26 +113,37 @@ def obtener_cambio_diario_justetf(isin: str) -> Optional[float]:
     """
     global _cambio_diario_cache, _cache_timestamp
     
-    # Verificar caché
-    if _cache_timestamp and (datetime.now() - _cache_timestamp).total_seconds() < _CACHE_DURATION_MINUTES * 60:
+    # Verificar caché (5 minutos para datos en tiempo real)
+    cache_duration = 5  # minutos para tiempo real
+    if _cache_timestamp and (datetime.now() - _cache_timestamp).total_seconds() < cache_duration * 60:
         if isin in _cambio_diario_cache:
-            return _cambio_diario_cache[isin].get('cambio')
+            cached = _cambio_diario_cache[isin].get('cambio')
+            if cached is not None:
+                print(f"[Cache] {isin}: {cached:.2f}%")
+                return cached
     
-    # Método 1: Intentar obtener de la API de JustETF
+    # Método 1: ariva.de (tiempo real)
+    cambio = _obtener_cambio_ariva(isin)
+    if cambio is not None:
+        _cambio_diario_cache[isin] = {'cambio': cambio}
+        _cache_timestamp = datetime.now()
+        return cambio
+    
+    # Método 2: Intentar obtener de la API de JustETF
     cambio = _obtener_cambio_api_justetf(isin)
     if cambio is not None:
         _cambio_diario_cache[isin] = {'cambio': cambio}
         _cache_timestamp = datetime.now()
         return cambio
     
-    # Método 2: Intentar Yahoo Finance con el ISIN
+    # Método 3: Intentar Yahoo Finance con el ISIN
     cambio = obtener_cambio_diario_yahoo(isin)
     if cambio is not None:
         _cambio_diario_cache[isin] = {'cambio': cambio}
         _cache_timestamp = datetime.now()
         return cambio
     
-    # Método 3: Histórico de JustETF (menos preciso pero funciona)
+    # Método 4: Histórico de JustETF (menos preciso pero funciona)
     cambio = _obtener_cambio_historico_justetf(isin)
     if cambio is not None:
         _cambio_diario_cache[isin] = {'cambio': cambio}
@@ -144,40 +153,157 @@ def obtener_cambio_diario_justetf(isin: str) -> Optional[float]:
     return None
 
 
-def _obtener_cambio_api_justetf(isin: str) -> Optional[float]:
-    """Intenta obtener cambio diario de la API de JustETF"""
+def _obtener_cambio_ariva(isin: str) -> Optional[float]:
+    """
+    Obtiene el cambio diario en tiempo real de ariva.de
+    
+    ariva.de muestra datos de L&S, Gettex, Tradegate en tiempo real
+    y el cambio porcentual está directamente en el HTML.
+    """
+    import re
+    
     try:
-        # Intentar la API de performance
-        url = f"https://www.justetf.com/api/etfs/{isin}/performance-chart"
-        params = {
-            'locale': 'es',
-            'currency': 'EUR',
-            'valuesType': 'MARKET_VALUE',
-            'dateFrom': (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d'),
-            'dateTo': datetime.now().strftime('%Y-%m-%d')
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml',
+            'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
         }
         
-        response = requests.get(url, params=params, headers=HEADERS, timeout=10)
+        # Buscar por ISIN directamente (ariva redirige automáticamente)
+        url = f"https://www.ariva.de/search/search.m?searchname={isin}"
+        
+        response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
         
         if response.status_code == 200:
-            data = response.json()
-            series = data.get('series', [])
+            html = response.text
             
-            if series and len(series) >= 2:
-                # Obtener últimos dos puntos
-                ultimo = series[-1]
-                penultimo = series[-2]
-                
-                precio_hoy = ultimo.get('value', {}).get('raw', 0)
-                precio_ayer = penultimo.get('value', {}).get('raw', 0)
-                
-                if precio_ayer > 0:
-                    cambio = ((precio_hoy - precio_ayer) / precio_ayer) * 100
-                    print(f"[JustETF API] {isin}: {cambio:.2f}%")
-                    return cambio
+            # Buscar el cambio porcentual en el HTML
+            # Patrón: +6,89% o -1,23% (formato alemán con coma)
+            
+            # Patrón 1: Buscar directamente el porcentaje con signo después del precio
+            # El primer match suele ser el cambio diario principal
+            match = re.search(r'([+-]\d+[,\.]\d+)\s*%', html)
+            if match:
+                valor_str = match.group(1).replace(',', '.')
+                cambio = float(valor_str)
+                print(f"[Ariva] {isin}: {cambio:.2f}% (tiempo real)")
+                return cambio
+            
+            # Patrón 2: Si el formato es sin signo pero con color/clase
+            # Buscar números decimales seguidos de %
+            matches = re.findall(r'(\d+[,\.]\d+)\s*%', html)
+            if matches:
+                # El primer porcentaje significativo (> 0.01) suele ser el cambio
+                for m in matches[:5]:
+                    valor = float(m.replace(',', '.'))
+                    if 0.01 < valor < 50:  # Rango razonable para cambio diario
+                        # Verificar si hay indicador de subida/bajada cerca
+                        print(f"[Ariva] {isin}: posible cambio {valor:.2f}%")
+                        # No podemos determinar el signo, mejor pasar al siguiente método
+                        break
                     
     except Exception as e:
-        print(f"[JustETF API] Error para {isin}: {e}")
+        print(f"[Ariva] Error para {isin}: {e}")
+    
+    return None
+
+
+def _obtener_cambio_api_justetf(isin: str) -> Optional[float]:
+    """
+    Intenta obtener cambio diario de JustETF.
+    
+    El cambio diario real es: (precio_actual - cierre_ayer) / cierre_ayer * 100
+    
+    JustETF muestra el precio actual de gettex comparado con el cierre del día anterior.
+    """
+    try:
+        precio_actual = None
+        cierre_ayer = None
+        fecha_ultimo = None
+        fecha_penultimo = None
+        series = []  # Inicializar para evitar error de scope
+        
+        # 1. Obtener histórico para tener cierre de ayer y fechas
+        try:
+            url = f"https://www.justetf.com/api/etfs/{isin}/performance-chart"
+            params = {
+                'locale': 'es',
+                'currency': 'EUR',
+                'valuesType': 'MARKET_VALUE',
+                'dateFrom': (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d'),
+                'dateTo': datetime.now().strftime('%Y-%m-%d')
+            }
+            
+            response = requests.get(url, params=params, headers=HEADERS, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                series = data.get('series', [])
+                
+                if series and len(series) >= 2:
+                    ultimo = series[-1]
+                    penultimo = series[-2]
+                    
+                    precio_ultimo_historico = ultimo.get('value', {}).get('raw', 0)
+                    cierre_ayer = penultimo.get('value', {}).get('raw', 0)
+                    fecha_ultimo = ultimo.get('date', '')
+                    fecha_penultimo = penultimo.get('date', '')
+                    
+                    print(f"[JustETF API] Histórico: último={precio_ultimo_historico:.2f} ({fecha_ultimo}), penúltimo={cierre_ayer:.2f} ({fecha_penultimo})")
+        except Exception as e:
+            print(f"[JustETF API] Error obteniendo histórico: {e}")
+        
+        # 2. Intentar obtener precio actual de la API de quote
+        try:
+            api_url = f"https://www.justetf.com/api/etfs/{isin}/quote?locale=es&currency=EUR"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                'Accept': 'application/json',
+            }
+            response = requests.get(api_url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('content-type', '')
+                if 'json' in content_type:
+                    data = response.json()
+                    if 'latestQuote' in data:
+                        latest = data['latestQuote']
+                        if isinstance(latest, dict) and 'raw' in latest:
+                            precio_actual = float(latest['raw'])
+                            print(f"[JustETF API] Precio actual de quote API: {precio_actual:.2f}")
+                        elif isinstance(latest, (int, float)):
+                            precio_actual = float(latest)
+                            print(f"[JustETF API] Precio actual de quote API: {precio_actual:.2f}")
+                    
+                    # También verificar si hay cambio diario en la respuesta
+                    if 'dailyChangePercent' in data:
+                        cambio_directo = data.get('dailyChangePercent', {})
+                        if isinstance(cambio_directo, dict) and 'raw' in cambio_directo:
+                            cambio = float(cambio_directo['raw'])
+                            print(f"[JustETF API] Cambio diario directo de API: {cambio:.2f}%")
+                            return cambio
+                        elif isinstance(cambio_directo, (int, float)):
+                            print(f"[JustETF API] Cambio diario directo de API: {cambio_directo:.2f}%")
+                            return float(cambio_directo)
+        except Exception as e:
+            print(f"[JustETF API] Error obteniendo quote: {e}")
+        
+        # 3. Calcular cambio
+        # Si tenemos precio actual de la API, usarlo
+        # Si no, usar el último del histórico (menos preciso)
+        if precio_actual is None and series and len(series) >= 1:
+            precio_actual = series[-1].get('value', {}).get('raw', 0)
+            print(f"[JustETF API] Usando precio del histórico como actual: {precio_actual:.2f}")
+        
+        if precio_actual and cierre_ayer and cierre_ayer > 0:
+            cambio = ((precio_actual - cierre_ayer) / cierre_ayer) * 100
+            print(f"[JustETF API] Cambio calculado: ({precio_actual:.2f} - {cierre_ayer:.2f}) / {cierre_ayer:.2f} * 100 = {cambio:.2f}%")
+            return cambio
+        else:
+            print(f"[JustETF API] No se pudo calcular cambio. actual={precio_actual}, ayer={cierre_ayer}")
+                    
+    except Exception as e:
+        print(f"[JustETF API] Error general para {isin}: {e}")
     
     return None
 

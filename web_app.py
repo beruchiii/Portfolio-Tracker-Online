@@ -4468,6 +4468,116 @@ def api_historical(ticker):
     except Exception as e:
         print(f"[Historical] Error calculando cambio diario: {e}")
     
+    # Para ETFs europeos: comparar Yahoo y JustETF, usar el más reciente
+    if es_etf_europeo and isin:
+        yahoo_historico = None
+        yahoo_fecha_ultima = None
+        justetf_historico = None
+        justetf_fecha_ultima = None
+        
+        # Intentar Yahoo Finance
+        if ticker and ticker not in ['null', 'undefined', 'none', '']:
+            print(f"[Historical] Intentando Yahoo Finance con ticker: {ticker}")
+            yahoo_historico = price_fetcher.obtener_historico(ticker, periodo)
+            if yahoo_historico is not None and not yahoo_historico.empty:
+                yahoo_fecha_ultima = yahoo_historico.index[-1].strftime('%Y-%m-%d')
+                print(f"[Historical] Yahoo Finance OK: {len(yahoo_historico)} puntos, última fecha: {yahoo_fecha_ultima}")
+        
+        # Intentar JustETF
+        try:
+            from src.scrapers import JustETFScraper
+            justetf = JustETFScraper()
+            
+            periodo_map = {
+                '1w': '1mo', '1mo': '1mo', '3mo': '3mo', 
+                '6mo': '6mo', '1y': '1y', '2y': '2y',
+                '5y': '5y', '10y': '5y', 'ytd': '1y', 'max': '5y'
+            }
+            periodo_justetf = periodo_map.get(periodo, '1y')
+            
+            resultado_justetf = justetf.obtener_historico(isin, periodo_justetf)
+            
+            if resultado_justetf and resultado_justetf.get('precios') and len(resultado_justetf['precios']) > 0:
+                justetf_fecha_ultima = resultado_justetf['fechas'][-1] if resultado_justetf.get('fechas') else None
+                print(f"[Historical] JustETF OK: {len(resultado_justetf['precios'])} puntos, última fecha: {justetf_fecha_ultima}")
+                justetf_historico = resultado_justetf
+        except Exception as e:
+            print(f"[Historical] Error JustETF: {e}")
+        
+        # Comparar fechas y elegir el más reciente
+        usar_justetf = False
+        if yahoo_fecha_ultima and justetf_fecha_ultima:
+            if justetf_fecha_ultima >= yahoo_fecha_ultima:
+                usar_justetf = True
+                print(f"[Historical] Elegido JustETF (más reciente: {justetf_fecha_ultima} vs Yahoo {yahoo_fecha_ultima})")
+            else:
+                print(f"[Historical] Elegido Yahoo (más reciente: {yahoo_fecha_ultima} vs JustETF {justetf_fecha_ultima})")
+        elif justetf_fecha_ultima:
+            usar_justetf = True
+            print(f"[Historical] Solo JustETF disponible: {justetf_fecha_ultima}")
+        elif yahoo_fecha_ultima:
+            print(f"[Historical] Solo Yahoo disponible: {yahoo_fecha_ultima}")
+        
+        # Devolver datos de la fuente elegida
+        if usar_justetf and justetf_historico:
+            nombre_etf = justetf_historico.get('nombre', isin)
+            if nombre_etf == isin:
+                try:
+                    info_etf = justetf.obtener_precio(isin)
+                    if info_etf and info_etf.get('nombre'):
+                        nombre_etf = info_etf['nombre']
+                except:
+                    pass
+            
+            return jsonify({
+                'success': True, 
+                'data': {
+                    'fechas': justetf_historico['fechas'],
+                    'precios': [round(p, 2) for p in justetf_historico['precios']],
+                    'nombre': nombre_etf,
+                    'cambio_diario': round(cambio_diario, 2) if cambio_diario is not None else None,
+                    'mensaje_cierre': mensaje_cierre
+                },
+                'fuente': 'justetf'
+            })
+        elif yahoo_historico is not None and not yahoo_historico.empty:
+            # Obtener nombre del activo
+            try:
+                import yfinance as yf
+                stock = yf.Ticker(ticker)
+                nombre = stock.info.get('longName') or stock.info.get('shortName') or ticker
+            except:
+                nombre = ticker
+            
+            data = {
+                'fechas': [d.strftime('%Y-%m-%d') for d in yahoo_historico.index],
+                'precios': [round(p, 2) for p in yahoo_historico['Close'].tolist()],
+                'nombre': nombre,
+                'cambio_diario': round(cambio_diario, 2) if cambio_diario is not None else None,
+                'mensaje_cierre': mensaje_cierre
+            }
+            
+            if 'Volume' in yahoo_historico.columns:
+                import math
+                volumen_lista = []
+                for v in yahoo_historico['Volume'].tolist():
+                    try:
+                        if v is None or (isinstance(v, float) and math.isnan(v)):
+                            volumen_lista.append(0)
+                        else:
+                            volumen_lista.append(int(v))
+                    except:
+                        volumen_lista.append(0)
+                data['volumenes'] = volumen_lista
+            
+            print(f"[Historical] Devolviendo datos de yahoo: {len(data['precios'])} puntos, nombre: {nombre}")
+            return jsonify({'success': True, 'data': data, 'fuente': 'yahoo'})
+        
+        # Si no hay datos de ninguna fuente
+        print(f"[Historical] No hay datos de ninguna fuente para ETF europeo")
+        return jsonify({'success': False, 'error': 'No hay datos históricos disponibles'})
+    
+    # Para activos NO europeos: usar lógica original (Yahoo primero, JustETF fallback)
     # 1. Intentar con Yahoo Finance si hay ticker válido
     if ticker and ticker not in ['null', 'undefined', 'none', '']:
         print(f"[Historical] Intentando Yahoo Finance con ticker: {ticker}")

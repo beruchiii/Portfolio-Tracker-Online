@@ -718,7 +718,7 @@
             }
         }
         
-        // Cargar cambio diario y mensaje de cierre
+        // Cargar cambio diario y mensaje de cierre (usando la fuente más reciente)
         async function loadDailyChange() {
             try {
                 const ticker = positionData.ticker || positionData.isin;
@@ -731,7 +731,46 @@
                 if (result.success && result.data) {
                     const cambioDiario = result.data.cambio_diario;
                     const mensajeCierre = result.data.mensaje_cierre;
+                    const precios = result.data.precios;
                     
+                    // Actualizar precio con el dato más reciente (mismo que explorar)
+                    if (precios && precios.length > 0) {
+                        const precioMasReciente = precios[precios.length - 1];
+                        
+                        // Solo actualizar si el precio es diferente (fuente más reciente)
+                        if (Math.abs(precioMasReciente - positionData.precio_actual) > 0.01) {
+                            console.log(`[Details] Actualizando precio: ${positionData.precio_actual} → ${precioMasReciente} (fuente más reciente)`);
+                            
+                            // Actualizar precio mostrado
+                            document.getElementById('current-price').textContent = formatCurrency(precioMasReciente);
+                            
+                            // Recalcular valor actual y beneficio
+                            const nuevoValorActual = positionData.cantidad * precioMasReciente;
+                            const nuevoBeneficio = nuevoValorActual - positionData.coste_total;
+                            const nuevaRentabilidad = (nuevoBeneficio / positionData.coste_total) * 100;
+                            
+                            // Actualizar UI
+                            document.getElementById('valor-actual').textContent = formatCurrency(nuevoValorActual);
+                            
+                            const beneficioEl = document.getElementById('beneficio');
+                            beneficioEl.textContent = (nuevoBeneficio >= 0 ? '+' : '') + formatCurrency(nuevoBeneficio);
+                            beneficioEl.className = 'text-xl font-bold ' + (nuevoBeneficio >= 0 ? 'text-green-400' : 'text-red-400');
+                            
+                            // Actualizar rentabilidad desde compra
+                            const changeColor = nuevaRentabilidad >= 0 ? 'text-green-400' : 'text-red-400';
+                            const sign = nuevaRentabilidad >= 0 ? '+' : '';
+                            document.getElementById('price-change').className = changeColor;
+                            document.getElementById('price-change').textContent = sign + nuevaRentabilidad.toFixed(2) + '% desde compra';
+                            
+                            // Actualizar positionData para otros cálculos
+                            positionData.precio_actual = precioMasReciente;
+                            positionData.valor_actual = nuevoValorActual;
+                            positionData.beneficio = nuevoBeneficio;
+                            positionData.rentabilidad_pct = nuevaRentabilidad;
+                        }
+                    }
+                    
+                    // Mostrar cambio diario y mensaje
                     const dailyPctEl = document.getElementById('daily-change-pct');
                     const dailyMsgEl = document.getElementById('daily-change-msg');
                     

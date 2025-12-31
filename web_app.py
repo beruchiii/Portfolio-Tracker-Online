@@ -936,15 +936,16 @@ def api_favoritos():
                 try:
                     es_etf_europeo = isin and isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL', 'GB']
                     
-                    # 1. Para ETFs europeos: usar JustETF con info de cierre
+                    # 1. Para ETFs europeos: comparar JustETF y Yahoo, usar el más reciente
                     if es_etf_europeo and isin:
                         from src.scrapers import obtener_cambio_diario_con_info
-                        info_cambio = obtener_cambio_diario_con_info(isin)
+                        info_cambio = obtener_cambio_diario_con_info(isin, ticker)
                         if info_cambio:
                             cambio_diario = info_cambio.get('cambio')
                             mensaje_cierre = info_cambio.get('mensaje')
+                            fuente = info_cambio.get('fuente', '')
                             if cambio_diario is not None:
-                                print(f"[Favoritos] JustETF para {isin}: {cambio_diario:.2f}% - {mensaje_cierre}")
+                                print(f"[Favoritos] {fuente.upper()} para {isin}: {cambio_diario:.2f}% - {mensaje_cierre}")
                     
                     # 2. Si no es ETF europeo o JustETF falló, usar Yahoo Finance
                     if cambio_diario is None and ticker and not ticker.startswith('IE'):
@@ -2109,7 +2110,7 @@ def api_portfolio_heatmap():
     try:
         import yfinance as yf
         from datetime import datetime, timedelta
-        from src.scrapers import JustETFScraper, obtener_cambio_diario_justetf, obtener_cambios_diarios_batch, obtener_cambio_diario_yahoo
+        from src.scrapers import JustETFScraper, obtener_cambio_diario_justetf, obtener_cambios_diarios_batch, obtener_cambio_diario_yahoo, obtener_cambio_diario_con_info
         
         justetf = JustETFScraper()
         
@@ -2149,15 +2150,25 @@ def api_portfolio_heatmap():
                 except Exception as e:
                     print(f"[Heatmap] Error en batch JustETF: {e}")
             
-            # Generar mensaje de cierre global
-            from src.scrapers import obtener_cambio_diario_con_info
+            # Generar mensaje de cierre global usando la primera posición como referencia
             ahora = datetime.now()
             es_fin_de_semana = ahora.weekday() >= 5
             hora_actual = ahora.hour
             fuera_horario = hora_actual < 8 or hora_actual >= 22
             meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
             
-            if es_fin_de_semana or fuera_horario:
+            # Intentar obtener fecha real de la primera posición
+            primera_pos = next((p for p in portfolio.posiciones if p.isin and p.isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL', 'GB']), None)
+            if primera_pos:
+                try:
+                    info = obtener_cambio_diario_con_info(primera_pos.isin, primera_pos.ticker)
+                    if info and info.get('mensaje'):
+                        mensaje_cierre_global = info['mensaje']
+                except:
+                    pass
+            
+            # Si no se obtuvo mensaje, generar uno por defecto
+            if not mensaje_cierre_global and (es_fin_de_semana or fuera_horario):
                 if es_fin_de_semana:
                     dias_desde_viernes = ahora.weekday() - 4
                     if dias_desde_viernes < 0:
@@ -2180,28 +2191,28 @@ def api_portfolio_heatmap():
             es_etf_europeo = pos_original.isin and pos_original.isin[:2] in ['IE', 'LU', 'DE', 'FR', 'NL', 'GB']
             
             # ============================================================
-            # PERIODO 1D: Usar JustETF directamente (dato más preciso)
+            # PERIODO 1D: Comparar JustETF y Yahoo, usar el más reciente
             # ============================================================
             if periodo == '1d':
                 es_crypto = pos_original.categoria and 'crypto' in pos_original.categoria.lower()
                 
-                # 1. Para ETFs europeos: usar cambio directo de JustETF
+                # 1. Para ETFs europeos: comparar JustETF y Yahoo, usar el más reciente
                 if es_etf_europeo and pos_original.isin:
-                    # Primero intentar del batch
-                    if pos_original.isin in cambios_justetf and cambios_justetf[pos_original.isin] is not None:
-                        cambio_pct = cambios_justetf[pos_original.isin]
-                        datos_encontrados = True
-                        print(f"[Heatmap] JustETF batch para {pos_original.isin}: {cambio_pct}%")
-                    else:
-                        # Fallback: obtener individualmente
-                        try:
-                            cambio = obtener_cambio_diario_justetf(pos_original.isin)
-                            if cambio is not None:
-                                cambio_pct = cambio
-                                datos_encontrados = True
-                                print(f"[Heatmap] JustETF individual para {pos_original.isin}: {cambio_pct}%")
-                        except Exception as e:
-                            print(f"[Heatmap] JustETF error para {pos_original.isin}: {e}")
+                    try:
+                        # Usar la función que compara ambas fuentes
+                        info_cambio = obtener_cambio_diario_con_info(pos_original.isin, pos_original.ticker)
+                        if info_cambio and info_cambio.get('cambio') is not None:
+                            cambio_pct = info_cambio['cambio']
+                            datos_encontrados = True
+                            fuente = info_cambio.get('fuente', 'unknown')
+                            print(f"[Heatmap] {fuente.upper()} para {pos_original.isin}: {cambio_pct:.2f}%")
+                    except Exception as e:
+                        print(f"[Heatmap] Error comparando fuentes para {pos_original.isin}: {e}")
+                        # Fallback al batch de JustETF
+                        if pos_original.isin in cambios_justetf and cambios_justetf[pos_original.isin] is not None:
+                            cambio_pct = cambios_justetf[pos_original.isin]
+                            datos_encontrados = True
+                            print(f"[Heatmap] JustETF batch fallback para {pos_original.isin}: {cambio_pct}%")
                 
                 # 2. Si es crypto y el cambio es 0% (mercado cerrado), usar BTC-USD como aproximación
                 if es_crypto and datos_encontrados and cambio_pct == 0:
@@ -4432,13 +4443,14 @@ def api_historical(ticker):
         from src.scrapers import obtener_cambio_diario_con_info, obtener_cambio_diario_yahoo
         
         if es_etf_europeo and isin:
-            # Para ETFs europeos, usar JustETF con info de cierre
-            info_cambio = obtener_cambio_diario_con_info(isin)
+            # Para ETFs europeos, comparar JustETF y Yahoo, usar el más reciente
+            info_cambio = obtener_cambio_diario_con_info(isin, ticker)
             if info_cambio:
                 cambio_diario = info_cambio.get('cambio')
                 mensaje_cierre = info_cambio.get('mensaje')
+                fuente = info_cambio.get('fuente', '')
                 if cambio_diario is not None:
-                    print(f"[Historical] Cambio diario de JustETF: {cambio_diario:.2f}% - {mensaje_cierre}")
+                    print(f"[Historical] Cambio diario de {fuente.upper()}: {cambio_diario:.2f}% - {mensaje_cierre}")
         
         if cambio_diario is None and ticker and ticker not in ['null', 'undefined', 'none', '']:
             # Para otros activos, usar Yahoo

@@ -143,30 +143,43 @@ def obtener_cambio_diario_justetf(isin: str) -> Optional[float]:
     return None
 
 
-def obtener_cambio_diario_con_info(isin: str) -> Dict[str, Any]:
+def obtener_cambio_diario_con_info(isin: str, ticker: str = None) -> Dict[str, Any]:
     """
-    Obtiene el cambio diario con información adicional sobre fecha y estado del mercado.
+    Obtiene el cambio diario comparando JustETF y Yahoo, usando el dato más reciente.
+    
+    Args:
+        isin: ISIN del ETF
+        ticker: Ticker de Yahoo (opcional, para comparar con otra bolsa)
     
     Returns:
         Dict con:
         - cambio: float o None
-        - fecha_cierre: str (formato "23 dic 2025, 17:30")
+        - fecha_cierre: str (formato "23 dic 2025")
         - mercado_cerrado: bool
         - mensaje: str (ej: "Al cierre: 23 dic 2025 · Mercado cerrado")
+        - fuente: str ('justetf' o 'yahoo')
     """
     resultado = {
         'cambio': None,
         'fecha_cierre': None,
         'mercado_cerrado': True,
-        'mensaje': ''
+        'mensaje': '',
+        'fuente': None
     }
     
-    fecha_ultimo = None
     meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 
             'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
     
+    # Datos de JustETF
+    justetf_cambio = None
+    justetf_fecha = None  # formato YYYY-MM-DD
+    
+    # Datos de Yahoo
+    yahoo_cambio = None
+    yahoo_fecha = None  # formato YYYY-MM-DD
+    
+    # 1. Obtener datos de JustETF
     try:
-        # Obtener datos del histórico para tener la fecha
         url = f"https://www.justetf.com/api/etfs/{isin}/performance-chart"
         params = {
             'locale': 'es',
@@ -188,37 +201,78 @@ def obtener_cambio_diario_con_info(isin: str) -> Dict[str, Any]:
                 
                 precio_hoy = ultimo.get('value', {}).get('raw', 0)
                 precio_ayer = penultimo.get('value', {}).get('raw', 0)
-                fecha_ultimo = ultimo.get('date', '')  # Formato: "2025-12-23"
+                justetf_fecha = ultimo.get('date', '')
                 
                 if precio_ayer > 0:
-                    resultado['cambio'] = ((precio_hoy - precio_ayer) / precio_ayer) * 100
-                    print(f"[Info] JustETF histórico OK para {isin}: {resultado['cambio']:.2f}%")
-                    
+                    justetf_cambio = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                    print(f"[Comparar] JustETF {isin}: {justetf_cambio:.2f}% (fecha: {justetf_fecha})")
     except Exception as e:
-        print(f"[Info] Error obteniendo histórico JustETF para {isin}: {e}")
+        print(f"[Comparar] Error JustETF para {isin}: {e}")
     
-    # Si no obtuvimos cambio del histórico, intentar otros métodos
-    if resultado['cambio'] is None:
-        resultado['cambio'] = obtener_cambio_diario_justetf(isin)
-        print(f"[Info] Usando fallback para {isin}: {resultado['cambio']}")
+    # 2. Obtener datos de Yahoo (si hay ticker)
+    if ticker and ticker not in ['null', 'undefined', 'none', '']:
+        try:
+            import yfinance as yf
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period='5d')
+            
+            if not hist.empty and len(hist) >= 2:
+                fecha_ultimo = hist.index[-1]
+                fecha_penultimo = hist.index[-2]
+                
+                precio_hoy = float(hist['Close'].iloc[-1])
+                precio_ayer = float(hist['Close'].iloc[-2])
+                yahoo_fecha = fecha_ultimo.strftime('%Y-%m-%d')
+                
+                if precio_ayer > 0:
+                    yahoo_cambio = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                    print(f"[Comparar] Yahoo {ticker}: {yahoo_cambio:.2f}% (fecha: {yahoo_fecha})")
+        except Exception as e:
+            print(f"[Comparar] Error Yahoo para {ticker}: {e}")
     
-    # SIEMPRE generar mensaje de cierre
+    # 3. Comparar fechas y usar el más reciente
+    fecha_elegida = None
+    cambio_elegido = None
+    fuente_elegida = None
+    
+    if justetf_fecha and yahoo_fecha:
+        # Ambos tienen datos, comparar fechas
+        if justetf_fecha >= yahoo_fecha:
+            fecha_elegida = justetf_fecha
+            cambio_elegido = justetf_cambio
+            fuente_elegida = 'justetf'
+            print(f"[Comparar] Elegido JustETF (más reciente: {justetf_fecha} vs {yahoo_fecha})")
+        else:
+            fecha_elegida = yahoo_fecha
+            cambio_elegido = yahoo_cambio
+            fuente_elegida = 'yahoo'
+            print(f"[Comparar] Elegido Yahoo (más reciente: {yahoo_fecha} vs {justetf_fecha})")
+    elif justetf_fecha:
+        fecha_elegida = justetf_fecha
+        cambio_elegido = justetf_cambio
+        fuente_elegida = 'justetf'
+    elif yahoo_fecha:
+        fecha_elegida = yahoo_fecha
+        cambio_elegido = yahoo_cambio
+        fuente_elegida = 'yahoo'
+    
+    resultado['cambio'] = cambio_elegido
+    resultado['fuente'] = fuente_elegida
+    
+    # 4. Generar mensaje de cierre
     ahora = datetime.now()
-    es_fin_de_semana = ahora.weekday() >= 5  # Sábado=5, Domingo=6
+    es_fin_de_semana = ahora.weekday() >= 5
     hora_actual = ahora.hour
-    # Horario de gettex: 8:00-22:00 CET
     fuera_horario = hora_actual < 8 or hora_actual >= 22
     
-    # Si tenemos fecha del histórico de JustETF, usarla
-    if fecha_ultimo:
+    if fecha_elegida:
         try:
-            fecha_obj = datetime.strptime(fecha_ultimo, '%Y-%m-%d')
+            fecha_obj = datetime.strptime(fecha_elegida, '%Y-%m-%d')
             fecha_formateada = f"{fecha_obj.day} {meses[fecha_obj.month-1]} {fecha_obj.year}"
             resultado['fecha_cierre'] = fecha_formateada
             
-            # Si la fecha del último dato es anterior a hoy, el mercado cerró
             fecha_hoy = ahora.strftime('%Y-%m-%d')
-            mercado_cerrado = (fecha_ultimo < fecha_hoy) or es_fin_de_semana or fuera_horario
+            mercado_cerrado = (fecha_elegida < fecha_hoy) or es_fin_de_semana or fuera_horario
             resultado['mercado_cerrado'] = mercado_cerrado
             
             if mercado_cerrado:
@@ -226,17 +280,15 @@ def obtener_cambio_diario_con_info(isin: str) -> Dict[str, Any]:
             else:
                 resultado['mensaje'] = f"Al cierre: {fecha_formateada}"
         except Exception as e:
-            print(f"[Info] Error parseando fecha {fecha_ultimo}: {e}")
+            print(f"[Comparar] Error parseando fecha {fecha_elegida}: {e}")
     
-    # Si no tenemos fecha de JustETF, usar fecha de hoy o ayer según el día
+    # Si no tenemos fecha, generar mensaje por defecto
     if not resultado['mensaje']:
         mercado_cerrado = es_fin_de_semana or fuera_horario
         resultado['mercado_cerrado'] = mercado_cerrado
         
-        # Si es fin de semana, el último día de mercado fue el viernes
         if es_fin_de_semana:
-            # Calcular el viernes anterior
-            dias_desde_viernes = ahora.weekday() - 4  # viernes = 4
+            dias_desde_viernes = ahora.weekday() - 4
             if dias_desde_viernes < 0:
                 dias_desde_viernes += 7
             ultimo_dia_mercado = ahora - timedelta(days=dias_desde_viernes)
@@ -244,20 +296,21 @@ def obtener_cambio_diario_con_info(isin: str) -> Dict[str, Any]:
             resultado['fecha_cierre'] = fecha_formateada
             resultado['mensaje'] = f"Al cierre: {fecha_formateada} · Mercado cerrado"
         elif fuera_horario:
-            # Fuera de horario pero día laborable
             if hora_actual < 8:
-                # Antes de apertura, mostrar cierre de ayer
                 ayer = ahora - timedelta(days=1)
                 fecha_formateada = f"{ayer.day} {meses[ayer.month-1]} {ayer.year}"
             else:
-                # Después de cierre, mostrar cierre de hoy
                 fecha_formateada = f"{ahora.day} {meses[ahora.month-1]} {ahora.year}"
             resultado['fecha_cierre'] = fecha_formateada
             resultado['mensaje'] = f"Al cierre: {fecha_formateada} · Mercado cerrado"
         else:
-            # Mercado abierto
             resultado['mensaje'] = "Hoy"
     
+    # Si no se obtuvo cambio, intentar fallback
+    if resultado['cambio'] is None:
+        resultado['cambio'] = obtener_cambio_diario_justetf(isin)
+    
+    return resultado
     return resultado
 
 

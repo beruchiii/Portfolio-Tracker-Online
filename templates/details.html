@@ -79,6 +79,10 @@
                     <div class="text-right">
                         <div class="text-3xl font-bold" id="current-price">-</div>
                         <div class="text-lg" id="price-change">-</div>
+                        <div class="text-sm mt-1" id="daily-change">
+                            <span id="daily-change-pct" class="text-gray-400">-</span>
+                            <span id="daily-change-msg" class="text-gray-500 text-xs ml-1"></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -705,9 +709,49 @@
             beneficioEl.textContent = (positionData.beneficio >= 0 ? '+' : '') + formatCurrency(positionData.beneficio);
             beneficioEl.className = 'text-xl font-bold ' + (positionData.beneficio >= 0 ? 'text-green-400' : 'text-red-400');
             
+            // Cargar cambio diario
+            loadDailyChange();
+            
             // Mostrar aportaciones si hay más de una
             if (positionData.aportaciones && positionData.aportaciones.length > 0) {
                 updateAportaciones();
+            }
+        }
+        
+        // Cargar cambio diario y mensaje de cierre
+        async function loadDailyChange() {
+            try {
+                const ticker = positionData.ticker || positionData.isin;
+                const isin = positionData.isin || '';
+                const url = `/api/historical/${encodeURIComponent(ticker)}?periodo=1y&isin=${encodeURIComponent(isin)}`;
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.success && result.data) {
+                    const cambioDiario = result.data.cambio_diario;
+                    const mensajeCierre = result.data.mensaje_cierre;
+                    
+                    const dailyPctEl = document.getElementById('daily-change-pct');
+                    const dailyMsgEl = document.getElementById('daily-change-msg');
+                    
+                    if (cambioDiario !== null && cambioDiario !== undefined) {
+                        const dailyColor = cambioDiario >= 0 ? 'text-green-400' : 'text-red-400';
+                        const dailySign = cambioDiario >= 0 ? '+' : '';
+                        dailyPctEl.className = dailyColor;
+                        dailyPctEl.textContent = `${dailySign}${cambioDiario.toFixed(2)}% hoy`;
+                    } else {
+                        dailyPctEl.textContent = '';
+                    }
+                    
+                    if (mensajeCierre) {
+                        dailyMsgEl.textContent = mensajeCierre;
+                    } else {
+                        dailyMsgEl.textContent = '';
+                    }
+                }
+            } catch (error) {
+                console.error('Error cargando cambio diario:', error);
             }
         }
         

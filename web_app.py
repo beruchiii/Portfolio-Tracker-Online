@@ -4474,6 +4474,7 @@ def api_historical(ticker):
         yahoo_fecha_ultima = None
         justetf_historico = None
         justetf_fecha_ultima = None
+        meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
         
         # Intentar Yahoo Finance
         if ticker and ticker not in ['null', 'undefined', 'none', '']:
@@ -4529,6 +4530,33 @@ def api_historical(ticker):
                 except:
                     pass
             
+            # Recalcular cambio_diario desde datos de JustETF (la fuente elegida)
+            precios_justetf = justetf_historico['precios']
+            if len(precios_justetf) >= 2:
+                precio_hoy = precios_justetf[-1]
+                precio_ayer = precios_justetf[-2]
+                if precio_ayer > 0:
+                    cambio_diario = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                    print(f"[Historical] Cambio diario recalculado de JustETF: {cambio_diario:.2f}%")
+            
+            # Generar mensaje_cierre desde la fecha de JustETF
+            if justetf_fecha_ultima:
+                try:
+                    from datetime import datetime
+                    fecha_obj = datetime.strptime(justetf_fecha_ultima, '%Y-%m-%d')
+                    fecha_formateada = f"{fecha_obj.day} {meses[fecha_obj.month-1]} {fecha_obj.year}"
+                    ahora = datetime.now()
+                    es_fin_de_semana = ahora.weekday() >= 5
+                    fuera_horario = ahora.hour < 8 or ahora.hour >= 22
+                    fecha_hoy = ahora.strftime('%Y-%m-%d')
+                    mercado_cerrado = (justetf_fecha_ultima < fecha_hoy) or es_fin_de_semana or fuera_horario
+                    if mercado_cerrado:
+                        mensaje_cierre = f"Al cierre: {fecha_formateada} · Mercado cerrado"
+                    else:
+                        mensaje_cierre = f"Al cierre: {fecha_formateada}"
+                except Exception as e:
+                    print(f"[Historical] Error generando mensaje cierre: {e}")
+            
             return jsonify({
                 'success': True, 
                 'data': {
@@ -4548,6 +4576,32 @@ def api_historical(ticker):
                 nombre = stock.info.get('longName') or stock.info.get('shortName') or ticker
             except:
                 nombre = ticker
+            
+            # Recalcular cambio_diario desde datos de Yahoo (la fuente elegida)
+            if len(yahoo_historico) >= 2:
+                precio_hoy = float(yahoo_historico['Close'].iloc[-1])
+                precio_ayer = float(yahoo_historico['Close'].iloc[-2])
+                if precio_ayer > 0:
+                    cambio_diario = ((precio_hoy - precio_ayer) / precio_ayer) * 100
+                    print(f"[Historical] Cambio diario recalculado de Yahoo: {cambio_diario:.2f}%")
+            
+            # Generar mensaje_cierre desde la fecha de Yahoo
+            if yahoo_fecha_ultima:
+                try:
+                    from datetime import datetime
+                    fecha_obj = datetime.strptime(yahoo_fecha_ultima, '%Y-%m-%d')
+                    fecha_formateada = f"{fecha_obj.day} {meses[fecha_obj.month-1]} {fecha_obj.year}"
+                    ahora = datetime.now()
+                    es_fin_de_semana = ahora.weekday() >= 5
+                    fuera_horario = ahora.hour < 8 or ahora.hour >= 22
+                    fecha_hoy = ahora.strftime('%Y-%m-%d')
+                    mercado_cerrado = (yahoo_fecha_ultima < fecha_hoy) or es_fin_de_semana or fuera_horario
+                    if mercado_cerrado:
+                        mensaje_cierre = f"Al cierre: {fecha_formateada} · Mercado cerrado"
+                    else:
+                        mensaje_cierre = f"Al cierre: {fecha_formateada}"
+                except Exception as e:
+                    print(f"[Historical] Error generando mensaje cierre: {e}")
             
             data = {
                 'fechas': [d.strftime('%Y-%m-%d') for d in yahoo_historico.index],

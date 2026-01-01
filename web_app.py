@@ -4476,8 +4476,13 @@ def api_historical(ticker):
         justetf_fecha_ultima = None
         meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
         
-        # Intentar Yahoo Finance
-        if ticker and ticker not in ['null', 'undefined', 'none', '']:
+        # Verificar si el ticker es realmente un ticker de Yahoo (no un ISIN)
+        # Los ISINs tienen 12 caracteres y empiezan con 2 letras de país
+        ticker_es_isin = ticker and len(ticker) == 12 and ticker[:2].isalpha() and ticker[2:].isalnum()
+        ticker_valido_yahoo = ticker and ticker not in ['null', 'undefined', 'none', ''] and not ticker_es_isin
+        
+        # Intentar Yahoo Finance solo si hay un ticker válido (no ISIN)
+        if ticker_valido_yahoo:
             print(f"[Historical] Intentando Yahoo Finance con ticker: {ticker}")
             yahoo_historico = price_fetcher.obtener_historico(ticker, periodo)
             if yahoo_historico is not None and not yahoo_historico.empty:

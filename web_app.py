@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import uuid
+import requests
 from pathlib import Path
 from datetime import datetime, timedelta
 from functools import wraps
@@ -4535,14 +4536,51 @@ def api_historical(ticker):
                 except:
                     pass
             
-            # Recalcular cambio_diario desde datos de JustETF (la fuente elegida)
-            precios_justetf = justetf_historico['precios']
-            if len(precios_justetf) >= 2:
-                precio_hoy = precios_justetf[-1]
-                precio_ayer = precios_justetf[-2]
+            # IMPORTANTE: Obtener precio ACTUAL de gettex (API quote), no del histórico (NAV)
+            # El histórico (performance-chart) devuelve NAV, pero queremos precio de mercado
+            precio_gettex = None
+            try:
+                api_url = f"https://www.justetf.com/api/etfs/{isin}/quote?locale=es&currency=EUR"
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                    'Accept': 'application/json',
+                }
+                response_quote = requests.get(api_url, headers=headers, timeout=10)
+                
+                if response_quote.status_code == 200:
+                    data_quote = response_quote.json()
+                    if 'latestQuote' in data_quote:
+                        latest = data_quote['latestQuote']
+                        if isinstance(latest, dict) and 'raw' in latest:
+                            precio_gettex = float(latest['raw'])
+                        elif isinstance(latest, (int, float)):
+                            precio_gettex = float(latest)
+                        print(f"[Historical] Precio gettex de API quote: {precio_gettex:.2f}€")
+                    
+                    # Obtener cambio diario directo si está disponible
+                    if 'dailyChangePercent' in data_quote:
+                        cambio_directo = data_quote.get('dailyChangePercent', {})
+                        if isinstance(cambio_directo, dict) and 'raw' in cambio_directo:
+                            cambio_diario = float(cambio_directo['raw'])
+                        elif isinstance(cambio_directo, (int, float)):
+                            cambio_diario = float(cambio_directo)
+                        print(f"[Historical] Cambio diario de API quote: {cambio_diario:.2f}%")
+            except Exception as e:
+                print(f"[Historical] Error obteniendo precio gettex: {e}")
+            
+            # Usar precios del histórico pero reemplazar el último con precio de gettex
+            precios_final = [round(p, 2) for p in justetf_historico['precios']]
+            if precio_gettex:
+                precios_final[-1] = round(precio_gettex, 2)
+                print(f"[Historical] Reemplazando último precio NAV con gettex: {precios_final[-1]}€")
+            
+            # Recalcular cambio_diario si no lo obtuvimos de la API quote
+            if cambio_diario is None and len(precios_final) >= 2:
+                precio_hoy = precios_final[-1]
+                precio_ayer = justetf_historico['precios'][-2]  # Usar NAV de ayer para comparar
                 if precio_ayer > 0:
                     cambio_diario = ((precio_hoy - precio_ayer) / precio_ayer) * 100
-                    print(f"[Historical] Cambio diario recalculado de JustETF: {cambio_diario:.2f}%")
+                    print(f"[Historical] Cambio diario calculado (gettex vs NAV ayer): {cambio_diario:.2f}%")
             
             # Generar mensaje_cierre desde la fecha de JustETF
             if justetf_fecha_ultima:
@@ -4566,7 +4604,7 @@ def api_historical(ticker):
                 'success': True, 
                 'data': {
                     'fechas': justetf_historico['fechas'],
-                    'precios': [round(p, 2) for p in justetf_historico['precios']],
+                    'precios': precios_final,
                     'nombre': nombre_etf,
                     'cambio_diario': round(cambio_diario, 2) if cambio_diario is not None else None,
                     'mensaje_cierre': mensaje_cierre

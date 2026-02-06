@@ -379,6 +379,19 @@
                             <!-- Filled dynamically -->
                         </div>
                     </div>
+
+                    <!-- Strategy Panel -->
+                    <div id="strategy-section" class="hidden">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Estrategia 100€
+                        </h3>
+                        <div id="strategy-content" class="space-y-2 text-sm">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
                 </div>
             </aside>
         </div>
@@ -527,6 +540,7 @@
                         aplicarIndicadores();
                         generarAnalisisTecnico();
                         calcularSoportesResistencias();
+                        generarEstrategia100();
                     }
 
                     // Mostrar secciones
@@ -1873,6 +1887,314 @@
                     </div>
                 </div>`;
             });
+
+            container.innerHTML = html;
+            section.classList.remove('hidden');
+        }
+
+        // ============================================
+        // ESTRATEGIA 100€
+        // ============================================
+        function generarEstrategia100() {
+            const section = document.getElementById('strategy-section');
+            const container = document.getElementById('strategy-content');
+            if (!section || !container || ohlcvData.length < 20) return;
+
+            const closes = ohlcvData.map(d => d.close);
+            const highs = ohlcvData.map(d => d.high);
+            const lows = ohlcvData.map(d => d.low);
+            const numDatos = closes.length;
+            const lastPrice = closes[closes.length - 1];
+            if (lastPrice <= 0) return;
+
+            const esIntradiario = typeof ohlcvData[0].time === 'number';
+            const ticker = currentTicker || 'Activo';
+            const presupuesto = 100;
+            const unidades = (presupuesto / lastPrice);
+            const unidadesText = unidades >= 1 ? unidades.toFixed(4) : unidades.toFixed(6);
+
+            // ---- Recopilar señales ----
+            const sma20 = numDatos >= 30 ? calcularSMA(closes, 20) : [];
+            const sma50 = numDatos >= 60 ? calcularSMA(closes, 50) : [];
+            const sma200 = numDatos >= 210 ? calcularSMA(closes, 200) : [];
+            const lastSma20 = sma20.filter(v => v !== null).slice(-1)[0] || null;
+            const lastSma50 = sma50.filter(v => v !== null).slice(-1)[0] || null;
+            const lastSma200 = sma200.filter(v => v !== null).slice(-1)[0] || null;
+
+            let tendencia = 'neutral';
+            if (lastSma50 && lastSma200) {
+                if (lastPrice > lastSma50 && lastPrice > lastSma200) tendencia = 'alcista';
+                else if (lastPrice < lastSma50 && lastPrice < lastSma200) tendencia = 'bajista';
+                else tendencia = 'lateral';
+            } else if (lastSma50) {
+                tendencia = lastPrice > lastSma50 ? 'alcista' : 'bajista';
+            } else if (lastSma20) {
+                tendencia = lastPrice > lastSma20 ? 'alcista' : 'bajista';
+            }
+
+            const rsiData = numDatos >= 20 ? calcularRSI(closes, 14) : [];
+            const rsiValid = rsiData.filter(v => v !== null);
+            const lastRsi = rsiValid.length > 0 ? rsiValid[rsiValid.length - 1] : 50;
+
+            let macdAlcista = false;
+            if (numDatos >= 45) {
+                const { macd, signal } = calcularMACD(closes, 12, 26, 9);
+                const mv = macd.filter(v => v !== null);
+                const sv = signal.filter(v => v !== null);
+                if (mv.length > 0 && sv.length > 0) {
+                    macdAlcista = mv[mv.length - 1] > sv[sv.length - 1];
+                }
+            }
+
+            let bbPos = 'middle';
+            if (numDatos >= 30) {
+                const { upper, lower, middle } = calcularBollinger(closes, 20, 2);
+                const lu = upper.filter(v => v !== null).slice(-1)[0];
+                const ll = lower.filter(v => v !== null).slice(-1)[0];
+                const lm = middle.filter(v => v !== null).slice(-1)[0];
+                if (lu && ll) {
+                    if (lastPrice <= ll) bbPos = 'lower';
+                    else if (lastPrice >= lu) bbPos = 'upper';
+                    else if (lastPrice > lm) bbPos = 'above';
+                    else bbPos = 'below';
+                }
+            }
+
+            // Pivot points para targets
+            const recentHigh = Math.max(...highs.slice(-20));
+            const recentLow = Math.min(...lows.slice(-20));
+            const pivot = (recentHigh + recentLow + lastPrice) / 3;
+            const s1 = 2 * pivot - recentHigh;
+            const r1 = 2 * pivot - recentLow;
+
+            // ---- Decidir recomendación ----
+            let accion = 'MANTENER'; // COMPRAR, VENDER, MANTENER, ESPERAR
+            let confianza = 0; // 0-100
+            let colorAccion = 'text-yellow-400';
+            let bgAccion = 'border-yellow-500/30 bg-yellow-500/5';
+            let iconAccion = '&#x23F3;'; // reloj
+            let razon = '';
+            let entryTarget = null;
+            let stopLoss = null;
+            let takeProfit = null;
+            let distribucion = { ahora: 0, enSoporte: 0, reserva: 0 };
+
+            // Puntuación técnica
+            let score = 0; // positivo = alcista, negativo = bajista
+            if (tendencia === 'alcista') score += 2;
+            else if (tendencia === 'bajista') score -= 2;
+            if (macdAlcista) score += 1; else score -= 1;
+            if (lastRsi <= 30) score += 2;
+            else if (lastRsi <= 40) score += 1;
+            else if (lastRsi >= 70) score -= 2;
+            else if (lastRsi >= 60) score -= 1;
+            if (bbPos === 'lower') score += 1;
+            else if (bbPos === 'upper') score -= 1;
+
+            // ---- Lógica de estrategia ----
+            if (score >= 4) {
+                // Fuerte alcista: comprar agresivo
+                accion = 'COMPRAR';
+                confianza = 85;
+                colorAccion = 'text-green-400';
+                bgAccion = 'border-green-500/30 bg-green-500/10';
+                iconAccion = '&#x1F7E2;';
+                razon = 'Todas las señales alineadas al alza. Buen momento de entrada.';
+                distribucion = { ahora: 70, enSoporte: 20, reserva: 10 };
+                entryTarget = lastPrice;
+                stopLoss = s1 > 0 ? s1 : lastPrice * 0.95;
+                takeProfit = r1;
+            } else if (score >= 2) {
+                // Moderadamente alcista
+                accion = 'COMPRAR';
+                confianza = 65;
+                colorAccion = 'text-green-300';
+                bgAccion = 'border-green-500/20 bg-green-500/5';
+                iconAccion = '&#x1F7E2;';
+                razon = 'Señales mayoritariamente alcistas. Entrada con precaución.';
+                distribucion = { ahora: 50, enSoporte: 30, reserva: 20 };
+                entryTarget = lastPrice;
+                stopLoss = s1 > 0 ? s1 : lastPrice * 0.95;
+                takeProfit = r1;
+            } else if (score >= 0) {
+                // Lateral / mixto
+                if (lastRsi <= 35 || bbPos === 'lower') {
+                    accion = 'COMPRAR PARCIAL';
+                    confianza = 45;
+                    colorAccion = 'text-cyan-400';
+                    bgAccion = 'border-cyan-500/20 bg-cyan-500/5';
+                    iconAccion = '&#x1F4B0;';
+                    razon = 'Señales mixtas pero hay sobreventa. Entrada parcial por posible rebote.';
+                    distribucion = { ahora: 30, enSoporte: 40, reserva: 30 };
+                    entryTarget = lastPrice;
+                    stopLoss = s1 > 0 ? s1 : lastPrice * 0.93;
+                    takeProfit = lastSma50 || r1;
+                } else {
+                    accion = 'ESPERAR';
+                    confianza = 50;
+                    colorAccion = 'text-yellow-400';
+                    bgAccion = 'border-yellow-500/20 bg-yellow-500/5';
+                    iconAccion = '&#x23F3;';
+                    razon = 'Señales mixtas. Mejor esperar confirmación antes de entrar.';
+                    distribucion = { ahora: 0, enSoporte: 50, reserva: 50 };
+                    entryTarget = s1 > 0 ? s1 : lastPrice * 0.95;
+                    stopLoss = lastPrice * 0.90;
+                    takeProfit = r1;
+                }
+            } else if (score >= -2) {
+                // Moderadamente bajista
+                if (lastRsi <= 30 && bbPos === 'lower') {
+                    accion = 'ESPERAR REBOTE';
+                    confianza = 40;
+                    colorAccion = 'text-orange-400';
+                    bgAccion = 'border-orange-500/20 bg-orange-500/5';
+                    iconAccion = '&#x1F440;';
+                    razon = 'Tendencia bajista pero con sobreventa extrema. Esperar confirmación de rebote.';
+                    distribucion = { ahora: 0, enSoporte: 40, reserva: 60 };
+                    entryTarget = s1 > 0 ? s1 : lastPrice * 0.95;
+                    stopLoss = lastPrice * 0.90;
+                    takeProfit = lastSma20 || pivot;
+                } else {
+                    accion = 'NO COMPRAR';
+                    confianza = 60;
+                    colorAccion = 'text-red-300';
+                    bgAccion = 'border-red-500/20 bg-red-500/5';
+                    iconAccion = '&#x1F6D1;';
+                    razon = 'Presión vendedora activa. Esperar a que el precio estabilice.';
+                    distribucion = { ahora: 0, enSoporte: 30, reserva: 70 };
+                    entryTarget = s1 > 0 ? s1 : lastPrice * 0.92;
+                    stopLoss = lastPrice * 0.88;
+                    takeProfit = pivot;
+                }
+            } else {
+                // Fuerte bajista
+                accion = 'NO COMPRAR';
+                confianza = 80;
+                colorAccion = 'text-red-400';
+                bgAccion = 'border-red-500/30 bg-red-500/10';
+                iconAccion = '&#x1F6D1;';
+                razon = 'Señales claramente bajistas. Demasiado riesgo para entrar ahora.';
+                distribucion = { ahora: 0, enSoporte: 20, reserva: 80 };
+                entryTarget = s1 > 0 ? s1 : lastPrice * 0.90;
+                stopLoss = lastPrice * 0.85;
+                takeProfit = pivot;
+            }
+
+            // ---- Generar HTML ----
+            let html = '';
+
+            // Disclaimer
+            html += `<div class="p-2 bg-amber-500/10 rounded border border-amber-500/30 text-xs text-amber-400 mb-2">
+                &#x26A0;&#xFE0F; Esto NO es consejo financiero. Es un análisis técnico automatizado con fines educativos.
+            </div>`;
+
+            // Acción principal
+            html += `<div class="p-3 rounded-lg border ${bgAccion}">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-xl">${iconAccion}</span>
+                    <span class="${colorAccion} font-bold text-lg">${accion}</span>
+                </div>
+                <p class="text-xs text-slate-400 mb-2">${razon}</p>
+                <div class="flex items-center gap-2 text-xs">
+                    <span class="text-slate-500">Confianza:</span>
+                    <div class="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+                        <div class="h-full ${confianza >= 70 ? 'bg-green-500' : confianza >= 50 ? 'bg-yellow-500' : 'bg-orange-500'} rounded-full transition-all" style="width: ${confianza}%"></div>
+                    </div>
+                    <span class="font-semibold ${colorAccion}">${confianza}%</span>
+                </div>
+            </div>`;
+
+            // Distribución de los 100€
+            const euroAhora = (presupuesto * distribucion.ahora / 100).toFixed(0);
+            const euroSoporte = (presupuesto * distribucion.enSoporte / 100).toFixed(0);
+            const euroReserva = (presupuesto * distribucion.reserva / 100).toFixed(0);
+
+            html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                <p class="text-xs font-semibold text-slate-300 mb-2">&#x1F4B6; Distribución de 100€</p>
+                <div class="space-y-1.5">`;
+
+            if (distribucion.ahora > 0) {
+                html += `<div class="flex items-center justify-between text-xs">
+                    <span class="text-green-400">&#x25B6; Comprar ahora</span>
+                    <span class="font-bold text-green-400">${euroAhora}€</span>
+                </div>
+                <p class="text-xs text-slate-500 pl-4">a ${formatPrice(lastPrice)} = ${(distribucion.ahora / 100 * presupuesto / lastPrice).toFixed(6)} uds</p>`;
+            }
+
+            if (distribucion.enSoporte > 0 && entryTarget) {
+                html += `<div class="flex items-center justify-between text-xs">
+                    <span class="text-cyan-400">&#x23F0; Orden en soporte</span>
+                    <span class="font-bold text-cyan-400">${euroSoporte}€</span>
+                </div>
+                <p class="text-xs text-slate-500 pl-4">si baja a ${formatPrice(entryTarget)} (${((entryTarget - lastPrice) / lastPrice * 100).toFixed(1)}%)</p>`;
+            }
+
+            if (distribucion.reserva > 0) {
+                html += `<div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-400">&#x1F4BC; Reserva (cash)</span>
+                    <span class="font-bold text-slate-400">${euroReserva}€</span>
+                </div>
+                <p class="text-xs text-slate-500 pl-4">Esperar mejor oportunidad</p>`;
+            }
+
+            html += `</div></div>`;
+
+            // Niveles clave
+            html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                <p class="text-xs font-semibold text-slate-300 mb-2">&#x1F3AF; Niveles clave</p>
+                <div class="space-y-1.5 text-xs">`;
+
+            if (takeProfit) {
+                const tpPct = ((takeProfit - lastPrice) / lastPrice * 100).toFixed(1);
+                const tpGanancia = (presupuesto * (takeProfit - lastPrice) / lastPrice).toFixed(2);
+                html += `<div class="flex items-center justify-between">
+                    <span class="text-green-400">&#x2705; Take Profit</span>
+                    <div class="text-right">
+                        <span class="text-green-400 font-semibold">${formatPrice(takeProfit)}</span>
+                        <span class="text-green-600 ml-1">(+${tpPct}%)</span>
+                    </div>
+                </div>
+                <p class="text-xs text-green-600 pl-4">Ganancia potencial: +${tpGanancia}€</p>`;
+            }
+
+            html += `<div class="flex items-center justify-between">
+                <span class="text-blue-400">&#x1F4CD; Precio actual</span>
+                <span class="text-blue-400 font-semibold">${formatPrice(lastPrice)}</span>
+            </div>`;
+
+            if (stopLoss) {
+                const slPct = ((stopLoss - lastPrice) / lastPrice * 100).toFixed(1);
+                const slPerdida = (presupuesto * (lastPrice - stopLoss) / lastPrice).toFixed(2);
+                html += `<div class="flex items-center justify-between">
+                    <span class="text-red-400">&#x1F6D1; Stop Loss</span>
+                    <div class="text-right">
+                        <span class="text-red-400 font-semibold">${formatPrice(stopLoss)}</span>
+                        <span class="text-red-600 ml-1">(${slPct}%)</span>
+                    </div>
+                </div>
+                <p class="text-xs text-red-600 pl-4">Pérdida máxima: -${slPerdida}€</p>`;
+            }
+
+            // Risk/Reward ratio
+            if (takeProfit && stopLoss) {
+                const reward = Math.abs(takeProfit - lastPrice);
+                const risk = Math.abs(lastPrice - stopLoss);
+                const rr = risk > 0 ? (reward / risk).toFixed(1) : '∞';
+                const rrColor = parseFloat(rr) >= 2 ? 'text-green-400' : parseFloat(rr) >= 1 ? 'text-yellow-400' : 'text-red-400';
+                html += `<div class="flex items-center justify-between mt-1 pt-1 border-t border-slate-700">
+                    <span class="text-slate-400">&#x2696;&#xFE0F; Risk/Reward</span>
+                    <span class="${rrColor} font-bold">1:${rr}</span>
+                </div>
+                <p class="text-xs text-slate-500 pl-4">${parseFloat(rr) >= 2 ? 'Buena relación riesgo/beneficio' : parseFloat(rr) >= 1 ? 'Relación aceptable' : 'Riesgo alto vs beneficio'}</p>`;
+            }
+
+            html += `</div></div>`;
+
+            // Nota sobre el score
+            html += `<div class="p-2 bg-slate-800/50 rounded border border-slate-700/50 text-xs text-slate-500">
+                <p>&#x1F4CA; Score técnico: <span class="font-semibold ${score > 0 ? 'text-green-400' : score < 0 ? 'text-red-400' : 'text-yellow-400'}">${score > 0 ? '+' : ''}${score}</span> (de -6 a +6)</p>
+                <p class="mt-1">Basado en: Tendencia · MACD · RSI · Bollinger</p>
+            </div>`;
 
             container.innerHTML = html;
             section.classList.remove('hidden');

@@ -4808,8 +4808,6 @@ def api_ohlcv(ticker):
     periodo = request.args.get('periodo', '1y')
     isin = request.args.get('isin', '')
 
-    print(f"[OHLCV] Solicitando ticker={ticker}, isin={isin}, periodo={periodo}, interval={yf_interval}")
-
     # Mapeo de períodos a yfinance con intervalo adaptativo
     # Para periodos cortos usamos datos horarios para tener más puntos
     periodo_map = {
@@ -4834,6 +4832,8 @@ def api_ohlcv(ticker):
     }
     yf_periodo = periodo_map.get(periodo, '1y')
     yf_interval = interval_map.get(periodo, '1d')
+
+    print(f"[OHLCV] Solicitando ticker={ticker}, isin={isin}, periodo={periodo}, interval={yf_interval}")
 
     try:
         # Verificar si el ticker es un ISIN

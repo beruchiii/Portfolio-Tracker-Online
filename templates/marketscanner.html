@@ -407,8 +407,6 @@
             sma200: null,
             ema12: null,
             ema26: null,
-            bollingerUpper: null,
-            bollingerLower: null,
             bollingerMiddle: null,
             bollingerFillUpper: null,
             bollingerFillLower: null
@@ -1162,7 +1160,7 @@
         }
 
         function toggleBollingerIndicator(enabled) {
-            ['bollingerUpper', 'bollingerMiddle', 'bollingerLower', 'bollingerFillUpper', 'bollingerFillLower'].forEach(key => {
+            ['bollingerMiddle', 'bollingerFillUpper', 'bollingerFillLower'].forEach(key => {
                 if (indicatorSeries[key]) {
                     mainChart.removeSeries(indicatorSeries[key]);
                     indicatorSeries[key] = null;
@@ -1174,41 +1172,29 @@
                 const closes = ohlcvData.map(d => d.close);
                 const { upper, middle, lower } = calcularBollinger(closes, 20, 2);
 
-                // Técnica de dos áreas para rellenar entre bandas:
-                // 1) Área desde upper hacia abajo (con color azul semitransparente)
+                // Banda superior como area (relleno sutil desde upper hacia abajo)
                 indicatorSeries.bollingerFillUpper = mainChart.addAreaSeries({
-                    lineColor: 'rgba(0, 0, 0, 0)',
-                    topColor: 'rgba(59, 130, 246, 0.12)',
-                    bottomColor: 'rgba(59, 130, 246, 0.12)',
-                    lineWidth: 0,
-                    priceLineVisible: false,
-                    lastValueVisible: false,
-                    crosshairMarkerVisible: false,
-                });
-                // 2) Área desde lower hacia abajo (con color del fondo para "borrar" debajo de lower)
-                indicatorSeries.bollingerFillLower = mainChart.addAreaSeries({
-                    lineColor: 'rgba(0, 0, 0, 0)',
-                    topColor: 'rgba(15, 23, 42, 1)',
-                    bottomColor: 'rgba(15, 23, 42, 1)',
-                    lineWidth: 0,
+                    lineColor: 'rgba(59, 130, 246, 0.5)',
+                    topColor: 'rgba(59, 130, 246, 0.06)',
+                    bottomColor: 'rgba(59, 130, 246, 0.02)',
+                    lineWidth: 1,
                     priceLineVisible: false,
                     lastValueVisible: false,
                     crosshairMarkerVisible: false,
                 });
 
-                // Líneas visibles de las bandas
-                indicatorSeries.bollingerUpper = mainChart.addLineSeries({
-                    color: 'rgba(59, 130, 246, 0.6)',
+                // Banda inferior como area (relleno sutil desde lower hacia abajo, mismo tono)
+                indicatorSeries.bollingerFillLower = mainChart.addAreaSeries({
+                    lineColor: 'rgba(59, 130, 246, 0.5)',
+                    topColor: 'rgba(59, 130, 246, 0.06)',
+                    bottomColor: 'rgba(59, 130, 246, 0.0)',
                     lineWidth: 1,
                     priceLineVisible: false,
                     lastValueVisible: false,
+                    crosshairMarkerVisible: false,
                 });
-                indicatorSeries.bollingerLower = mainChart.addLineSeries({
-                    color: 'rgba(59, 130, 246, 0.6)',
-                    lineWidth: 1,
-                    priceLineVisible: false,
-                    lastValueVisible: false,
-                });
+
+                // Línea media punteada
                 indicatorSeries.bollingerMiddle = mainChart.addLineSeries({
                     color: 'rgba(59, 130, 246, 0.9)',
                     lineWidth: 1,
@@ -1234,8 +1220,6 @@
 
                 indicatorSeries.bollingerFillUpper.setData(upperData);
                 indicatorSeries.bollingerFillLower.setData(lowerData);
-                indicatorSeries.bollingerUpper.setData(upperData);
-                indicatorSeries.bollingerLower.setData(lowerData);
                 indicatorSeries.bollingerMiddle.setData(middleData);
             }
         }

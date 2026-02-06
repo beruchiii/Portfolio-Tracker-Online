@@ -360,7 +360,7 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                             </svg>
-                            Analisis Tecnico
+                            Análisis Técnico
                         </h3>
                         <div id="analysis-content" class="space-y-3 text-sm">
                             <!-- Filled dynamically -->
@@ -407,9 +407,9 @@
             sma200: null,
             ema12: null,
             ema26: null,
+            bollingerUpper: null,
             bollingerMiddle: null,
-            bollingerFillUpper: null,
-            bollingerFillLower: null
+            bollingerLower: null
         };
 
         let currentTicker = null;
@@ -662,8 +662,8 @@
                 const isPositive = ohlcvData.length > 1 && ohlcvData[ohlcvData.length - 1].close >= ohlcvData[0].close;
                 mainSeries = mainChart.addAreaSeries({
                     lineColor: isPositive ? '#22c55e' : '#ef4444',
-                    topColor: isPositive ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',
-                    bottomColor: isPositive ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+                    topColor: isPositive ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                    bottomColor: isPositive ? 'rgba(34, 197, 94, 0.02)' : 'rgba(239, 68, 68, 0.02)',
                     lineWidth: 2,
                 });
                 mainSeries.setData(ohlcvData.map(d => ({
@@ -671,6 +671,18 @@
                     value: d.close,
                 })));
             }
+
+            // Línea de precio actual (reference line)
+            const lastClose = ohlcvData[ohlcvData.length - 1].close;
+            const isUp = ohlcvData.length > 1 && lastClose >= ohlcvData[0].close;
+            mainSeries.createPriceLine({
+                price: lastClose,
+                color: isUp ? '#22c55e' : '#ef4444',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dotted,
+                axisLabelVisible: true,
+                title: '',
+            });
 
             // Ajustar vista
             mainChart.timeScale().fitContent();
@@ -739,12 +751,14 @@
                 };
             }));
 
-            // Sincronizar crosshair
-            mainChart.subscribeCrosshairMove(param => {
-                if (param.time) {
-                    volumeChart.setCrosshairPosition(0, param.time, volumeSeries);
+            // Sincronizar crosshair (almacenar referencia para cleanup)
+            const volumeCrosshairHandler = param => {
+                if (param.time && volumeChart) {
+                    try { volumeChart.setCrosshairPosition(0, param.time, volumeSeries); } catch(e) {}
                 }
-            });
+            };
+            mainChart.subscribeCrosshairMove(volumeCrosshairHandler);
+            crosshairSubscriptions.push(volumeCrosshairHandler);
         }
 
         function crearGraficoRSI() {
@@ -810,7 +824,7 @@
                 actualizarRSIInfo(lastRsi);
             }
 
-            // Sincronizar crosshair (almacenar referencia para cleanup)
+            // Sincronizar crosshair bidireccional (almacenar referencia para cleanup)
             const rsiCrosshairHandler = param => {
                 if (param.time && rsiChart) {
                     try { rsiChart.setCrosshairPosition(0, param.time, rsiSeries); } catch(e) {}
@@ -818,6 +832,13 @@
             };
             mainChart.subscribeCrosshairMove(rsiCrosshairHandler);
             crosshairSubscriptions.push(rsiCrosshairHandler);
+
+            // Reverso: RSI -> Main
+            rsiChart.subscribeCrosshairMove(param => {
+                if (param.time && mainChart) {
+                    try { mainChart.setCrosshairPosition(0, param.time, mainSeries); } catch(e) {}
+                }
+            });
         }
 
         function crearGraficoMACD() {
@@ -881,7 +902,7 @@
                 color: (histogram[i] !== null && histogram[i] >= 0) ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)',
             })).filter(d => d.value !== null && d.value !== undefined));
 
-            // Sincronizar crosshair (almacenar referencia para cleanup)
+            // Sincronizar crosshair bidireccional (almacenar referencia para cleanup)
             const macdCrosshairHandler = param => {
                 if (param.time && macdChart) {
                     try { macdChart.setCrosshairPosition(0, param.time, macdLineSeries); } catch(e) {}
@@ -889,6 +910,13 @@
             };
             mainChart.subscribeCrosshairMove(macdCrosshairHandler);
             crosshairSubscriptions.push(macdCrosshairHandler);
+
+            // Reverso: MACD -> Main
+            macdChart.subscribeCrosshairMove(param => {
+                if (param.time && mainChart) {
+                    try { mainChart.setCrosshairPosition(0, param.time, mainSeries); } catch(e) {}
+                }
+            });
         }
 
         // ============================================
@@ -1160,7 +1188,7 @@
         }
 
         function toggleBollingerIndicator(enabled) {
-            ['bollingerMiddle', 'bollingerFillUpper', 'bollingerFillLower'].forEach(key => {
+            ['bollingerUpper', 'bollingerMiddle', 'bollingerLower'].forEach(key => {
                 if (indicatorSeries[key]) {
                     mainChart.removeSeries(indicatorSeries[key]);
                     indicatorSeries[key] = null;
@@ -1172,31 +1200,21 @@
                 const closes = ohlcvData.map(d => d.close);
                 const { upper, middle, lower } = calcularBollinger(closes, 20, 2);
 
-                // Banda superior como area (relleno sutil desde upper hacia abajo)
-                indicatorSeries.bollingerFillUpper = mainChart.addAreaSeries({
-                    lineColor: 'rgba(59, 130, 246, 0.5)',
-                    topColor: 'rgba(59, 130, 246, 0.06)',
-                    bottomColor: 'rgba(59, 130, 246, 0.02)',
+                // 3 líneas limpias: upper, middle (punteada), lower
+                indicatorSeries.bollingerUpper = mainChart.addLineSeries({
+                    color: '#3b82f6',
                     lineWidth: 1,
                     priceLineVisible: false,
                     lastValueVisible: false,
-                    crosshairMarkerVisible: false,
                 });
-
-                // Banda inferior como area (relleno sutil desde lower hacia abajo, mismo tono)
-                indicatorSeries.bollingerFillLower = mainChart.addAreaSeries({
-                    lineColor: 'rgba(59, 130, 246, 0.5)',
-                    topColor: 'rgba(59, 130, 246, 0.06)',
-                    bottomColor: 'rgba(59, 130, 246, 0.0)',
+                indicatorSeries.bollingerLower = mainChart.addLineSeries({
+                    color: '#3b82f6',
                     lineWidth: 1,
                     priceLineVisible: false,
                     lastValueVisible: false,
-                    crosshairMarkerVisible: false,
                 });
-
-                // Línea media punteada
                 indicatorSeries.bollingerMiddle = mainChart.addLineSeries({
-                    color: 'rgba(59, 130, 246, 0.9)',
+                    color: '#60a5fa',
                     lineWidth: 1,
                     lineStyle: LightweightCharts.LineStyle.Dashed,
                     priceLineVisible: false,
@@ -1218,9 +1236,25 @@
                     value: middle[i],
                 })).filter(d => d.value !== null);
 
-                indicatorSeries.bollingerFillUpper.setData(upperData);
-                indicatorSeries.bollingerFillLower.setData(lowerData);
+                indicatorSeries.bollingerUpper.setData(upperData);
+                indicatorSeries.bollingerLower.setData(lowerData);
                 indicatorSeries.bollingerMiddle.setData(middleData);
+            } else if (enabled && ohlcvData.length < 30) {
+                // Datos insuficientes: desactivar checkbox con feedback visual
+                const checkbox = document.getElementById('bollinger-toggle');
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.parentElement.title = `Necesita 30 datos (hay ${ohlcvData.length})`;
+                    checkbox.parentElement.style.opacity = '0.4';
+                }
+            }
+            // Restaurar opacidad si hay datos suficientes
+            if (ohlcvData.length >= 30) {
+                const checkbox = document.getElementById('bollinger-toggle');
+                if (checkbox) {
+                    checkbox.parentElement.title = '';
+                    checkbox.parentElement.style.opacity = '1';
+                }
             }
         }
 
@@ -1439,7 +1473,7 @@
                     tendenciaTexto = 'Precio por debajo de SMA 50 y SMA 200. Tendencia bajista confirmada.';
                 } else {
                     tendencia = 'lateral';
-                    tendenciaTexto = 'Precio entre medias moviles. Mercado en fase lateral o de transicion.';
+                    tendenciaTexto = 'Precio entre medias móviles. Mercado en fase lateral o de transición.';
                 }
             } else if (lastSma50) {
                 tendencia = lastPrice > lastSma50 ? 'alcista' : 'bajista';
@@ -1452,7 +1486,7 @@
                 // Muy pocos datos, usar comparacion simple
                 const firstPrice = closes[0];
                 tendencia = lastPrice > firstPrice ? 'alcista' : 'bajista';
-                tendenciaTexto = lastPrice > firstPrice ? `Subida del ${((lastPrice - firstPrice) / firstPrice * 100).toFixed(1)}% en el periodo.` : `Caida del ${((firstPrice - lastPrice) / firstPrice * 100).toFixed(1)}% en el periodo.`;
+                tendenciaTexto = lastPrice > firstPrice ? `Subida del ${((lastPrice - firstPrice) / firstPrice * 100).toFixed(1)}% en el período.` : `Caída del ${((firstPrice - lastPrice) / firstPrice * 100).toFixed(1)}% en el período.`;
             }
 
             const tendIcon = tendencia === 'alcista' ? '&#x1F7E2;' : tendencia === 'bajista' ? '&#x1F534;' : '&#x1F7E1;';
@@ -1498,7 +1532,7 @@
                         </div>
                         <p class="text-xs"><span class="${cruceColor} font-bold uppercase">Cruce ${tipoCruce}</span> <span class="text-slate-500">(SMA50/SMA200)</span></p>
                         <p class="text-xs text-slate-400">Fecha: ${formatTime(ultimoCruce)} - Hace ${diasCruce} ${esIntradiario ? 'velas' : 'sesiones'}${diasCruce <= 10 ? ' - <span class="text-yellow-400 font-semibold">Reciente!</span>' : ''}</p>
-                        <p class="text-xs text-slate-500 mt-1">${tipoCruce === 'dorado' ? 'La SMA 50 cruzo por encima de la SMA 200. Senal historica de compra.' : 'La SMA 50 cruzo por debajo de la SMA 200. Senal historica de venta.'}</p>
+                        <p class="text-xs text-slate-500 mt-1">${tipoCruce === 'dorado' ? 'La SMA 50 cruzó por encima de la SMA 200. Señal histórica de compra.' : 'La SMA 50 cruzó por debajo de la SMA 200. Señal histórica de venta.'}</p>
                     </div>`;
                 }
             }
@@ -1589,7 +1623,7 @@
                         <span class="${rsiColor} font-bold ml-auto text-xs">${lastRsi.toFixed(1)}</span>
                     </div>
                     <p class="text-xs"><span class="${rsiColor} font-bold">${rsiSignal}</span></p>
-                    <p class="text-xs text-slate-500">${lastRsi >= 70 ? 'Posible correccion a la baja. Considerar toma de beneficios.' : lastRsi <= 30 ? 'Posible rebote al alza. Oportunidad de compra.' : 'Sin senales extremas. Mercado en equilibrio.'}</p>
+                    <p class="text-xs text-slate-500">${lastRsi >= 70 ? 'Posible corrección a la baja. Considerar toma de beneficios.' : lastRsi <= 30 ? 'Posible rebote al alza. Oportunidad de compra.' : 'Sin señales extremas. Mercado en equilibrio.'}</p>
                     ${divergencia}
                 </div>`;
             }
@@ -1620,8 +1654,8 @@
                             <span class="font-semibold text-slate-200">Bollinger</span>
                             <span class="${bbColor} font-bold ml-auto text-xs">${bbSignal}</span>
                         </div>
-                        <p class="text-xs text-slate-400">Ancho: ${bandWidth}% ${parseFloat(bandWidth) < 5 ? '- <span class="text-yellow-400">Compresion! Posible movimiento fuerte</span>' : ''}</p>
-                        <p class="text-xs text-slate-500">${lastPrice >= lastUpper ? 'Precio toca banda superior. Posible sobreextension.' : lastPrice <= lastLower ? 'Precio toca banda inferior. Posible sobreventa.' : 'Precio dentro de bandas normales.'}</p>
+                        <p class="text-xs text-slate-400">Ancho: ${bandWidth}% ${parseFloat(bandWidth) < 5 ? '- <span class="text-yellow-400">Compresión! Posible movimiento fuerte</span>' : ''}</p>
+                        <p class="text-xs text-slate-500">${lastPrice >= lastUpper ? 'Precio toca banda superior. Posible sobreextensión.' : lastPrice <= lastLower ? 'Precio toca banda inferior. Posible sobreventa.' : 'Precio dentro de bandas normales.'}</p>
                     </div>`;
                 }
             }
@@ -1645,15 +1679,15 @@
 
             let resumen, resColor, resBg, resIcon;
             if (bullSignals >= 3 && bearSignals <= 1) {
-                resumen = 'SENAL ALCISTA FUERTE'; resColor = 'text-green-400'; resBg = 'bg-green-500/10 border-green-500/30'; resIcon = '&#x2705;';
+                resumen = 'SEÑAL ALCISTA FUERTE'; resColor = 'text-green-400'; resBg = 'bg-green-500/10 border-green-500/30'; resIcon = '&#x2705;';
             } else if (bearSignals >= 3 && bullSignals <= 1) {
-                resumen = 'SENAL BAJISTA FUERTE'; resColor = 'text-red-400'; resBg = 'bg-red-500/10 border-red-500/30'; resIcon = '&#x1F6D1;';
+                resumen = 'SEÑAL BAJISTA FUERTE'; resColor = 'text-red-400'; resBg = 'bg-red-500/10 border-red-500/30'; resIcon = '&#x1F6D1;';
             } else if (bullSignals > bearSignals) {
                 resumen = 'LIGERAMENTE ALCISTA'; resColor = 'text-green-300'; resBg = 'bg-green-500/5 border-green-500/20'; resIcon = '&#x1F4C8;';
             } else if (bearSignals > bullSignals) {
                 resumen = 'LIGERAMENTE BAJISTA'; resColor = 'text-red-300'; resBg = 'bg-red-500/5 border-red-500/20'; resIcon = '&#x1F4C9;';
             } else {
-                resumen = 'SENALES MIXTAS'; resColor = 'text-yellow-400'; resBg = 'bg-yellow-500/10 border-yellow-500/30'; resIcon = '&#x26A0;&#xFE0F;';
+                resumen = 'SEÑALES MIXTAS'; resColor = 'text-yellow-400'; resBg = 'bg-yellow-500/10 border-yellow-500/30'; resIcon = '&#x26A0;&#xFE0F;';
             }
 
             html += `<div class="p-3 rounded-lg border ${resBg} text-center">
@@ -1698,11 +1732,11 @@
             let levels = [
                 { price: r2, label: 'R2', type: 'resistance' },
                 { price: r1, label: 'R1', type: 'resistance' },
-                { price: periodHigh, label: 'Max periodo', type: 'resistance' },
+                { price: periodHigh, label: 'Máx período', type: 'resistance' },
                 { price: pivot, label: 'Pivot', type: 'pivot' },
                 { price: s1, label: 'S1', type: 'support' },
                 { price: s2, label: 'S2', type: 'support' },
-                { price: periodLow, label: 'Min periodo', type: 'support' },
+                { price: periodLow, label: 'Mín período', type: 'support' },
             ];
 
             // Filtrar niveles con precio <= 0

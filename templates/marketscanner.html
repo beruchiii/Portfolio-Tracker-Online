@@ -347,6 +347,19 @@
                         </div>
                     </div>
 
+                    <!-- Technical Analysis -->
+                    <div id="analysis-section" class="hidden">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            Analisis Tecnico
+                        </h3>
+                        <div id="analysis-content" class="space-y-3 text-sm">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
+
                     <!-- Support/Resistance -->
                     <div id="sr-section" class="hidden">
                         <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
@@ -486,6 +499,7 @@
                     if (ohlcvData.length > 0) {
                         crearGraficos();
                         aplicarIndicadores();
+                        generarAnalisisTecnico();
                     }
 
                     // Mostrar secciones
@@ -535,6 +549,14 @@
         // CREACIÓN DE GRÁFICOS
         // ============================================
         function crearGraficos() {
+            // Limpiar gráficos anteriores
+            if (mainChart) { try { mainChart.remove(); } catch(e) {} mainChart = null; }
+            if (rsiChart) { try { rsiChart.remove(); } catch(e) {} rsiChart = null; }
+            if (macdChart) { try { macdChart.remove(); } catch(e) {} macdChart = null; }
+            if (volumeChart) { try { volumeChart.remove(); } catch(e) {} volumeChart = null; }
+            // Reset indicator series references
+            Object.keys(indicatorSeries).forEach(k => indicatorSeries[k] = null);
+
             const chartOptions = {
                 layout: {
                     background: { type: 'solid', color: 'transparent' },
@@ -809,8 +831,8 @@
             macdHistogramSeries.setData(ohlcvData.map((d, i) => ({
                 time: d.time,
                 value: histogram[i],
-                color: histogram[i] >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)',
-            })).filter(d => d.value !== null));
+                color: (histogram[i] !== null && histogram[i] >= 0) ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)',
+            })).filter(d => d.value !== null && d.value !== undefined));
 
             // Sincronizar crosshair
             mainChart.subscribeCrosshairMove(param => {
@@ -1224,6 +1246,251 @@
                 signalEl.className = 'text-xs px-2 py-1 rounded bg-slate-600 text-slate-300';
                 barEl.className = 'h-full bg-blue-500 transition-all duration-300';
             }
+        }
+
+        // ============================================
+        // ANALISIS TECNICO
+        // ============================================
+        function generarAnalisisTecnico() {
+            const section = document.getElementById('analysis-section');
+            const container = document.getElementById('analysis-content');
+            if (!section || !container || ohlcvData.length < 30) return;
+
+            section.classList.remove('hidden');
+            const closes = ohlcvData.map(d => d.close);
+            const lastPrice = closes[closes.length - 1];
+            const prevPrice = closes[closes.length - 2];
+            let html = '';
+
+            // --- 1. TENDENCIA GENERAL ---
+            const sma20 = calcularSMA(closes, 20);
+            const sma50 = calcularSMA(closes, 50);
+            const sma200 = calcularSMA(closes, 200);
+            const lastSma20 = sma20.filter(v => v !== null).slice(-1)[0];
+            const lastSma50 = sma50.filter(v => v !== null).slice(-1)[0];
+            const lastSma200 = sma200.filter(v => v !== null).slice(-1)[0];
+
+            let tendencia = 'neutral';
+            let tendenciaTexto = '';
+            if (lastSma50 && lastSma200) {
+                if (lastPrice > lastSma50 && lastPrice > lastSma200 && lastSma50 > lastSma200) {
+                    tendencia = 'alcista';
+                    tendenciaTexto = 'Precio por encima de SMA 50 y SMA 200. Tendencia alcista confirmada.';
+                } else if (lastPrice < lastSma50 && lastPrice < lastSma200 && lastSma50 < lastSma200) {
+                    tendencia = 'bajista';
+                    tendenciaTexto = 'Precio por debajo de SMA 50 y SMA 200. Tendencia bajista confirmada.';
+                } else {
+                    tendencia = 'lateral';
+                    tendenciaTexto = 'Precio entre medias moviles. Mercado en fase lateral o de transicion.';
+                }
+            } else if (lastSma50) {
+                tendencia = lastPrice > lastSma50 ? 'alcista' : 'bajista';
+                tendenciaTexto = lastPrice > lastSma50 ? 'Precio sobre SMA 50. Tendencia a corto plazo alcista.' : 'Precio bajo SMA 50. Tendencia a corto plazo bajista.';
+            }
+
+            const tendIcon = tendencia === 'alcista' ? '&#x1F7E2;' : tendencia === 'bajista' ? '&#x1F534;' : '&#x1F7E1;';
+            const tendColor = tendencia === 'alcista' ? 'text-green-400' : tendencia === 'bajista' ? 'text-red-400' : 'text-yellow-400';
+            html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                <div class="flex items-center gap-2 mb-1">
+                    <span>${tendIcon}</span>
+                    <span class="font-semibold text-slate-200">Tendencia</span>
+                    <span class="${tendColor} font-bold ml-auto text-xs uppercase">${tendencia}</span>
+                </div>
+                <p class="text-xs text-slate-400">${tendenciaTexto}</p>
+            </div>`;
+
+            // --- 2. CRUCES DE MEDIAS (Golden/Death Cross) ---
+            if (sma50.length > 1 && sma200.length > 1) {
+                let ultimoCruce = null, tipoCruce = null, diasCruce = 0;
+                for (let i = sma50.length - 1; i > 0; i--) {
+                    if (sma50[i] === null || sma200[i] === null || sma50[i-1] === null || sma200[i-1] === null) continue;
+                    const arriba = sma50[i] > sma200[i];
+                    const arribaAntes = sma50[i-1] > sma200[i-1];
+                    if (arriba && !arribaAntes) {
+                        ultimoCruce = ohlcvData[i].time;
+                        tipoCruce = 'dorado';
+                        diasCruce = sma50.length - 1 - i;
+                        break;
+                    }
+                    if (!arriba && arribaAntes) {
+                        ultimoCruce = ohlcvData[i].time;
+                        tipoCruce = 'mortal';
+                        diasCruce = sma50.length - 1 - i;
+                        break;
+                    }
+                }
+
+                if (tipoCruce) {
+                    const cruceIcon = tipoCruce === 'dorado' ? '&#x2728;' : '&#x2620;&#xFE0F;';
+                    const cruceColor = tipoCruce === 'dorado' ? 'text-green-400' : 'text-red-400';
+                    const cruceBg = tipoCruce === 'dorado' ? 'border-green-700/50' : 'border-red-700/50';
+                    html += `<div class="p-2.5 bg-slate-800 rounded-lg border ${cruceBg}">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span>${cruceIcon}</span>
+                            <span class="font-semibold text-slate-200">Cruce de Medias</span>
+                        </div>
+                        <p class="text-xs"><span class="${cruceColor} font-bold uppercase">Cruce ${tipoCruce}</span> <span class="text-slate-500">(SMA50/SMA200)</span></p>
+                        <p class="text-xs text-slate-400">Fecha: ${ultimoCruce} - Hace ${diasCruce} sesiones${diasCruce <= 10 ? ' - <span class="text-yellow-400 font-semibold">Reciente!</span>' : ''}</p>
+                        <p class="text-xs text-slate-500 mt-1">${tipoCruce === 'dorado' ? 'La SMA 50 cruzo por encima de la SMA 200. Senal historica de compra.' : 'La SMA 50 cruzo por debajo de la SMA 200. Senal historica de venta.'}</p>
+                    </div>`;
+                }
+            }
+
+            // --- 3. MACD ANALYSIS ---
+            const { macd, signal, histogram } = calcularMACD(closes, 12, 26, 9);
+            const macdValid = macd.filter(v => v !== null);
+            const signalValid = signal.filter(v => v !== null);
+            const histValid = histogram.filter(v => v !== null);
+
+            if (macdValid.length > 1) {
+                const lastMacd = macdValid[macdValid.length - 1];
+                const lastSignal = signalValid[signalValid.length - 1];
+                const lastHist = histValid[histValid.length - 1];
+                const prevHist = histValid[histValid.length - 2];
+                const macdTrend = lastMacd > lastSignal ? 'alcista' : 'bajista';
+                const momentum = lastHist > prevHist ? 'acelerando' : 'desacelerando';
+                const sobreCero = lastMacd > 0;
+
+                // Detect last MACD cross
+                let macdCruce = null, macdCruceTipo = null, macdCruceDias = 0;
+                for (let i = macd.length - 1; i > 0; i--) {
+                    if (macd[i] === null || signal[i] === null || macd[i-1] === null || signal[i-1] === null) continue;
+                    const above = macd[i] > signal[i];
+                    const aboveBefore = macd[i-1] > signal[i-1];
+                    if (above && !aboveBefore) { macdCruce = ohlcvData[i].time; macdCruceTipo = 'alcista'; macdCruceDias = macd.length - 1 - i; break; }
+                    if (!above && aboveBefore) { macdCruce = ohlcvData[i].time; macdCruceTipo = 'bajista'; macdCruceDias = macd.length - 1 - i; break; }
+                }
+
+                const macdIcon = macdTrend === 'alcista' ? '&#x1F4C8;' : '&#x1F4C9;';
+                const macdColor = macdTrend === 'alcista' ? 'text-green-400' : 'text-red-400';
+                const momIcon = momentum === 'acelerando' ? '&#x1F680;' : '&#x1F40C;';
+                const momColor = momentum === 'acelerando' ? 'text-green-400' : 'text-orange-400';
+
+                html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span>${macdIcon}</span>
+                        <span class="font-semibold text-slate-200">MACD</span>
+                        <span class="${macdColor} font-bold ml-auto text-xs uppercase">${macdTrend}</span>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="text-xs text-slate-400">${momIcon} Momentum: <span class="${momColor} font-semibold">${momentum}</span></p>
+                        <p class="text-xs text-slate-400">${sobreCero ? '&#x2600;&#xFE0F;' : '&#x1F319;'} Zona: <span class="${sobreCero ? 'text-green-400' : 'text-yellow-400'} font-semibold">${sobreCero ? 'Positiva' : 'Negativa'}</span></p>
+                        ${macdCruce ? `<p class="text-xs text-slate-400">Ultimo cruce: <span class="${macdCruceTipo === 'alcista' ? 'text-green-400' : 'text-red-400'} font-semibold">${macdCruceTipo === 'alcista' ? 'Compra' : 'Venta'}</span> (${macdCruce}, hace ${macdCruceDias}d)</p>` : ''}
+                    </div>
+                </div>`;
+            }
+
+            // --- 4. RSI ANALYSIS ---
+            const rsiData = calcularRSI(closes, 14);
+            const rsiValid = rsiData.filter(v => v !== null);
+            if (rsiValid.length > 0) {
+                const lastRsi = rsiValid[rsiValid.length - 1];
+                let rsiSignal, rsiColor, rsiIcon;
+                if (lastRsi >= 70) {
+                    rsiSignal = 'SOBRECOMPRADO'; rsiColor = 'text-red-400'; rsiIcon = '&#x1F6A8;';
+                } else if (lastRsi >= 60) {
+                    rsiSignal = 'ZONA ALTA'; rsiColor = 'text-orange-400'; rsiIcon = '&#x26A0;&#xFE0F;';
+                } else if (lastRsi <= 30) {
+                    rsiSignal = 'SOBREVENDIDO'; rsiColor = 'text-green-400'; rsiIcon = '&#x1F4B0;';
+                } else if (lastRsi <= 40) {
+                    rsiSignal = 'ZONA BAJA'; rsiColor = 'text-cyan-400'; rsiIcon = '&#x1F440;';
+                } else {
+                    rsiSignal = 'NEUTRAL'; rsiColor = 'text-slate-300'; rsiIcon = '&#x2696;&#xFE0F;';
+                }
+
+                // Detect RSI divergence (simple)
+                let divergencia = '';
+                if (rsiValid.length > 20 && closes.length > 20) {
+                    const price5ago = closes[closes.length - 6];
+                    const rsi5ago = rsiValid[rsiValid.length - 6];
+                    if (lastPrice < price5ago && lastRsi > rsi5ago) {
+                        divergencia = '<p class="text-xs text-green-400 mt-1">&#x2728; Divergencia alcista detectada (precio baja, RSI sube)</p>';
+                    } else if (lastPrice > price5ago && lastRsi < rsi5ago) {
+                        divergencia = '<p class="text-xs text-red-400 mt-1">&#x26A0;&#xFE0F; Divergencia bajista detectada (precio sube, RSI baja)</p>';
+                    }
+                }
+
+                html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span>${rsiIcon}</span>
+                        <span class="font-semibold text-slate-200">RSI (14)</span>
+                        <span class="${rsiColor} font-bold ml-auto text-xs">${lastRsi.toFixed(1)}</span>
+                    </div>
+                    <p class="text-xs"><span class="${rsiColor} font-bold">${rsiSignal}</span></p>
+                    <p class="text-xs text-slate-500">${lastRsi >= 70 ? 'Posible correccion a la baja. Considerar toma de beneficios.' : lastRsi <= 30 ? 'Posible rebote al alza. Oportunidad de compra.' : 'Sin senales extremas. Mercado en equilibrio.'}</p>
+                    ${divergencia}
+                </div>`;
+            }
+
+            // --- 5. BOLLINGER BANDS ---
+            if (closes.length >= 20) {
+                const { upper, middle, lower } = calcularBollinger(closes, 20, 2);
+                const lastUpper = upper.filter(v => v !== null).slice(-1)[0];
+                const lastLower = lower.filter(v => v !== null).slice(-1)[0];
+                const lastMiddle = middle.filter(v => v !== null).slice(-1)[0];
+
+                if (lastUpper && lastLower && lastMiddle) {
+                    const bandWidth = ((lastUpper - lastLower) / lastMiddle * 100).toFixed(2);
+                    let bbSignal, bbColor, bbIcon;
+                    if (lastPrice >= lastUpper) {
+                        bbSignal = 'EN BANDA SUPERIOR'; bbColor = 'text-red-400'; bbIcon = '&#x1F53A;';
+                    } else if (lastPrice <= lastLower) {
+                        bbSignal = 'EN BANDA INFERIOR'; bbColor = 'text-green-400'; bbIcon = '&#x1F53B;';
+                    } else if (lastPrice > lastMiddle) {
+                        bbSignal = 'SOBRE MEDIA'; bbColor = 'text-cyan-400'; bbIcon = '&#x2197;&#xFE0F;';
+                    } else {
+                        bbSignal = 'BAJO MEDIA'; bbColor = 'text-orange-400'; bbIcon = '&#x2198;&#xFE0F;';
+                    }
+
+                    html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span>${bbIcon}</span>
+                            <span class="font-semibold text-slate-200">Bollinger</span>
+                            <span class="${bbColor} font-bold ml-auto text-xs">${bbSignal}</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Ancho: ${bandWidth}% ${parseFloat(bandWidth) < 5 ? '- <span class="text-yellow-400">Compresion! Posible movimiento fuerte</span>' : ''}</p>
+                        <p class="text-xs text-slate-500">${lastPrice >= lastUpper ? 'Precio toca banda superior. Posible sobreextension.' : lastPrice <= lastLower ? 'Precio toca banda inferior. Posible sobreventa.' : 'Precio dentro de bandas normales.'}</p>
+                    </div>`;
+                }
+            }
+
+            // --- 6. RESUMEN GENERAL ---
+            let bullSignals = 0, bearSignals = 0;
+            if (tendencia === 'alcista') bullSignals += 2; else if (tendencia === 'bajista') bearSignals += 2;
+            if (macdValid.length > 1 && macdValid[macdValid.length - 1] > signalValid[signalValid.length - 1]) bullSignals++; else if (macdValid.length > 1) bearSignals++;
+            if (rsiValid.length > 0) {
+                const lr = rsiValid[rsiValid.length - 1];
+                if (lr <= 30) bullSignals++; else if (lr >= 70) bearSignals++;
+            }
+            if (closes.length >= 20) {
+                const { upper, lower } = calcularBollinger(closes, 20, 2);
+                const lu = upper.filter(v => v !== null).slice(-1)[0];
+                const ll = lower.filter(v => v !== null).slice(-1)[0];
+                if (lu && ll) {
+                    if (lastPrice <= ll) bullSignals++; else if (lastPrice >= lu) bearSignals++;
+                }
+            }
+
+            let resumen, resColor, resBg, resIcon;
+            if (bullSignals >= 3 && bearSignals <= 1) {
+                resumen = 'SENAL ALCISTA FUERTE'; resColor = 'text-green-400'; resBg = 'bg-green-500/10 border-green-500/30'; resIcon = '&#x2705;';
+            } else if (bearSignals >= 3 && bullSignals <= 1) {
+                resumen = 'SENAL BAJISTA FUERTE'; resColor = 'text-red-400'; resBg = 'bg-red-500/10 border-red-500/30'; resIcon = '&#x1F6D1;';
+            } else if (bullSignals > bearSignals) {
+                resumen = 'LIGERAMENTE ALCISTA'; resColor = 'text-green-300'; resBg = 'bg-green-500/5 border-green-500/20'; resIcon = '&#x1F4C8;';
+            } else if (bearSignals > bullSignals) {
+                resumen = 'LIGERAMENTE BAJISTA'; resColor = 'text-red-300'; resBg = 'bg-red-500/5 border-red-500/20'; resIcon = '&#x1F4C9;';
+            } else {
+                resumen = 'SENALES MIXTAS'; resColor = 'text-yellow-400'; resBg = 'bg-yellow-500/10 border-yellow-500/30'; resIcon = '&#x26A0;&#xFE0F;';
+            }
+
+            html += `<div class="p-3 rounded-lg border ${resBg} text-center">
+                <span class="text-lg">${resIcon}</span>
+                <span class="${resColor} font-bold text-sm ml-1">${resumen}</span>
+                <p class="text-xs text-slate-500 mt-1">Alcistas: ${bullSignals} | Bajistas: ${bearSignals}</p>
+            </div>`;
+
+            container.innerHTML = html;
         }
 
         // ============================================

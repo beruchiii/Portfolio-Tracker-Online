@@ -4808,9 +4808,10 @@ def api_ohlcv(ticker):
     periodo = request.args.get('periodo', '1y')
     isin = request.args.get('isin', '')
 
-    print(f"[OHLCV] Solicitando ticker={ticker}, isin={isin}, periodo={periodo}")
+    print(f"[OHLCV] Solicitando ticker={ticker}, isin={isin}, periodo={periodo}, interval={yf_interval}")
 
-    # Mapeo de períodos a yfinance
+    # Mapeo de períodos a yfinance con intervalo adaptativo
+    # Para periodos cortos usamos datos horarios para tener más puntos
     periodo_map = {
         '1mo': '1mo',
         '3mo': '3mo',
@@ -4820,7 +4821,19 @@ def api_ohlcv(ticker):
         '5y': '5y',
         'max': 'max'
     }
+    # Intervalo adaptativo: horario para periodos cortos, diario para largos
+    # Yahoo Finance limita datos de 1h a ~60 dias, asi que 3mo usa diario
+    interval_map = {
+        '1mo': '1h',    # ~500 puntos horarios (suficiente para todos los indicadores)
+        '3mo': '1d',    # ~65 puntos diarios (1h limitado a 60 dias por Yahoo)
+        '6mo': '1d',    # ~130 puntos diarios
+        '1y': '1d',     # ~250 puntos diarios
+        '2y': '1d',     # ~500 puntos diarios
+        '5y': '1d',     # ~1250 puntos diarios
+        'max': '1wk'    # semanal para evitar datasets enormes
+    }
     yf_periodo = periodo_map.get(periodo, '1y')
+    yf_interval = interval_map.get(periodo, '1d')
 
     try:
         # Verificar si el ticker es un ISIN
@@ -4835,7 +4848,7 @@ def api_ohlcv(ticker):
 
         # Obtener datos de Yahoo Finance
         stock = yf.Ticker(ticker)
-        df = stock.history(period=yf_periodo)
+        df = stock.history(period=yf_periodo, interval=yf_interval)
 
         if df.empty:
             # Intentar con isin si se proporcionó
@@ -4843,7 +4856,7 @@ def api_ohlcv(ticker):
                 ticker_from_isin = price_fetcher.buscar_ticker_por_isin(isin)
                 if ticker_from_isin:
                     stock = yf.Ticker(ticker_from_isin)
-                    df = stock.history(period=yf_periodo)
+                    df = stock.history(period=yf_periodo, interval=yf_interval)
 
         if df.empty:
             return jsonify({
@@ -4862,11 +4875,16 @@ def api_ohlcv(ticker):
 
         # Convertir a formato OHLCV para Lightweight Charts
         ohlcv = []
+        is_intraday = yf_interval in ('1h', '30m', '15m', '5m', '1m')
         for idx, row in df.iterrows():
-            # Lightweight Charts espera timestamp en segundos o fecha string YYYY-MM-DD
-            date_str = idx.strftime('%Y-%m-%d')
+            # Para datos intradiarios, usar Unix timestamp (segundos)
+            # Para datos diarios/semanales, usar fecha string YYYY-MM-DD
+            if is_intraday:
+                time_val = int(idx.timestamp())
+            else:
+                time_val = idx.strftime('%Y-%m-%d')
             ohlcv.append({
-                'time': date_str,
+                'time': time_val,
                 'open': round(float(row['Open']), 4) if not pd.isna(row['Open']) else None,
                 'high': round(float(row['High']), 4) if not pd.isna(row['High']) else None,
                 'low': round(float(row['Low']), 4) if not pd.isna(row['Low']) else None,

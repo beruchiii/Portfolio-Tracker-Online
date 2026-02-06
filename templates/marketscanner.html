@@ -407,6 +407,7 @@
         let currentIsin = null;
         let currentPeriod = '1y';
         let currentChartType = 'line';
+        let currentCurrency = 'EUR';
         let ohlcvData = [];
 
         // ============================================
@@ -431,10 +432,12 @@
         }
 
         async function buscarActivo() {
-            const input = document.getElementById('search-input').value.trim();
+            const input = document.getElementById('search-input').value.trim().toUpperCase();
             if (!input) return;
+            // Actualizar el input visualmente
+            document.getElementById('search-input').value = input;
 
-            // Detectar si es ISIN
+            // Detectar si es ISIN (2 letras + 10 alfanuméricos)
             const esIsin = /^[A-Z]{2}[A-Z0-9]{10}$/.test(input);
 
             showLoading(true);
@@ -447,10 +450,19 @@
                 if (esIsin) {
                     isin = input;
                     // Buscar ticker para el ISIN
-                    const tickerResponse = await fetch(`/api/ticker/search/${encodeURIComponent(input)}`);
-                    const tickerResult = await tickerResponse.json();
-                    if (tickerResult.success && tickerResult.data.ticker) {
-                        ticker = tickerResult.data.ticker;
+                    try {
+                        const tickerResponse = await fetch(`/api/ticker/search/${encodeURIComponent(input)}`);
+                        if (!tickerResponse.ok) throw new Error('Error en la busqueda');
+                        const tickerResult = await tickerResponse.json();
+                        if (tickerResult.success && tickerResult.data && tickerResult.data.ticker) {
+                            ticker = tickerResult.data.ticker;
+                        } else {
+                            throw new Error('No se encontro un ticker para este ISIN');
+                        }
+                    } catch (isinError) {
+                        showLoading(false);
+                        showError(`No se pudo resolver el ISIN "${input}". Prueba buscando directamente el ticker del fondo.`);
+                        return;
                     }
                 }
 
@@ -471,6 +483,10 @@
             } catch (error) {
                 console.error('Error buscando activo:', error);
                 showError('Error al cargar el activo. Verifica el ticker o ISIN.');
+                // Restaurar estado vacío si no hay datos
+                if (!ohlcvData || ohlcvData.length === 0) {
+                    document.getElementById('empty-state').classList.remove('hidden');
+                }
             }
 
             showLoading(false);
@@ -487,6 +503,7 @@
             try {
                 const url = `/api/ohlcv/${encodeURIComponent(currentTicker)}?periodo=${periodo}${currentIsin ? '&isin=' + encodeURIComponent(currentIsin) : ''}`;
                 const response = await fetch(url);
+                if (!response.ok) throw new Error(`Error del servidor (${response.status})`);
                 const result = await response.json();
 
                 if (result.success && result.data) {
@@ -500,6 +517,7 @@
                         crearGraficos();
                         aplicarIndicadores();
                         generarAnalisisTecnico();
+                        calcularSoportesResistencias();
                     }
 
                     // Mostrar secciones
@@ -520,6 +538,7 @@
 
         function actualizarInfoActivo(data) {
             const info = data.info || {};
+            currentCurrency = info.currency || 'EUR';
             document.getElementById('asset-name').textContent = info.name || currentTicker;
             document.getElementById('asset-ticker').textContent = currentTicker + (currentIsin ? ` · ${currentIsin}` : '');
 
@@ -645,15 +664,20 @@
             });
             resizeObserver.observe(mainContainer);
 
-            // Crear gráficos de indicadores si están activos
+            // Crear gráficos de indicadores si están activos Y hay datos suficientes
             if (document.getElementById('volume-toggle').checked) {
                 crearGraficoVolumen();
             }
-            if (document.getElementById('rsi-toggle').checked) {
+            if (document.getElementById('rsi-toggle').checked && ohlcvData.length >= 20) {
                 crearGraficoRSI();
+            } else if (document.getElementById('rsi-toggle').checked) {
+                document.getElementById('rsi-chart-container').classList.add('hidden');
+                document.getElementById('rsi-info').classList.add('hidden');
             }
-            if (document.getElementById('macd-toggle').checked) {
+            if (document.getElementById('macd-toggle').checked && ohlcvData.length >= 45) {
                 crearGraficoMACD();
+            } else if (document.getElementById('macd-toggle').checked) {
+                document.getElementById('macd-chart-container').classList.add('hidden');
             }
         }
 
@@ -900,19 +924,23 @@
             let avgGain = gains.slice(0, periodo).reduce((a, b) => a + b, 0) / periodo;
             let avgLoss = losses.slice(0, periodo).reduce((a, b) => a + b, 0) / periodo;
 
-            if (avgLoss === 0) {
+            if (avgGain === 0 && avgLoss === 0) {
+                rsi[periodo] = 50; // Sin movimiento = neutral
+            } else if (avgLoss === 0) {
                 rsi[periodo] = 100;
             } else {
                 const rs = avgGain / avgLoss;
                 rsi[periodo] = 100 - (100 / (1 + rs));
             }
 
-            // RSI suavizado
+            // RSI suavizado (Wilder's smoothing)
             for (let i = periodo; i < gains.length; i++) {
                 avgGain = (avgGain * (periodo - 1) + gains[i]) / periodo;
                 avgLoss = (avgLoss * (periodo - 1) + losses[i]) / periodo;
 
-                if (avgLoss === 0) {
+                if (avgGain === 0 && avgLoss === 0) {
+                    rsi[i + 1] = 50;
+                } else if (avgLoss === 0) {
                     rsi[i + 1] = 100;
                 } else {
                     const rs = avgGain / avgLoss;
@@ -927,26 +955,31 @@
             const emaFast = calcularEMA(data, fast);
             const emaSlow = calcularEMA(data, slow);
 
+            // Linea MACD = EMA rapida - EMA lenta
             const macd = data.map((_, i) => {
                 if (emaFast[i] === null || emaSlow[i] === null) return null;
                 return emaFast[i] - emaSlow[i];
             });
 
+            // Signal = EMA(signal) de los valores MACD no-null
             const macdFiltered = macd.filter(v => v !== null);
             const signalLine = calcularEMA(macdFiltered, signal);
 
-            // Reconstruir con nulls
+            // Reconstruir signal alineada con el array original
             const signalFull = [];
             let idx = 0;
             for (let i = 0; i < macd.length; i++) {
                 if (macd[i] === null) {
                     signalFull.push(null);
                 } else {
-                    signalFull.push(signalLine[idx] || null);
+                    // Usar !== null/undefined explicitamente (0 es valor valido)
+                    const val = signalLine[idx];
+                    signalFull.push(val !== null && val !== undefined ? val : null);
                     idx++;
                 }
             }
 
+            // Histograma = MACD - Signal
             const histogram = macd.map((m, i) => {
                 if (m === null || signalFull[i] === null) return null;
                 return m - signalFull[i];
@@ -961,18 +994,19 @@
             const lower = [];
 
             for (let i = 0; i < data.length; i++) {
-                if (sma[i] === null) {
+                if (sma[i] === null || i < periodo - 1) {
+                    // No calcular hasta tener ventana completa
                     upper.push(null);
                     lower.push(null);
                 } else {
-                    // Calcular desviación estándar
-                    const slice = data.slice(Math.max(0, i - periodo + 1), i + 1);
-                    const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+                    // Ventana completa de exactamente 'periodo' elementos
+                    const slice = data.slice(i - periodo + 1, i + 1);
+                    const mean = sma[i]; // Ya tenemos la media (es la SMA)
                     const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / slice.length;
                     const std = Math.sqrt(variance);
 
-                    upper.push(sma[i] + desviaciones * std);
-                    lower.push(sma[i] - desviaciones * std);
+                    upper.push(mean + desviaciones * std);
+                    lower.push(mean - desviaciones * std);
                 }
             }
 
@@ -1024,7 +1058,9 @@
                 indicatorSeries[key] = null;
             }
 
-            if (enabled && mainChart && ohlcvData.length > 0) {
+            // Necesitamos al menos periodo + 10 datos para que la SMA sea visualmente util
+            const minDatos = periodo + 10;
+            if (enabled && mainChart && ohlcvData.length >= minDatos) {
                 const closes = ohlcvData.map(d => d.close);
                 const sma = calcularSMA(closes, periodo);
 
@@ -1039,6 +1075,8 @@
                     time: d.time,
                     value: sma[i],
                 })).filter(d => d.value !== null));
+            } else if (enabled && ohlcvData.length < minDatos) {
+                console.warn(`SMA ${periodo}: datos insuficientes (${ohlcvData.length}/${minDatos}). No se muestra.`);
             }
         }
 
@@ -1049,7 +1087,8 @@
                 indicatorSeries[key] = null;
             }
 
-            if (enabled && mainChart && ohlcvData.length > 0) {
+            const minDatos = periodo + 10;
+            if (enabled && mainChart && ohlcvData.length >= minDatos) {
                 const closes = ohlcvData.map(d => d.close);
                 const ema = calcularEMA(closes, periodo);
 
@@ -1064,6 +1103,8 @@
                     time: d.time,
                     value: ema[i],
                 })).filter(d => d.value !== null));
+            } else if (enabled && ohlcvData.length < minDatos) {
+                console.warn(`EMA ${periodo}: datos insuficientes (${ohlcvData.length}/${minDatos}). No se muestra.`);
             }
         }
 
@@ -1075,7 +1116,8 @@
                 }
             });
 
-            if (enabled && mainChart && ohlcvData.length > 0) {
+            // Bollinger necesita SMA 20 + datos extra para ser visual
+            if (enabled && mainChart && ohlcvData.length >= 30) {
                 const closes = ohlcvData.map(d => d.close);
                 const { upper, middle, lower } = calcularBollinger(closes, 20, 2);
 
@@ -1120,7 +1162,8 @@
             const container = document.getElementById('rsi-chart-container');
             const infoPanel = document.getElementById('rsi-info');
 
-            if (enabled) {
+            // RSI necesita al menos 20 datos (14 periodo + margen)
+            if (enabled && ohlcvData.length >= 20) {
                 crearGraficoRSI();
             } else {
                 container.classList.add('hidden');
@@ -1135,7 +1178,8 @@
         function toggleMACDIndicator(enabled) {
             const container = document.getElementById('macd-chart-container');
 
-            if (enabled) {
+            // MACD necesita al menos 45 datos (26 EMA + 9 signal + margen)
+            if (enabled && ohlcvData.length >= 45) {
                 crearGraficoMACD();
             } else {
                 container.classList.add('hidden');
@@ -1207,6 +1251,7 @@
         async function cargarEstadisticas(ticker) {
             try {
                 const response = await fetch(`/api/stats/${encodeURIComponent(ticker)}`);
+                if (!response.ok) throw new Error(`Error del servidor (${response.status})`);
                 const result = await response.json();
 
                 if (result.success && result.data) {
@@ -1254,21 +1299,33 @@
         function generarAnalisisTecnico() {
             const section = document.getElementById('analysis-section');
             const container = document.getElementById('analysis-content');
-            if (!section || !container || ohlcvData.length < 30) return;
+            if (!section || !container || ohlcvData.length < 15) return;
 
             section.classList.remove('hidden');
             const closes = ohlcvData.map(d => d.close);
+            const numDatos = closes.length;
             const lastPrice = closes[closes.length - 1];
             const prevPrice = closes[closes.length - 2];
             let html = '';
 
+            // Detectar si los datos son intradiarios (timestamps unix) o diarios (string)
+            const esIntradiario = typeof ohlcvData[0].time === 'number';
+            const unidadTiempo = esIntradiario ? 'velas horarias' : 'sesiones';
+
+            // Aviso informativo sobre datos intradiarios
+            if (esIntradiario) {
+                html += `<div class="p-2 bg-blue-500/10 rounded-lg border border-blue-500/30 text-xs text-blue-400 mb-2">
+                    &#x1F4CA; Datos horarios (${numDatos} ${unidadTiempo}). Los indicadores se calculan sobre velas de 1h.
+                </div>`;
+            }
+
             // --- 1. TENDENCIA GENERAL ---
-            const sma20 = calcularSMA(closes, 20);
-            const sma50 = calcularSMA(closes, 50);
-            const sma200 = calcularSMA(closes, 200);
-            const lastSma20 = sma20.filter(v => v !== null).slice(-1)[0];
-            const lastSma50 = sma50.filter(v => v !== null).slice(-1)[0];
-            const lastSma200 = sma200.filter(v => v !== null).slice(-1)[0];
+            const sma20 = numDatos >= 30 ? calcularSMA(closes, 20) : [];
+            const sma50 = numDatos >= 60 ? calcularSMA(closes, 50) : [];
+            const sma200 = numDatos >= 210 ? calcularSMA(closes, 200) : [];
+            const lastSma20 = sma20.filter(v => v !== null).slice(-1)[0] || null;
+            const lastSma50 = sma50.filter(v => v !== null).slice(-1)[0] || null;
+            const lastSma200 = sma200.filter(v => v !== null).slice(-1)[0] || null;
 
             let tendencia = 'neutral';
             let tendenciaTexto = '';
@@ -1286,6 +1343,15 @@
             } else if (lastSma50) {
                 tendencia = lastPrice > lastSma50 ? 'alcista' : 'bajista';
                 tendenciaTexto = lastPrice > lastSma50 ? 'Precio sobre SMA 50. Tendencia a corto plazo alcista.' : 'Precio bajo SMA 50. Tendencia a corto plazo bajista.';
+            } else if (lastSma20) {
+                // Solo tenemos SMA 20 (periodo corto)
+                tendencia = lastPrice > lastSma20 ? 'alcista' : 'bajista';
+                tendenciaTexto = lastPrice > lastSma20 ? 'Precio sobre SMA 20. Tendencia reciente alcista.' : 'Precio bajo SMA 20. Tendencia reciente bajista.';
+            } else {
+                // Muy pocos datos, usar comparacion simple
+                const firstPrice = closes[0];
+                tendencia = lastPrice > firstPrice ? 'alcista' : 'bajista';
+                tendenciaTexto = lastPrice > firstPrice ? `Subida del ${((lastPrice - firstPrice) / firstPrice * 100).toFixed(1)}% en el periodo.` : `Caida del ${((firstPrice - lastPrice) / firstPrice * 100).toFixed(1)}% en el periodo.`;
             }
 
             const tendIcon = tendencia === 'alcista' ? '&#x1F7E2;' : tendencia === 'bajista' ? '&#x1F534;' : '&#x1F7E1;';
@@ -1336,11 +1402,16 @@
                 }
             }
 
-            // --- 3. MACD ANALYSIS ---
-            const { macd, signal, histogram } = calcularMACD(closes, 12, 26, 9);
-            const macdValid = macd.filter(v => v !== null);
-            const signalValid = signal.filter(v => v !== null);
-            const histValid = histogram.filter(v => v !== null);
+            // --- 3. MACD ANALYSIS (necesita 45+ datos) ---
+            let macdValid = [], signalValid = [], histValid = [];
+            let macd = [], signal = [], histogram = [];
+            if (numDatos >= 45) {
+                const macdResult = calcularMACD(closes, 12, 26, 9);
+                macd = macdResult.macd; signal = macdResult.signal; histogram = macdResult.histogram;
+                macdValid = macd.filter(v => v !== null);
+                signalValid = signal.filter(v => v !== null);
+                histValid = histogram.filter(v => v !== null);
+            }
 
             if (macdValid.length > 1) {
                 const lastMacd = macdValid[macdValid.length - 1];
@@ -1380,8 +1451,8 @@
                 </div>`;
             }
 
-            // --- 4. RSI ANALYSIS ---
-            const rsiData = calcularRSI(closes, 14);
+            // --- 4. RSI ANALYSIS (necesita 20+ datos) ---
+            const rsiData = numDatos >= 20 ? calcularRSI(closes, 14) : [];
             const rsiValid = rsiData.filter(v => v !== null);
             if (rsiValid.length > 0) {
                 const lastRsi = rsiValid[rsiValid.length - 1];
@@ -1422,8 +1493,8 @@
                 </div>`;
             }
 
-            // --- 5. BOLLINGER BANDS ---
-            if (closes.length >= 20) {
+            // --- 5. BOLLINGER BANDS (necesita 30+ datos) ---
+            if (numDatos >= 30) {
                 const { upper, middle, lower } = calcularBollinger(closes, 20, 2);
                 const lastUpper = upper.filter(v => v !== null).slice(-1)[0];
                 const lastLower = lower.filter(v => v !== null).slice(-1)[0];
@@ -1462,10 +1533,10 @@
                 const lr = rsiValid[rsiValid.length - 1];
                 if (lr <= 30) bullSignals++; else if (lr >= 70) bearSignals++;
             }
-            if (closes.length >= 20) {
-                const { upper, lower } = calcularBollinger(closes, 20, 2);
-                const lu = upper.filter(v => v !== null).slice(-1)[0];
-                const ll = lower.filter(v => v !== null).slice(-1)[0];
+            if (numDatos >= 30) {
+                const bbResult = calcularBollinger(closes, 20, 2);
+                const lu = bbResult.upper.filter(v => v !== null).slice(-1)[0];
+                const ll = bbResult.lower.filter(v => v !== null).slice(-1)[0];
                 if (lu && ll) {
                     if (lastPrice <= ll) bullSignals++; else if (lastPrice >= lu) bearSignals++;
                 }
@@ -1494,16 +1565,101 @@
         }
 
         // ============================================
+        // SOPORTES Y RESISTENCIAS
+        // ============================================
+        function calcularSoportesResistencias() {
+            const section = document.getElementById('sr-section');
+            const container = document.getElementById('sr-levels');
+            if (!section || !container || ohlcvData.length < 20) return;
+
+            const closes = ohlcvData.map(d => d.close);
+            const highs = ohlcvData.map(d => d.high);
+            const lows = ohlcvData.map(d => d.low);
+            const lastPrice = closes[closes.length - 1];
+
+            // Metodo: Pivot Points clasicos + niveles de precio por frecuencia
+            // Pivot del ultimo periodo
+            const recentHigh = Math.max(...highs.slice(-20));
+            const recentLow = Math.min(...lows.slice(-20));
+            const recentClose = closes[closes.length - 1];
+            const pivot = (recentHigh + recentLow + recentClose) / 3;
+
+            const r1 = 2 * pivot - recentLow;
+            const r2 = pivot + (recentHigh - recentLow);
+            const s1 = 2 * pivot - recentHigh;
+            const s2 = pivot - (recentHigh - recentLow);
+
+            // Maximo y minimo del periodo completo
+            const periodHigh = Math.max(...highs);
+            const periodLow = Math.min(...lows);
+
+            // Construir niveles
+            let levels = [
+                { price: r2, label: 'R2', type: 'resistance' },
+                { price: r1, label: 'R1', type: 'resistance' },
+                { price: periodHigh, label: 'Max periodo', type: 'resistance' },
+                { price: pivot, label: 'Pivot', type: 'pivot' },
+                { price: s1, label: 'S1', type: 'support' },
+                { price: s2, label: 'S2', type: 'support' },
+                { price: periodLow, label: 'Min periodo', type: 'support' },
+            ];
+
+            // Filtrar duplicados cercanos (< 0.5% diferencia) y ordenar descendente
+            levels.sort((a, b) => b.price - a.price);
+            const filtered = [levels[0]];
+            for (let i = 1; i < levels.length; i++) {
+                const prevPrice = filtered[filtered.length - 1].price;
+                if (Math.abs(levels[i].price - prevPrice) / prevPrice > 0.005) {
+                    filtered.push(levels[i]);
+                }
+            }
+
+            let html = '';
+            filtered.forEach(level => {
+                const distancia = ((level.price - lastPrice) / lastPrice * 100).toFixed(2);
+                const isAbove = level.price > lastPrice;
+                let colorClass, bgClass, icon;
+
+                if (level.type === 'resistance') {
+                    colorClass = 'text-red-400'; bgClass = 'border-red-500/30'; icon = '🔴';
+                } else if (level.type === 'support') {
+                    colorClass = 'text-green-400'; bgClass = 'border-green-500/30'; icon = '🟢';
+                } else {
+                    colorClass = 'text-blue-400'; bgClass = 'border-blue-500/30'; icon = '🔵';
+                }
+
+                html += `<div class="flex items-center justify-between p-2 bg-slate-800 rounded border ${bgClass} text-xs">
+                    <div class="flex items-center gap-1.5">
+                        <span>${icon}</span>
+                        <span class="text-slate-400">${level.label}</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="${colorClass} font-semibold">${formatPrice(level.price)}</span>
+                        <span class="text-slate-500 ml-1">(${isAbove ? '+' : ''}${distancia}%)</span>
+                    </div>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+            section.classList.remove('hidden');
+        }
+
+        // ============================================
         // UTILIDADES
         // ============================================
         function formatPrice(value) {
             if (value === null || value === undefined) return '-';
-            return new Intl.NumberFormat('es-ES', {
-                style: 'currency',
-                currency: 'EUR',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            }).format(value);
+            try {
+                return new Intl.NumberFormat('es-ES', {
+                    style: 'currency',
+                    currency: currentCurrency || 'EUR',
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                }).format(value);
+            } catch (e) {
+                // Fallback si la moneda no es reconocida
+                return value.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + (currentCurrency || '€');
+            }
         }
 
         function formatNumber(num) {

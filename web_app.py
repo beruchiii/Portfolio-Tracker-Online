@@ -4940,16 +4940,21 @@ def api_stats(ticker):
         info = stock.info
         
         # Calcular dividendo - Yahoo a veces devuelve valores incorrectos
+        # Yahoo devuelve dividendYield SIEMPRE como decimal (ej: 0.0080 = 0.80%)
         raw_dividend = info.get('dividendYield') or 0
-        # Si viene como decimal (0.028 = 2.8%), multiplicar por 100
-        # Si viene como porcentaje (2.8), no multiplicar
-        # Si es mayor a 1, asumimos que ya viene en porcentaje
         if raw_dividend > 0 and raw_dividend < 1:
-            dividend_yield = raw_dividend * 100
-        elif raw_dividend >= 1 and raw_dividend <= 25:
-            dividend_yield = raw_dividend  # Ya viene en %
+            # Convertir decimal a porcentaje
+            dividend_yield = round(raw_dividend * 100, 2)
+        elif raw_dividend >= 1:
+            # Valor sospechosamente alto - probablemente ya en porcentaje o error
+            # Verificar: si > 30% es casi seguro un error
+            dividend_yield = round(raw_dividend, 2) if raw_dividend <= 30 else None
         else:
-            dividend_yield = None  # Valor sospechoso, ignorar
+            dividend_yield = None
+
+        # Sanity check final: ningun dividendo razonable supera 25%
+        if dividend_yield and dividend_yield > 25:
+            dividend_yield = None
         
         return jsonify({
             'success': True,

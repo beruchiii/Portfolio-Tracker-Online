@@ -218,6 +218,11 @@
                         <div id="macd-chart" class="indicator-chart h-full"></div>
                     </div>
 
+                    <!-- Stochastic Chart -->
+                    <div id="stoch-chart-container" class="h-24 hidden">
+                        <div id="stoch-chart" class="indicator-chart h-full"></div>
+                    </div>
+
                     <!-- Volume Chart -->
                     <div id="volume-chart-container" class="h-20 hidden">
                         <div id="volume-chart" class="indicator-chart h-full"></div>
@@ -278,11 +283,20 @@
                                 <input type="checkbox" id="macd-toggle" onchange="toggleIndicator('macd')" checked class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
                                 <span class="text-sm group-hover:text-white transition">MACD</span>
                             </label>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="stoch-toggle" onchange="toggleIndicator('stoch')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">Estocástico</span>
+                            </label>
                         </div>
 
                         <!-- Others -->
                         <div class="space-y-2">
                             <p class="text-xs text-slate-500 uppercase tracking-wider">Otros</p>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="vwap-toggle" onchange="toggleIndicator('vwap')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">VWAP</span>
+                                <span class="w-3 h-3 rounded-full bg-amber-400 ml-auto"></span>
+                            </label>
                             <label class="flex items-center gap-2 cursor-pointer group">
                                 <input type="checkbox" id="bollinger-toggle" onchange="toggleIndicator('bollinger')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
                                 <span class="text-sm group-hover:text-white transition">Bollinger Bands</span>
@@ -411,6 +425,9 @@
         let macdLineSeries = null;
         let macdSignalSeries = null;
         let macdHistogramSeries = null;
+        let stochChart = null;
+        let stochKSeries = null;
+        let stochDSeries = null;
         let chartResizeObserver = null;
         let crosshairSubscriptions = []; // Para limpiar suscripciones
 
@@ -422,7 +439,8 @@
             ema26: null,
             bollingerUpper: null,
             bollingerMiddle: null,
-            bollingerLower: null
+            bollingerLower: null,
+            vwap: null
         };
 
         let currentTicker = null;
@@ -725,6 +743,11 @@
                 crearGraficoMACD();
             } else if (document.getElementById('macd-toggle').checked) {
                 document.getElementById('macd-chart-container').classList.add('hidden');
+            }
+            if (document.getElementById('stoch-toggle').checked && ohlcvData.length >= 20) {
+                crearGraficoEstocastico();
+            } else if (document.getElementById('stoch-toggle').checked) {
+                document.getElementById('stoch-chart-container').classList.add('hidden');
             }
         }
 
@@ -1080,6 +1103,62 @@
             return { upper, middle: sma, lower };
         }
 
+        function calcularVWAP(ohlcvArr) {
+            // VWAP = Σ(Precio Típico × Volumen) / Σ(Volumen)
+            // Se resetea cada día (para intradiario) o es acumulativo (para diario)
+            const vwap = new Array(ohlcvArr.length).fill(null);
+            let cumTPV = 0; // Acumulado de (Típico × Volumen)
+            let cumVol = 0; // Acumulado de Volumen
+            let lastDay = null;
+
+            for (let i = 0; i < ohlcvArr.length; i++) {
+                const d = ohlcvArr[i];
+                const tp = (d.high + d.low + d.close) / 3; // Precio típico
+                const vol = d.volume || 0;
+
+                // Detectar cambio de día para resetear (solo intradiario)
+                if (typeof d.time === 'number') {
+                    const date = new Date(d.time * 1000);
+                    const day = date.toISOString().slice(0, 10);
+                    if (lastDay !== null && day !== lastDay) {
+                        cumTPV = 0;
+                        cumVol = 0;
+                    }
+                    lastDay = day;
+                }
+
+                cumTPV += tp * vol;
+                cumVol += vol;
+
+                vwap[i] = cumVol > 0 ? cumTPV / cumVol : null;
+            }
+            return vwap;
+        }
+
+        function calcularEstocastico(highs, lows, closes, kPeriodo = 14, dPeriodo = 3) {
+            // %K = (Cierre - Mínimo período) / (Máximo período - Mínimo período) × 100
+            // %D = SMA de %K (señal de suavizado)
+            const k = new Array(closes.length).fill(null);
+
+            for (let i = kPeriodo - 1; i < closes.length; i++) {
+                const highSlice = highs.slice(i - kPeriodo + 1, i + 1);
+                const lowSlice = lows.slice(i - kPeriodo + 1, i + 1);
+                const highestHigh = Math.max(...highSlice);
+                const lowestLow = Math.min(...lowSlice);
+                const range = highestHigh - lowestLow;
+
+                k[i] = range > 0 ? ((closes[i] - lowestLow) / range) * 100 : 50;
+            }
+
+            // %D es la SMA de %K (solo sobre valores no-null)
+            const kValues = k.map(v => v !== null ? v : 0);
+            const d = calcularSMA(kValues, dPeriodo);
+            // Poner null donde %K es null
+            for (let i = 0; i < kPeriodo - 1; i++) d[i] = null;
+
+            return { k, d };
+        }
+
         // ============================================
         // TOGGLES DE INDICADORES
         // ============================================
@@ -1114,6 +1193,12 @@
                     break;
                 case 'volume':
                     toggleVolumeIndicator(enabled);
+                    break;
+                case 'vwap':
+                    toggleVWAPIndicator(enabled);
+                    break;
+                case 'stoch':
+                    toggleStochasticIndicator(enabled);
                     break;
             }
         }
@@ -1318,9 +1403,149 @@
             }
         }
 
+        function toggleVWAPIndicator(enabled) {
+            // VWAP se dibuja como línea en el gráfico principal
+            if (indicatorSeries.vwap) {
+                mainChart.removeSeries(indicatorSeries.vwap);
+                indicatorSeries.vwap = null;
+            }
+
+            if (enabled && mainChart && ohlcvData.length >= 10) {
+                const vwap = calcularVWAP(ohlcvData);
+
+                indicatorSeries.vwap = mainChart.addLineSeries({
+                    color: '#f59e0b', // amber/amarillo
+                    lineWidth: 2,
+                    lineStyle: LightweightCharts.LineStyle.Solid,
+                    priceLineVisible: false,
+                    lastValueVisible: true,
+                    title: 'VWAP',
+                });
+
+                indicatorSeries.vwap.setData(ohlcvData.map((d, i) => ({
+                    time: d.time,
+                    value: vwap[i],
+                })).filter(d => d.value !== null));
+            } else if (enabled) {
+                const checkbox = document.getElementById('vwap-toggle');
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.parentElement.title = 'Necesita datos con volumen';
+                    checkbox.parentElement.style.opacity = '0.4';
+                }
+            }
+        }
+
+        function toggleStochasticIndicator(enabled) {
+            const container = document.getElementById('stoch-chart-container');
+
+            if (enabled && ohlcvData.length >= 20) {
+                crearGraficoEstocastico();
+            } else {
+                container.classList.add('hidden');
+                if (stochChart) {
+                    stochChart.remove();
+                    stochChart = null;
+                    stochKSeries = null;
+                    stochDSeries = null;
+                }
+                if (enabled) {
+                    const checkbox = document.getElementById('stoch-toggle');
+                    if (checkbox) {
+                        checkbox.checked = false;
+                        checkbox.parentElement.title = `Necesita 20 datos (hay ${ohlcvData.length})`;
+                        checkbox.parentElement.style.opacity = '0.4';
+                    }
+                }
+            }
+        }
+
+        function crearGraficoEstocastico() {
+            const container = document.getElementById('stoch-chart');
+            container.innerHTML = '';
+            document.getElementById('stoch-chart-container').classList.remove('hidden');
+
+            stochChart = LightweightCharts.createChart(container, {
+                height: 96,
+                layout: {
+                    background: { type: 'solid', color: 'transparent' },
+                    textColor: '#94a3b8',
+                },
+                grid: {
+                    vertLines: { visible: false },
+                    horzLines: { color: '#1e293b' },
+                },
+                timeScale: { visible: false },
+                rightPriceScale: {
+                    borderColor: '#334155',
+                    scaleMargins: { top: 0.05, bottom: 0.05 },
+                },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+            });
+
+            const closes = ohlcvData.map(d => d.close);
+            const highs = ohlcvData.map(d => d.high);
+            const lows = ohlcvData.map(d => d.low);
+            const stochData = calcularEstocastico(highs, lows, closes, 14, 3);
+            const stK = stochData.k;
+            const stD = stochData.d;
+
+            // Línea %K (rápida) - azul
+            stochKSeries = stochChart.addLineSeries({
+                color: '#3b82f6',
+                lineWidth: 1.5,
+                priceLineVisible: false,
+                lastValueVisible: true,
+                title: '%K',
+            });
+
+            // Línea %D (señal) - naranja
+            stochDSeries = stochChart.addLineSeries({
+                color: '#f97316',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                priceLineVisible: false,
+                lastValueVisible: true,
+                title: '%D',
+            });
+
+            stochKSeries.setData(ohlcvData.map((candle, i) => ({
+                time: candle.time,
+                value: stK[i],
+            })).filter(item => item.value !== null));
+
+            stochDSeries.setData(ohlcvData.map((candle, i) => ({
+                time: candle.time,
+                value: stD[i],
+            })).filter(item => item.value !== null));
+
+            // Líneas de referencia: sobrecompra (80) y sobreventa (20)
+            stochKSeries.createPriceLine({ price: 80, color: '#ef444480', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: false });
+            stochKSeries.createPriceLine({ price: 20, color: '#22c55e80', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: false });
+            stochKSeries.createPriceLine({ price: 50, color: '#64748b40', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+
+            stochChart.timeScale().fitContent();
+
+            // Crosshair sync: Main → Stochastic
+            const stochCrosshairHandler = param => {
+                if (param.time && stochChart) {
+                    try { stochChart.setCrosshairPosition(0, param.time, stochKSeries); } catch(e) {}
+                }
+            };
+            mainChart.subscribeCrosshairMove(stochCrosshairHandler);
+            crosshairSubscriptions.push(stochCrosshairHandler);
+
+            // Reverse: Stochastic → Main
+            stochChart.subscribeCrosshairMove(param => {
+                if (param.time && mainChart) {
+                    try { mainChart.setCrosshairPosition(0, param.time, mainSeries); } catch(e) {}
+                }
+            });
+        }
+
         function aplicarIndicadores() {
             // Primero restaurar opacidad de TODOS los checkboxes (por si cambiamos de timeframe)
-            ['sma20', 'sma50', 'sma200', 'ema12', 'ema26', 'bollinger'].forEach(ind => {
+            ['sma20', 'sma50', 'sma200', 'ema12', 'ema26', 'bollinger', 'vwap', 'stoch'].forEach(ind => {
                 const checkbox = document.getElementById(`${ind}-toggle`);
                 if (checkbox) {
                     checkbox.parentElement.style.opacity = '1';
@@ -1329,7 +1554,7 @@
             });
 
             // Aplicar indicadores según checkboxes
-            ['sma20', 'sma50', 'sma200', 'ema12', 'ema26', 'bollinger'].forEach(ind => {
+            ['sma20', 'sma50', 'sma200', 'ema12', 'ema26', 'bollinger', 'vwap'].forEach(ind => {
                 const checkbox = document.getElementById(`${ind}-toggle`);
                 if (checkbox && checkbox.checked) {
                     toggleIndicator(ind);
@@ -1453,6 +1678,8 @@
 
             section.classList.remove('hidden');
             const closes = ohlcvData.map(d => d.close);
+            const highs = ohlcvData.map(d => d.high);
+            const lows = ohlcvData.map(d => d.low);
             const numDatos = closes.length;
             const lastPrice = closes[closes.length - 1];
             let html = '';
@@ -1675,6 +1902,99 @@
                 }
             }
 
+            // --- 5.5 VWAP ---
+            let vwapSignal = null, vwapColor = '', vwapIcon = '', lastVwap = null;
+            {
+                const vwapData = calcularVWAP(ohlcvData);
+                lastVwap = vwapData.filter(v => v !== null).slice(-1)[0];
+                if (lastVwap) {
+                    const pctVsVwap = ((lastPrice - lastVwap) / lastVwap * 100).toFixed(2);
+                    if (lastPrice > lastVwap) {
+                        vwapSignal = 'POR ENCIMA';
+                        vwapColor = 'text-green-400';
+                        vwapIcon = '&#x1F4B0;';
+                    } else {
+                        vwapSignal = 'POR DEBAJO';
+                        vwapColor = 'text-red-400';
+                        vwapIcon = '&#x1F4B8;';
+                    }
+
+                    const vwapExplicacion = lastPrice > lastVwap
+                        ? 'El precio está por encima del precio medio ponderado por volumen. La mayoría de compradores del día están en ganancias — señal de fortaleza.'
+                        : 'El precio está por debajo del precio medio ponderado por volumen. La mayoría de compradores del día están en pérdidas — señal de debilidad.';
+
+                    html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span>${vwapIcon}</span>
+                            <span class="font-semibold text-slate-200">VWAP</span>
+                            <span class="${vwapColor} font-bold ml-auto text-xs">${vwapSignal}</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Precio vs VWAP: <span class="${vwapColor} font-semibold">${pctVsVwap > 0 ? '+' : ''}${pctVsVwap}%</span> (${formatPrice(lastVwap)})</p>
+                        <p class="text-xs text-slate-500">${vwapExplicacion}</p>
+                    </div>`;
+                }
+            }
+
+            // --- 5.6 ESTOCÁSTICO ---
+            let stochSignal = null, stochColor = '', stochIcon = '', lastK = null, lastD = null;
+            if (numDatos >= 20) {
+                const stochResult = calcularEstocastico(highs, lows, closes, 14, 3);
+                const kValid = stochResult.k.filter(v => v !== null);
+                const dValid = stochResult.d.filter(v => v !== null);
+                lastK = kValid.length > 0 ? kValid[kValid.length - 1] : null;
+                lastD = dValid.length > 0 ? dValid[dValid.length - 1] : null;
+
+                if (lastK !== null) {
+                    let stochExplicacion = '';
+                    let stochCruce = '';
+
+                    if (lastK >= 80) {
+                        stochSignal = 'SOBRECOMPRADO';
+                        stochColor = 'text-red-400';
+                        stochIcon = '&#x1F534;';
+                        stochExplicacion = 'El Estocástico indica sobrecompra. El precio podría corregir a la baja próximamente.';
+                    } else if (lastK <= 20) {
+                        stochSignal = 'SOBREVENDIDO';
+                        stochColor = 'text-green-400';
+                        stochIcon = '&#x1F7E2;';
+                        stochExplicacion = 'El Estocástico indica sobreventa. Posible oportunidad de rebote al alza.';
+                    } else if (lastK >= 50) {
+                        stochSignal = 'ZONA ALTA';
+                        stochColor = 'text-cyan-400';
+                        stochIcon = '&#x2197;&#xFE0F;';
+                        stochExplicacion = 'Momentum positivo. El precio tiene fuerza alcista a corto plazo.';
+                    } else {
+                        stochSignal = 'ZONA BAJA';
+                        stochColor = 'text-orange-400';
+                        stochIcon = '&#x2198;&#xFE0F;';
+                        stochExplicacion = 'Momentum negativo. El precio muestra debilidad a corto plazo.';
+                    }
+
+                    // Detectar cruce %K/%D (señal de giro)
+                    if (kValid.length >= 2 && dValid.length >= 2) {
+                        const prevK = kValid[kValid.length - 2];
+                        const prevD = dValid[dValid.length - 2];
+                        if (prevK <= prevD && lastK > lastD) {
+                            stochCruce = '<p class="text-xs text-green-400 mt-1">&#x2705; Cruce alcista %K/%D — señal de compra a corto plazo</p>';
+                        } else if (prevK >= prevD && lastK < lastD) {
+                            stochCruce = '<p class="text-xs text-red-400 mt-1">&#x1F6D1; Cruce bajista %K/%D — señal de venta a corto plazo</p>';
+                        }
+                    }
+
+                    html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span>${stochIcon}</span>
+                            <span class="font-semibold text-slate-200">Estocástico (14,3)</span>
+                            <span class="${stochColor} font-bold ml-auto text-xs">${lastK.toFixed(1)}</span>
+                        </div>
+                        <p class="text-xs"><span class="${stochColor} font-bold">${stochSignal}</span></p>
+                        <p class="text-xs text-slate-500">${stochExplicacion}</p>
+                        <p class="text-xs text-slate-400 mt-1">%K: ${lastK.toFixed(1)} | %D: ${lastD !== null ? lastD.toFixed(1) : '-'}</p>
+                        ${stochCruce}
+                    </div>`;
+                }
+            }
+
             // --- 6. RESUMEN GENERAL + NARRATIVA INTELIGENTE ---
             let bullSignals = 0, bearSignals = 0;
             if (tendencia === 'alcista') bullSignals += 2; else if (tendencia === 'bajista') bearSignals += 2;
@@ -1682,6 +2002,17 @@
             // MACD direction
             const macdAlcista = macdValid.length > 1 && macdValid[macdValid.length - 1] > signalValid[signalValid.length - 1];
             if (macdAlcista) bullSignals++; else if (macdValid.length > 1) bearSignals++;
+
+            // VWAP
+            if (lastVwap) {
+                if (lastPrice > lastVwap) bullSignals++; else bearSignals++;
+            }
+
+            // Stochastic
+            if (lastK !== null) {
+                if (lastK <= 20) bullSignals++; // sobreventa = alcista (contrarian)
+                else if (lastK >= 80) bearSignals++; // sobrecompra = bajista
+            }
 
             // RSI extremes
             let lastRsiValue = null;
@@ -1706,9 +2037,9 @@
             }
 
             let resumen, resColor, resBg, resIcon;
-            if (bullSignals >= 3 && bearSignals <= 1) {
+            if (bullSignals >= 4 && bearSignals <= 1) {
                 resumen = 'SEÑAL ALCISTA FUERTE'; resColor = 'text-green-400'; resBg = 'bg-green-500/10 border-green-500/30'; resIcon = '&#x2705;';
-            } else if (bearSignals >= 3 && bullSignals <= 1) {
+            } else if (bearSignals >= 4 && bullSignals <= 1) {
                 resumen = 'SEÑAL BAJISTA FUERTE'; resColor = 'text-red-400'; resBg = 'bg-red-500/10 border-red-500/30'; resIcon = '&#x1F6D1;';
             } else if (bullSignals > bearSignals) {
                 resumen = 'LIGERAMENTE ALCISTA'; resColor = 'text-green-300'; resBg = 'bg-green-500/5 border-green-500/20'; resIcon = '&#x1F4C8;';
@@ -1787,10 +2118,28 @@
                 narrativa += `El precio toca la <span class="text-red-400">banda superior de Bollinger</span>, zona de posible sobreextensión. `;
             }
 
+            // VWAP
+            if (lastVwap) {
+                if (lastPrice > lastVwap) {
+                    narrativa += `El precio cotiza <span class="text-green-400">por encima del VWAP</span>, lo que indica interés comprador. `;
+                } else {
+                    narrativa += `El precio cotiza <span class="text-red-400">por debajo del VWAP</span>, lo que refleja presión vendedora intradía. `;
+                }
+            }
+
+            // Estocástico
+            if (lastK !== null) {
+                if (lastK <= 20) {
+                    narrativa += `El Estocástico en <span class="text-green-400 font-semibold">${lastK.toFixed(0)} (sobreventa)</span> refuerza la posibilidad de rebote. `;
+                } else if (lastK >= 80) {
+                    narrativa += `El Estocástico en <span class="text-red-400 font-semibold">${lastK.toFixed(0)} (sobrecompra)</span> advierte de posible agotamiento alcista. `;
+                }
+            }
+
             // Conclusión
-            if (bullSignals >= 3 && bearSignals <= 1) {
+            if (bullSignals >= 4 && bearSignals <= 1) {
                 narrativa += `<span class="text-green-400 font-semibold">Las señales apuntan claramente al alza.</span>`;
-            } else if (bearSignals >= 3 && bullSignals <= 1) {
+            } else if (bearSignals >= 4 && bullSignals <= 1) {
                 narrativa += `<span class="text-red-400 font-semibold">Las señales apuntan claramente a la baja.</span>`;
             } else if (hayContradiccion) {
                 narrativa += `<span class="text-yellow-400">Precaución: hay señales contradictorias.</span> Vigilar confirmación en próximas ${esIntradiario ? 'horas' : 'sesiones'}.`;
@@ -1960,6 +2309,19 @@
                 }
             }
 
+            // VWAP
+            const vwapArr = calcularVWAP(ohlcvData);
+            const stratVwap = vwapArr.filter(v => v !== null).slice(-1)[0];
+            let vwapAlcista = null;
+            if (stratVwap) {
+                vwapAlcista = lastPrice > stratVwap;
+            }
+
+            // Estocástico
+            const stochRes = numDatos >= 20 ? calcularEstocastico(highs, lows, closes, 14, 3) : { k: [], d: [] };
+            const stratK = stochRes.k.filter(v => v !== null);
+            const lastStochK = stratK.length > 0 ? stratK[stratK.length - 1] : null;
+
             // Pivot points y niveles de S/R para targets
             const recentHigh = Math.max(...highs.slice(-20));
             const recentLow = Math.min(...lows.slice(-20));
@@ -2018,6 +2380,14 @@
             else if (lastRsi >= 60) score -= 1;
             if (bbPos === 'lower') score += 1;
             else if (bbPos === 'upper') score -= 1;
+            // VWAP: precio por encima = alcista
+            if (vwapAlcista === true) score += 1;
+            else if (vwapAlcista === false) score -= 1;
+            // Estocástico: sobreventa/sobrecompra
+            if (lastStochK !== null) {
+                if (lastStochK <= 20) score += 1;
+                else if (lastStochK >= 80) score -= 1;
+            }
 
             // ---- Lógica de estrategia ----
             if (score >= 4) {
@@ -2219,8 +2589,8 @@
 
             // Nota sobre el score
             html += `<div class="p-2 bg-slate-800/50 rounded border border-slate-700/50 text-xs text-slate-500">
-                <p>&#x1F4CA; Score técnico: <span class="font-semibold ${score > 0 ? 'text-green-400' : score < 0 ? 'text-red-400' : 'text-yellow-400'}">${score > 0 ? '+' : ''}${score}</span> (de -6 a +6)</p>
-                <p class="mt-1">Basado en: Tendencia · MACD · RSI · Bollinger</p>
+                <p>&#x1F4CA; Score técnico: <span class="font-semibold ${score > 0 ? 'text-green-400' : score < 0 ? 'text-red-400' : 'text-yellow-400'}">${score > 0 ? '+' : ''}${score}</span> (de -8 a +8)</p>
+                <p class="mt-1">Basado en: Tendencia · MACD · RSI · Bollinger · VWAP · Estocástico</p>
             </div>`;
 
             container.innerHTML = html;

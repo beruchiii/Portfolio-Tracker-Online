@@ -2053,7 +2053,8 @@
                     razon = 'Señales mixtas. Mejor esperar confirmación antes de entrar.';
                     distribucion = { ahora: 0, enSoporte: 50, reserva: 50 };
                     entryTarget = entryFromSupport;
-                    stopLoss = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.90;
+                    const slEsperar = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.90;
+                    stopLoss = Math.max(slEsperar, slMaximo); // nunca peor que -8%
                     takeProfit = tpDefault;
                 }
             } else if (score >= -2) {
@@ -2063,7 +2064,8 @@
                     razon = 'Tendencia bajista pero con sobreventa extrema. Esperar confirmación de rebote antes de entrar.';
                     distribucion = { ahora: 0, enSoporte: 40, reserva: 60 };
                     entryTarget = entryFromSupport;
-                    stopLoss = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.90;
+                    const slRebote = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.90;
+                    stopLoss = Math.max(slRebote, slMaximo); // nunca peor que -8%
                     takeProfit = tpDefault;
                 } else {
                     accion = 'NO COMPRAR'; confianza = 60;
@@ -2071,7 +2073,8 @@
                     razon = 'Presión vendedora activa. Esperar a que el precio estabilice en un soporte.';
                     distribucion = { ahora: 0, enSoporte: 30, reserva: 70 };
                     entryTarget = soportesAbajo.length > 0 ? soportesAbajo[0] : lastPrice * 0.95;
-                    stopLoss = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.90;
+                    const sl1 = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.90;
+                    stopLoss = Math.max(sl1, slMaximo); // nunca peor que -8%
                     takeProfit = tpDefault;
                 }
             } else {
@@ -2080,7 +2083,8 @@
                 razon = 'Señales claramente bajistas. Alto riesgo. Esperar a que forme un suelo.';
                 distribucion = { ahora: 0, enSoporte: 20, reserva: 80 };
                 entryTarget = soportesAbajo.length > 0 ? soportesAbajo[0] : lastPrice * 0.90;
-                stopLoss = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.85;
+                const sl2 = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.85;
+                stopLoss = Math.max(sl2, slMaximo); // nunca peor que -8%
                 takeProfit = tpDefault;
             }
 

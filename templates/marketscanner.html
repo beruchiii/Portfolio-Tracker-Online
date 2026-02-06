@@ -1442,6 +1442,7 @@
             const numDatos = closes.length;
             const lastPrice = closes[closes.length - 1];
             let html = '';
+            let macdCruce = null, macdCruceTipo = null, macdCruceDias = 0;
 
             // Detectar si los datos son intradiarios (timestamps unix) o diarios (string)
             const esIntradiario = typeof ohlcvData[0].time === 'number';
@@ -1501,8 +1502,8 @@
             </div>`;
 
             // --- 2. CRUCES DE MEDIAS (Golden/Death Cross) ---
+            let ultimoCruce = null, tipoCruce = null, diasCruce = 0;
             if (sma50.length > 1 && sma200.length > 1) {
-                let ultimoCruce = null, tipoCruce = null, diasCruce = 0;
                 for (let i = sma50.length - 1; i > 0; i--) {
                     if (sma50[i] === null || sma200[i] === null || sma50[i-1] === null || sma200[i-1] === null) continue;
                     const arriba = sma50[i] > sma200[i];
@@ -1531,7 +1532,7 @@
                             <span class="font-semibold text-slate-200">Cruce de Medias</span>
                         </div>
                         <p class="text-xs"><span class="${cruceColor} font-bold uppercase">Cruce ${tipoCruce}</span> <span class="text-slate-500">(SMA50/SMA200)</span></p>
-                        <p class="text-xs text-slate-400">Fecha: ${formatTime(ultimoCruce)} - Hace ${diasCruce} ${esIntradiario ? 'velas' : 'sesiones'}${diasCruce <= 10 ? ' - <span class="text-yellow-400 font-semibold">Reciente!</span>' : ''}</p>
+                        <p class="text-xs text-slate-400">Fecha: ${formatTime(ultimoCruce)} - Hace ${formatVelasToTime(diasCruce, esIntradiario)}${diasCruce <= (esIntradiario ? 48 : 5) ? ' - <span class="text-yellow-400 font-semibold">¡Reciente!</span>' : ''}</p>
                         <p class="text-xs text-slate-500 mt-1">${tipoCruce === 'dorado' ? 'La SMA 50 cruzó por encima de la SMA 200. Señal histórica de compra.' : 'La SMA 50 cruzó por debajo de la SMA 200. Señal histórica de venta.'}</p>
                     </div>`;
                 }
@@ -1558,7 +1559,7 @@
                 const sobreCero = lastMacd > 0;
 
                 // Detect last MACD cross
-                let macdCruce = null, macdCruceTipo = null, macdCruceDias = 0;
+                macdCruce = null; macdCruceTipo = null; macdCruceDias = 0;
                 for (let i = macd.length - 1; i > 0; i--) {
                     if (macd[i] === null || signal[i] === null || macd[i-1] === null || signal[i-1] === null) continue;
                     const above = macd[i] > signal[i];
@@ -1581,7 +1582,7 @@
                     <div class="space-y-1">
                         <p class="text-xs text-slate-400">${momIcon} Momentum: <span class="${momColor} font-semibold">${momentum}</span></p>
                         <p class="text-xs text-slate-400">${sobreCero ? '&#x2600;&#xFE0F;' : '&#x1F319;'} Zona: <span class="${sobreCero ? 'text-green-400' : 'text-yellow-400'} font-semibold">${sobreCero ? 'Positiva' : 'Negativa'}</span></p>
-                        ${macdCruce ? `<p class="text-xs text-slate-400">Ultimo cruce: <span class="${macdCruceTipo === 'alcista' ? 'text-green-400' : 'text-red-400'} font-semibold">${macdCruceTipo === 'alcista' ? 'Compra' : 'Venta'}</span> (${formatTime(macdCruce)}, hace ${macdCruceDias} ${esIntradiario ? 'velas' : 'dias'})</p>` : ''}
+                        ${macdCruce ? `<p class="text-xs text-slate-400">Último cruce: <span class="${macdCruceTipo === 'alcista' ? 'text-green-400' : 'text-red-400'} font-semibold">${macdCruceTipo === 'alcista' ? 'Compra' : 'Venta'}</span> (${formatTime(macdCruce)}, hace ${formatVelasToTime(macdCruceDias, esIntradiario)})</p>` : ''}
                     </div>
                 </div>`;
             }
@@ -1660,20 +1661,33 @@
                 }
             }
 
-            // --- 6. RESUMEN GENERAL ---
+            // --- 6. RESUMEN GENERAL + NARRATIVA INTELIGENTE ---
             let bullSignals = 0, bearSignals = 0;
             if (tendencia === 'alcista') bullSignals += 2; else if (tendencia === 'bajista') bearSignals += 2;
-            if (macdValid.length > 1 && macdValid[macdValid.length - 1] > signalValid[signalValid.length - 1]) bullSignals++; else if (macdValid.length > 1) bearSignals++;
+
+            // MACD direction
+            const macdAlcista = macdValid.length > 1 && macdValid[macdValid.length - 1] > signalValid[signalValid.length - 1];
+            if (macdAlcista) bullSignals++; else if (macdValid.length > 1) bearSignals++;
+
+            // RSI extremes
+            let lastRsiValue = null;
             if (rsiValid.length > 0) {
-                const lr = rsiValid[rsiValid.length - 1];
-                if (lr <= 30) bullSignals++; else if (lr >= 70) bearSignals++;
+                lastRsiValue = rsiValid[rsiValid.length - 1];
+                if (lastRsiValue <= 30) bullSignals++; else if (lastRsiValue >= 70) bearSignals++;
             }
+
+            // Bollinger position
+            let bbPos = null; // 'upper', 'lower', 'above', 'below'
             if (numDatos >= 30) {
                 const bbResult = calcularBollinger(closes, 20, 2);
                 const lu = bbResult.upper.filter(v => v !== null).slice(-1)[0];
                 const ll = bbResult.lower.filter(v => v !== null).slice(-1)[0];
+                const lm = bbResult.middle.filter(v => v !== null).slice(-1)[0];
                 if (lu && ll) {
-                    if (lastPrice <= ll) bullSignals++; else if (lastPrice >= lu) bearSignals++;
+                    if (lastPrice <= ll) { bullSignals++; bbPos = 'lower'; }
+                    else if (lastPrice >= lu) { bearSignals++; bbPos = 'upper'; }
+                    else if (lastPrice > lm) { bbPos = 'above'; }
+                    else { bbPos = 'below'; }
                 }
             }
 
@@ -1690,10 +1704,91 @@
                 resumen = 'SEÑALES MIXTAS'; resColor = 'text-yellow-400'; resBg = 'bg-yellow-500/10 border-yellow-500/30'; resIcon = '&#x26A0;&#xFE0F;';
             }
 
-            html += `<div class="p-3 rounded-lg border ${resBg} text-center">
-                <span class="text-lg">${resIcon}</span>
-                <span class="${resColor} font-bold text-sm ml-1">${resumen}</span>
-                <p class="text-xs text-slate-500 mt-1">Alcistas: ${bullSignals} | Bajistas: ${bearSignals}</p>
+            // --- NARRATIVA AUTOMÁTICA (estilo analista) ---
+            const ticker = currentTicker || 'El activo';
+            const firstCloseVal = closes[0];
+            const cambio = ((lastPrice - firstCloseVal) / firstCloseVal * 100).toFixed(1);
+            const cambioAbs = Math.abs(cambio);
+            const subeBaja = parseFloat(cambio) >= 0 ? 'subió' : 'cayó';
+            const periodoTexto = currentPeriod === '1mo' ? 'en el último mes' : currentPeriod === '3mo' ? 'en los últimos 3 meses' : currentPeriod === '6mo' ? 'en 6 meses' : currentPeriod === '1y' ? 'en el último año' : currentPeriod === '2y' ? 'en 2 años' : currentPeriod === '5y' ? 'en 5 años' : 'en el período';
+
+            let narrativa = `<span class="font-semibold text-slate-200">${ticker}</span> ${subeBaja} un <span class="${parseFloat(cambio) >= 0 ? 'text-green-400' : 'text-red-400'} font-semibold">${cambioAbs}%</span> ${periodoTexto}. `;
+
+            // Tendencia + medias
+            if (tendencia === 'bajista' && lastSma50 && lastSma200) {
+                narrativa += `La tendencia es <span class="text-red-400 font-semibold">bajista confirmada</span> (precio por debajo de SMA 50 y SMA 200). `;
+            } else if (tendencia === 'alcista' && lastSma50 && lastSma200) {
+                narrativa += `La tendencia es <span class="text-green-400 font-semibold">alcista confirmada</span> (precio por encima de SMA 50 y SMA 200). `;
+            } else if (tendencia === 'bajista') {
+                narrativa += `La tendencia a corto plazo es <span class="text-red-400 font-semibold">bajista</span>. `;
+            } else if (tendencia === 'alcista') {
+                narrativa += `La tendencia a corto plazo es <span class="text-green-400 font-semibold">alcista</span>. `;
+            } else {
+                narrativa += `El mercado está en fase <span class="text-yellow-400 font-semibold">lateral</span>. `;
+            }
+
+            // Cruces de medias (reusar variables ya calculadas)
+            if (tipoCruce) {
+                narrativa += tipoCruce === 'mortal'
+                    ? `Se produjo un <span class="text-red-400 font-semibold">cruce mortal</span> hace ${formatVelasToTime(diasCruce, esIntradiario)}, señal histórica de venta. `
+                    : `Se produjo un <span class="text-green-400 font-semibold">cruce dorado</span> hace ${formatVelasToTime(diasCruce, esIntradiario)}, señal histórica de compra. `;
+            }
+
+            // Contradicciones / confluencias (lo más interesante del análisis)
+            const hayContradiccion = (tendencia === 'bajista' && macdAlcista) || (tendencia === 'alcista' && !macdAlcista);
+            if (hayContradiccion) {
+                if (tendencia === 'bajista' && macdAlcista) {
+                    narrativa += `<span class="text-yellow-400">Sin embargo</span>, el MACD acaba de dar <span class="text-green-400 font-semibold">señal de compra</span>`;
+                    if (macdCruceDias > 0) {
+                        narrativa += ` hace ${formatVelasToTime(macdCruceDias, esIntradiario)}`;
+                    }
+                    narrativa += `, lo que sugiere un <span class="text-cyan-400">posible rebote técnico</span> dentro de la tendencia bajista. `;
+                } else if (tendencia === 'alcista' && !macdAlcista) {
+                    narrativa += `<span class="text-yellow-400">Sin embargo</span>, el MACD está en <span class="text-red-400 font-semibold">señal de venta</span>, lo que podría anticipar una <span class="text-orange-400">corrección a corto plazo</span>. `;
+                }
+            } else {
+                // Confluencia: todo apunta en la misma dirección
+                if (tendencia === 'bajista' && !macdAlcista) {
+                    narrativa += `El MACD confirma la presión vendedora. `;
+                } else if (tendencia === 'alcista' && macdAlcista) {
+                    narrativa += `El MACD confirma el impulso comprador. `;
+                }
+            }
+
+            // RSI
+            if (lastRsiValue !== null) {
+                if (lastRsiValue <= 30) {
+                    narrativa += `El RSI en <span class="text-green-400 font-semibold">${lastRsiValue.toFixed(1)} (sobrevendido)</span> sugiere que la presión vendedora podría estar agotándose. `;
+                } else if (lastRsiValue >= 70) {
+                    narrativa += `El RSI en <span class="text-red-400 font-semibold">${lastRsiValue.toFixed(1)} (sobrecomprado)</span> indica riesgo de corrección. `;
+                } else if (lastRsiValue >= 40 && lastRsiValue <= 60) {
+                    narrativa += `El RSI está neutral en ${lastRsiValue.toFixed(1)}, sin señales extremas. `;
+                }
+            }
+
+            // Bollinger
+            if (bbPos === 'lower') {
+                narrativa += `El precio toca la <span class="text-green-400">banda inferior de Bollinger</span>, zona típica de sobreventa. `;
+            } else if (bbPos === 'upper') {
+                narrativa += `El precio toca la <span class="text-red-400">banda superior de Bollinger</span>, zona de posible sobreextensión. `;
+            }
+
+            // Conclusión
+            if (bullSignals >= 3 && bearSignals <= 1) {
+                narrativa += `<span class="text-green-400 font-semibold">Las señales apuntan claramente al alza.</span>`;
+            } else if (bearSignals >= 3 && bullSignals <= 1) {
+                narrativa += `<span class="text-red-400 font-semibold">Las señales apuntan claramente a la baja.</span>`;
+            } else if (hayContradiccion) {
+                narrativa += `<span class="text-yellow-400">Precaución: hay señales contradictorias.</span> Vigilar confirmación en próximas ${esIntradiario ? 'horas' : 'sesiones'}.`;
+            }
+
+            html += `<div class="p-3 rounded-lg border ${resBg}">
+                <div class="flex items-center gap-2 mb-2">
+                    <span class="text-lg">${resIcon}</span>
+                    <span class="${resColor} font-bold text-sm">${resumen}</span>
+                    <span class="text-xs text-slate-500 ml-auto">Alcistas: ${bullSignals} | Bajistas: ${bearSignals}</span>
+                </div>
+                <p class="text-xs text-slate-400 leading-relaxed">${narrativa}</p>
             </div>`;
 
             container.innerHTML = html;
@@ -1798,6 +1893,36 @@
                 return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
             }
             return String(timeValue);
+        }
+
+        function formatVelasToTime(numVelas, esIntradiario) {
+            // Convierte número de velas a tiempo legible
+            // En intradiario: 1 vela = 1 hora, en diario: 1 vela = 1 día
+            if (esIntradiario) {
+                const horas = numVelas;
+                if (horas < 24) {
+                    return `${horas}h`;
+                } else {
+                    const dias = Math.floor(horas / 24);
+                    const horasRestantes = horas % 24;
+                    return dias === 1
+                        ? `1 día${horasRestantes > 0 ? ` y ${horasRestantes}h` : ''}`
+                        : `${dias} días${horasRestantes > 0 ? ` y ${horasRestantes}h` : ''}`;
+                }
+            } else {
+                // Datos diarios
+                if (numVelas === 1) return '1 día';
+                if (numVelas < 7) return `${numVelas} días`;
+                if (numVelas < 30) {
+                    const semanas = Math.floor(numVelas / 7);
+                    const diasResto = numVelas % 7;
+                    return semanas === 1
+                        ? `1 semana${diasResto > 0 ? ` y ${diasResto}d` : ''}`
+                        : `${semanas} semanas${diasResto > 0 ? ` y ${diasResto}d` : ''}`;
+                }
+                const meses = Math.floor(numVelas / 30);
+                return meses === 1 ? '~1 mes' : `~${meses} meses`;
+            }
         }
 
         function formatPrice(value) {

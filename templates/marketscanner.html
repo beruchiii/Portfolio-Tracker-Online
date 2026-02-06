@@ -937,16 +937,16 @@
         // INDICADORES TÉCNICOS
         // ============================================
         function calcularSMA(data, periodo) {
-            const sma = [];
+            // Ventana deslizante O(n) - optimizado para datasets grandes (6000+ velas)
+            const sma = new Array(data.length);
+            let sum = 0;
             for (let i = 0; i < data.length; i++) {
+                sum += data[i];
                 if (i < periodo - 1) {
-                    sma.push(null);
+                    sma[i] = null;
                 } else {
-                    let sum = 0;
-                    for (let j = 0; j < periodo; j++) {
-                        sum += data[i - j];
-                    }
-                    sma.push(sum / periodo);
+                    if (i >= periodo) sum -= data[i - periodo];
+                    sma[i] = sum / periodo;
                 }
             }
             return sma;

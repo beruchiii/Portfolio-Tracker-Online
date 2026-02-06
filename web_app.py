@@ -4819,14 +4819,15 @@ def api_ohlcv(ticker):
         '5y': '5y',
         'max': 'max'
     }
-    # Intervalo adaptativo: horario para periodos cortos, diario para largos
-    # Yahoo Finance limita datos de 1h a ~60 dias, asi que 3mo usa diario
+    # Intervalo adaptativo: horario para periodos hasta 1 año, diario para más largos
+    # Yahoo Finance permite datos horarios (1h) hasta ~730 días atrás
+    # Más velas = mejor análisis técnico (SMA 200, cruces, divergencias...)
     interval_map = {
-        '1mo': '1h',    # ~500 puntos horarios (suficiente para todos los indicadores)
-        '3mo': '1d',    # ~65 puntos diarios (1h limitado a 60 dias por Yahoo)
-        '6mo': '1d',    # ~130 puntos diarios
-        '1y': '1d',     # ~250 puntos diarios
-        '2y': '1d',     # ~500 puntos diarios
+        '1mo': '1h',    # ~500 velas horarias
+        '3mo': '1h',    # ~1,500 velas horarias - permite SMA 200 con margen
+        '6mo': '1h',    # ~3,000 velas horarias - análisis detallado
+        '1y': '1h',     # ~6,000 velas horarias - máximo detalle anual
+        '2y': '1d',     # ~500 puntos diarios (límite Yahoo para 1h es ~730 días)
         '5y': '1d',     # ~1250 puntos diarios
         'max': '1wk'    # semanal para evitar datasets enormes
     }

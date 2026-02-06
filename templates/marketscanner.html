@@ -1960,19 +1960,47 @@
                 }
             }
 
-            // Pivot points para targets
+            // Pivot points y niveles de S/R para targets
             const recentHigh = Math.max(...highs.slice(-20));
             const recentLow = Math.min(...lows.slice(-20));
+            const periodHigh = Math.max(...highs);
+            const periodLow = Math.min(...lows);
             const pivot = (recentHigh + recentLow + lastPrice) / 3;
             const s1 = 2 * pivot - recentHigh;
+            const s2 = pivot - (recentHigh - recentLow);
             const r1 = 2 * pivot - recentLow;
+            const r2 = pivot + (recentHigh - recentLow);
+
+            // Construir lista de resistencias por encima del precio (para Take Profit)
+            const resistenciasArriba = [r1, r2, recentHigh, periodHigh, lastSma20, lastSma50, lastSma200]
+                .filter(v => v !== null && v > lastPrice * 1.01) // al menos 1% por encima
+                .sort((a, b) => a - b); // menor a mayor (la más cercana primero)
+
+            // Construir lista de soportes por debajo del precio (para Stop Loss / Entry)
+            const soportesAbajo = [s1, s2, recentLow, periodLow]
+                .filter(v => v !== null && v > 0 && v < lastPrice * 0.99) // al menos 1% por debajo
+                .sort((a, b) => b - a); // mayor a menor (el más cercano primero)
+
+            // Seleccionar Take Profit inteligente: primer nivel de resistencia significativo
+            // Si no hay resistencia, usar +5% como mínimo para que el R/R sea razonable
+            const tpFromResistance = resistenciasArriba.length > 0 ? resistenciasArriba[0] : null;
+            const tpMinimo = lastPrice * 1.05; // al menos 5% de ganancia
+            const tpDefault = tpFromResistance && tpFromResistance > tpMinimo ? tpFromResistance : tpMinimo;
+
+            // Seleccionar Stop Loss inteligente: primer soporte por debajo, máximo -8%
+            const slFromSupport = soportesAbajo.length > 0 ? soportesAbajo[0] : null;
+            const slMaximo = lastPrice * 0.92; // máximo -8%
+            const slDefault = slFromSupport && slFromSupport > slMaximo ? slFromSupport : slMaximo;
+
+            // Nivel de entrada en soporte (para órdenes limit)
+            const entryFromSupport = soportesAbajo.length > 0 ? soportesAbajo[0] : lastPrice * 0.97;
 
             // ---- Decidir recomendación ----
-            let accion = 'MANTENER'; // COMPRAR, VENDER, MANTENER, ESPERAR
-            let confianza = 0; // 0-100
+            let accion = 'MANTENER';
+            let confianza = 0;
             let colorAccion = 'text-yellow-400';
             let bgAccion = 'border-yellow-500/30 bg-yellow-500/5';
-            let iconAccion = '&#x23F3;'; // reloj
+            let iconAccion = '&#x23F3;';
             let razon = '';
             let entryTarget = null;
             let stopLoss = null;
@@ -1993,91 +2021,86 @@
 
             // ---- Lógica de estrategia ----
             if (score >= 4) {
-                // Fuerte alcista: comprar agresivo
-                accion = 'COMPRAR';
-                confianza = 85;
-                colorAccion = 'text-green-400';
-                bgAccion = 'border-green-500/30 bg-green-500/10';
-                iconAccion = '&#x1F7E2;';
+                accion = 'COMPRAR'; confianza = 85;
+                colorAccion = 'text-green-400'; bgAccion = 'border-green-500/30 bg-green-500/10'; iconAccion = '&#x1F7E2;';
                 razon = 'Todas las señales alineadas al alza. Buen momento de entrada.';
                 distribucion = { ahora: 70, enSoporte: 20, reserva: 10 };
-                entryTarget = lastPrice;
-                stopLoss = s1 > 0 ? s1 : lastPrice * 0.95;
-                takeProfit = r1;
+                entryTarget = entryFromSupport;
+                stopLoss = slDefault;
+                // Target ambicioso: segunda resistencia si es mayor al mínimo, sino la primera, sino el mínimo
+                const tpAmbicioso = resistenciasArriba.length > 1 ? resistenciasArriba[1] : null;
+                takeProfit = (tpAmbicioso && tpAmbicioso > tpMinimo) ? tpAmbicioso : tpDefault;
             } else if (score >= 2) {
-                // Moderadamente alcista
-                accion = 'COMPRAR';
-                confianza = 65;
-                colorAccion = 'text-green-300';
-                bgAccion = 'border-green-500/20 bg-green-500/5';
-                iconAccion = '&#x1F7E2;';
+                accion = 'COMPRAR'; confianza = 65;
+                colorAccion = 'text-green-300'; bgAccion = 'border-green-500/20 bg-green-500/5'; iconAccion = '&#x1F7E2;';
                 razon = 'Señales mayoritariamente alcistas. Entrada con precaución.';
                 distribucion = { ahora: 50, enSoporte: 30, reserva: 20 };
-                entryTarget = lastPrice;
-                stopLoss = s1 > 0 ? s1 : lastPrice * 0.95;
-                takeProfit = r1;
+                entryTarget = entryFromSupport;
+                stopLoss = slDefault;
+                takeProfit = tpDefault;
             } else if (score >= 0) {
-                // Lateral / mixto
                 if (lastRsi <= 35 || bbPos === 'lower') {
-                    accion = 'COMPRAR PARCIAL';
-                    confianza = 45;
-                    colorAccion = 'text-cyan-400';
-                    bgAccion = 'border-cyan-500/20 bg-cyan-500/5';
-                    iconAccion = '&#x1F4B0;';
+                    accion = 'COMPRAR PARCIAL'; confianza = 45;
+                    colorAccion = 'text-cyan-400'; bgAccion = 'border-cyan-500/20 bg-cyan-500/5'; iconAccion = '&#x1F4B0;';
                     razon = 'Señales mixtas pero hay sobreventa. Entrada parcial por posible rebote.';
                     distribucion = { ahora: 30, enSoporte: 40, reserva: 30 };
-                    entryTarget = lastPrice;
-                    stopLoss = s1 > 0 ? s1 : lastPrice * 0.93;
-                    takeProfit = lastSma50 || r1;
+                    entryTarget = entryFromSupport;
+                    stopLoss = slDefault;
+                    takeProfit = tpDefault;
                 } else {
-                    accion = 'ESPERAR';
-                    confianza = 50;
-                    colorAccion = 'text-yellow-400';
-                    bgAccion = 'border-yellow-500/20 bg-yellow-500/5';
-                    iconAccion = '&#x23F3;';
+                    accion = 'ESPERAR'; confianza = 50;
+                    colorAccion = 'text-yellow-400'; bgAccion = 'border-yellow-500/20 bg-yellow-500/5'; iconAccion = '&#x23F3;';
                     razon = 'Señales mixtas. Mejor esperar confirmación antes de entrar.';
                     distribucion = { ahora: 0, enSoporte: 50, reserva: 50 };
-                    entryTarget = s1 > 0 ? s1 : lastPrice * 0.95;
-                    stopLoss = lastPrice * 0.90;
-                    takeProfit = r1;
+                    entryTarget = entryFromSupport;
+                    stopLoss = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.90;
+                    takeProfit = tpDefault;
                 }
             } else if (score >= -2) {
-                // Moderadamente bajista
                 if (lastRsi <= 30 && bbPos === 'lower') {
-                    accion = 'ESPERAR REBOTE';
-                    confianza = 40;
-                    colorAccion = 'text-orange-400';
-                    bgAccion = 'border-orange-500/20 bg-orange-500/5';
-                    iconAccion = '&#x1F440;';
-                    razon = 'Tendencia bajista pero con sobreventa extrema. Esperar confirmación de rebote.';
+                    accion = 'ESPERAR REBOTE'; confianza = 40;
+                    colorAccion = 'text-orange-400'; bgAccion = 'border-orange-500/20 bg-orange-500/5'; iconAccion = '&#x1F440;';
+                    razon = 'Tendencia bajista pero con sobreventa extrema. Esperar confirmación de rebote antes de entrar.';
                     distribucion = { ahora: 0, enSoporte: 40, reserva: 60 };
-                    entryTarget = s1 > 0 ? s1 : lastPrice * 0.95;
-                    stopLoss = lastPrice * 0.90;
-                    takeProfit = lastSma20 || pivot;
+                    entryTarget = entryFromSupport;
+                    stopLoss = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.90;
+                    takeProfit = tpDefault;
                 } else {
-                    accion = 'NO COMPRAR';
-                    confianza = 60;
-                    colorAccion = 'text-red-300';
-                    bgAccion = 'border-red-500/20 bg-red-500/5';
-                    iconAccion = '&#x1F6D1;';
-                    razon = 'Presión vendedora activa. Esperar a que el precio estabilice.';
+                    accion = 'NO COMPRAR'; confianza = 60;
+                    colorAccion = 'text-red-300'; bgAccion = 'border-red-500/20 bg-red-500/5'; iconAccion = '&#x1F6D1;';
+                    razon = 'Presión vendedora activa. Esperar a que el precio estabilice en un soporte.';
                     distribucion = { ahora: 0, enSoporte: 30, reserva: 70 };
-                    entryTarget = s1 > 0 ? s1 : lastPrice * 0.92;
-                    stopLoss = lastPrice * 0.88;
-                    takeProfit = pivot;
+                    entryTarget = soportesAbajo.length > 0 ? soportesAbajo[0] : lastPrice * 0.95;
+                    stopLoss = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.90;
+                    takeProfit = tpDefault;
                 }
             } else {
-                // Fuerte bajista
-                accion = 'NO COMPRAR';
-                confianza = 80;
-                colorAccion = 'text-red-400';
-                bgAccion = 'border-red-500/30 bg-red-500/10';
-                iconAccion = '&#x1F6D1;';
-                razon = 'Señales claramente bajistas. Demasiado riesgo para entrar ahora.';
+                accion = 'NO COMPRAR'; confianza = 80;
+                colorAccion = 'text-red-400'; bgAccion = 'border-red-500/30 bg-red-500/10'; iconAccion = '&#x1F6D1;';
+                razon = 'Señales claramente bajistas. Alto riesgo. Esperar a que forme un suelo.';
                 distribucion = { ahora: 0, enSoporte: 20, reserva: 80 };
-                entryTarget = s1 > 0 ? s1 : lastPrice * 0.90;
-                stopLoss = lastPrice * 0.85;
-                takeProfit = pivot;
+                entryTarget = soportesAbajo.length > 0 ? soportesAbajo[0] : lastPrice * 0.90;
+                stopLoss = soportesAbajo.length > 1 ? soportesAbajo[1] : lastPrice * 0.85;
+                takeProfit = tpDefault;
+            }
+
+            // ---- Validación final de seguridad ----
+            // Take Profit SIEMPRE debe estar por encima del precio actual
+            if (takeProfit && takeProfit <= lastPrice) {
+                takeProfit = lastPrice * 1.05; // fallback mínimo +5%
+            }
+            // Stop Loss SIEMPRE debe estar por debajo del precio actual
+            if (stopLoss && stopLoss >= lastPrice) {
+                stopLoss = lastPrice * 0.95; // fallback -5%
+            }
+            // Garantizar que el R/R sea al menos razonable (mínimo 1:0.5)
+            if (takeProfit && stopLoss) {
+                const rewardCheck = takeProfit - lastPrice;
+                const riskCheck = lastPrice - stopLoss;
+                if (riskCheck > 0 && rewardCheck / riskCheck < 0.5) {
+                    // Subir el TP para mejorar el ratio
+                    takeProfit = lastPrice + (riskCheck * 1.0); // forzar al menos 1:1
+                }
             }
 
             // ---- Generar HTML ----

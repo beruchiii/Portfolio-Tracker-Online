@@ -593,25 +593,87 @@
             btn.disabled = true;
 
             try {
-                // Crear un contenedor temporal con todo el análisis
+                // 1. Capturar screenshots de los gráficos visibles
+                const chartScreenshots = [];
+                if (mainChart) {
+                    try { chartScreenshots.push({ label: 'Gráfico principal', canvas: mainChart.takeScreenshot() }); } catch(e) {}
+                }
+                if (rsiChart && !document.getElementById('rsi-chart-container').classList.contains('hidden')) {
+                    try { chartScreenshots.push({ label: 'RSI', canvas: rsiChart.takeScreenshot() }); } catch(e) {}
+                }
+                if (macdChart && !document.getElementById('macd-chart-container').classList.contains('hidden')) {
+                    try { chartScreenshots.push({ label: 'MACD', canvas: macdChart.takeScreenshot() }); } catch(e) {}
+                }
+                if (stochChart && !document.getElementById('stoch-chart-container').classList.contains('hidden')) {
+                    try { chartScreenshots.push({ label: 'Estocástico', canvas: stochChart.takeScreenshot() }); } catch(e) {}
+                }
+                if (volumeChart && !document.getElementById('volume-chart-container').classList.contains('hidden')) {
+                    try { chartScreenshots.push({ label: 'Volumen', canvas: volumeChart.takeScreenshot() }); } catch(e) {}
+                }
+
+                // 2. Crear contenedor temporal con el análisis de texto
                 const exportDiv = document.createElement('div');
                 exportDiv.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:800px;background:#0f172a;color:#e2e8f0;padding:24px;font-family:Inter,sans-serif;';
                 exportDiv.innerHTML = generarHTMLExport();
                 document.body.appendChild(exportDiv);
 
-                const canvas = await html2canvas(exportDiv, {
+                const textCanvas = await html2canvas(exportDiv, {
                     backgroundColor: '#0f172a',
                     scale: 2,
                     useCORS: true,
                     logging: false,
                 });
-
                 document.body.removeChild(exportDiv);
 
-                // Descargar como PNG
+                // 3. Componer todo en un canvas final
+                const scale = 2;
+                const exportWidth = 800 * scale;
+
+                // Calcular altura total: charts + texto
+                let chartsHeight = 0;
+                chartScreenshots.forEach(cs => {
+                    // Escalar cada screenshot al ancho del export
+                    const ratio = exportWidth / cs.canvas.width;
+                    chartsHeight += Math.round(cs.canvas.height * ratio);
+                });
+
+                const totalHeight = chartsHeight + textCanvas.height;
+                const finalCanvas = document.createElement('canvas');
+                finalCanvas.width = exportWidth;
+                finalCanvas.height = totalHeight;
+                const ctx = finalCanvas.getContext('2d');
+
+                // Fondo
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(0, 0, exportWidth, totalHeight);
+
+                // Dibujar gráficos
+                let yOffset = 0;
+                chartScreenshots.forEach(cs => {
+                    const ratio = exportWidth / cs.canvas.width;
+                    const h = Math.round(cs.canvas.height * ratio);
+                    ctx.drawImage(cs.canvas, 0, yOffset, exportWidth, h);
+                    yOffset += h;
+                });
+
+                // Línea separadora entre gráficos y texto
+                if (chartScreenshots.length > 0) {
+                    ctx.strokeStyle = '#3b82f6';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(24 * scale, yOffset);
+                    ctx.lineTo(exportWidth - 24 * scale, yOffset);
+                    ctx.stroke();
+                }
+
+                // Dibujar análisis de texto
+                ctx.drawImage(textCanvas, 0, yOffset, exportWidth, textCanvas.height);
+
+                // 4. Descargar
                 const link = document.createElement('a');
-                link.download = `analisis_${currentTicker}_${new Date().toISOString().slice(0,10)}.png`;
-                link.href = canvas.toDataURL('image/png');
+                const periodoLabel = { '1mo': '1M', '3mo': '3M', '6mo': '6M', '1y': '1A', '2y': '2A', '5y': '5A', 'max': 'MAX' }[currentPeriod] || currentPeriod;
+                link.download = `analisis_${currentTicker}_${periodoLabel}_${new Date().toISOString().slice(0,10)}.png`;
+                link.href = finalCanvas.toDataURL('image/png');
                 link.click();
 
             } catch (error) {
@@ -628,11 +690,11 @@
             const assetPrice = document.getElementById('asset-price')?.textContent || '';
             const assetChange = document.getElementById('asset-change')?.textContent || '';
 
-            // Recopilar el análisis técnico
             const analysisContent = document.getElementById('analysis-content')?.innerHTML || '';
             const srContent = document.getElementById('sr-levels')?.innerHTML || '';
             const strategyContent = document.getElementById('strategy-content')?.innerHTML || '';
 
+            const periodoLabel = { '1mo': '1 mes', '3mo': '3 meses', '6mo': '6 meses', '1y': '1 año', '2y': '2 años', '5y': '5 años', 'max': 'Máximo' }[currentPeriod] || currentPeriod;
             const fecha = new Date().toLocaleDateString('es-ES', {
                 day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
             });
@@ -642,7 +704,7 @@
                     <div style="display:flex;align-items:center;justify-content:space-between;">
                         <div>
                             <div style="font-size:24px;font-weight:bold;color:white;">${assetName}</div>
-                            <div style="font-size:14px;color:#94a3b8;">${currentTicker} · ${fecha}</div>
+                            <div style="font-size:14px;color:#94a3b8;">${currentTicker} · Período: ${periodoLabel} · ${fecha}</div>
                         </div>
                         <div style="text-align:right;">
                             <div style="font-size:28px;font-weight:bold;color:white;">${assetPrice}</div>

@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Market Scanner - Portfolio Tracker</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            background: #0f172a;
+        }
+        .chart-container {
+            width: 100%;
+            height: 100%;
+        }
+        .indicator-chart {
+            width: 100%;
+            border-top: 1px solid #334155;
+        }
+        .toggle-btn {
+            transition: all 0.2s ease;
+        }
+        .toggle-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+        .period-btn {
+            transition: all 0.15s ease;
+        }
+        .period-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+        .chart-type-btn.active {
+            background: #1e40af;
+            border-color: #3b82f6;
+        }
+        .loader {
+            border: 3px solid #1e293b;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen overflow-hidden">
+    <div class="flex flex-col h-screen">
+        <!-- Header -->
+        <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 px-4 py-3 flex-shrink-0">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    <a href="/" class="text-xl font-bold text-white flex items-center gap-2 hover:opacity-80 transition">
+                        <span class="text-2xl">📊</span>
+                        <span class="hidden sm:inline">Portfolio Tracker</span>
+                    </a>
+                    <span class="text-slate-500">|</span>
+                    <span class="text-lg font-semibold text-blue-400 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        Market Scanner
+                    </span>
+                </div>
+
+                <!-- Search -->
+                <div class="flex-1 max-w-md">
+                    <div class="relative">
+                        <input type="text" id="search-input"
+                            placeholder="Buscar ticker o ISIN (ej: AAPL, MSFT, IE00B4L5Y983)"
+                            class="w-full bg-slate-700/50 border border-slate-600 rounded-lg pl-10 pr-4 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition placeholder-slate-400"
+                            onkeypress="if(event.key === 'Enter') buscarActivo()">
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Nav links -->
+                <div class="flex items-center gap-2">
+                    <a href="/" class="text-slate-400 hover:text-white transition p-2 rounded-lg hover:bg-slate-700" title="Dashboard">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                        </svg>
+                    </a>
+                    <a href="/explorar" class="text-slate-400 hover:text-white transition p-2 rounded-lg hover:bg-slate-700" title="Explorar">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Chart Area -->
+            <div class="flex-1 flex flex-col min-w-0">
+                <!-- Asset Info Bar -->
+                <div id="asset-info" class="bg-slate-800/50 border-b border-slate-700 px-4 py-3 flex-shrink-0 hidden">
+                    <div class="flex items-center justify-between flex-wrap gap-4">
+                        <div class="flex items-center gap-4">
+                            <div>
+                                <h2 id="asset-name" class="text-lg font-bold">-</h2>
+                                <span id="asset-ticker" class="text-sm text-slate-400">-</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span id="asset-price" class="text-2xl font-bold">-</span>
+                                <span id="asset-change" class="text-sm px-2 py-1 rounded">-</span>
+                            </div>
+                        </div>
+
+                        <!-- Period Selector -->
+                        <div class="flex items-center gap-1 bg-slate-700/50 rounded-lg p-1">
+                            <button onclick="cambiarPeriodo('1mo')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="1mo">1M</button>
+                            <button onclick="cambiarPeriodo('3mo')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="3mo">3M</button>
+                            <button onclick="cambiarPeriodo('6mo')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="6mo">6M</button>
+                            <button onclick="cambiarPeriodo('1y')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition active" data-period="1y">1A</button>
+                            <button onclick="cambiarPeriodo('2y')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="2y">2A</button>
+                            <button onclick="cambiarPeriodo('5y')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="5y">5A</button>
+                            <button onclick="cambiarPeriodo('max')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="max">MAX</button>
+                        </div>
+
+                        <!-- Chart Type Toggle -->
+                        <div class="flex items-center gap-1 bg-slate-700/50 rounded-lg p-1">
+                            <button onclick="cambiarTipoGrafico('line')" id="btn-line" class="chart-type-btn px-3 py-1.5 text-xs font-medium rounded-md border border-transparent hover:bg-slate-600 transition active" title="Gráfico de línea">
+                                📈 Línea
+                            </button>
+                            <button onclick="cambiarTipoGrafico('candlestick')" id="btn-candle" class="chart-type-btn px-3 py-1.5 text-xs font-medium rounded-md border border-transparent hover:bg-slate-600 transition" title="Velas japonesas">
+                                🕯️ Velas
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Container -->
+                <div class="flex-1 flex flex-col overflow-hidden relative">
+                    <!-- Loading State -->
+                    <div id="loading-state" class="absolute inset-0 flex items-center justify-center bg-slate-900/80 z-10 hidden">
+                        <div class="text-center">
+                            <div class="loader mx-auto mb-3"></div>
+                            <p class="text-slate-400 text-sm">Cargando datos...</p>
+                        </div>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="empty-state" class="flex-1 flex items-center justify-center">
+                        <div class="text-center max-w-md px-4">
+                            <div class="text-6xl mb-4">📈</div>
+                            <h3 class="text-xl font-bold mb-2">Market Scanner</h3>
+                            <p class="text-slate-400 mb-6">Analiza cualquier activo con gráficos avanzados e indicadores técnicos profesionales</p>
+                            <div class="flex flex-wrap justify-center gap-2">
+                                <button onclick="buscarRapido('AAPL')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition">Apple</button>
+                                <button onclick="buscarRapido('MSFT')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition">Microsoft</button>
+                                <button onclick="buscarRapido('GOOGL')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition">Google</button>
+                                <button onclick="buscarRapido('BTC-USD')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition">Bitcoin</button>
+                                <button onclick="buscarRapido('IE00B4L5Y983')" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition">MSCI World</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Chart -->
+                    <div id="main-chart-container" class="flex-1 min-h-0 hidden">
+                        <div id="main-chart" class="chart-container"></div>
+                    </div>
+
+                    <!-- RSI Chart -->
+                    <div id="rsi-chart-container" class="h-24 hidden">
+                        <div id="rsi-chart" class="indicator-chart h-full"></div>
+                    </div>
+
+                    <!-- MACD Chart -->
+                    <div id="macd-chart-container" class="h-28 hidden">
+                        <div id="macd-chart" class="indicator-chart h-full"></div>
+                    </div>
+
+                    <!-- Volume Chart -->
+                    <div id="volume-chart-container" class="h-20 hidden">
+                        <div id="volume-chart" class="indicator-chart h-full"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <aside class="w-72 bg-slate-800/50 border-l border-slate-700 flex-shrink-0 overflow-y-auto hidden lg:block">
+                <div class="p-4 space-y-6">
+                    <!-- Indicators Section -->
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                            Indicadores
+                        </h3>
+
+                        <!-- Moving Averages -->
+                        <div class="space-y-2 mb-4">
+                            <p class="text-xs text-slate-500 uppercase tracking-wider">Medias Móviles</p>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="sma20-toggle" onchange="toggleIndicator('sma20')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">SMA 20</span>
+                                <span class="w-3 h-3 rounded-full bg-yellow-400 ml-auto"></span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="sma50-toggle" onchange="toggleIndicator('sma50')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">SMA 50</span>
+                                <span class="w-3 h-3 rounded-full bg-orange-400 ml-auto"></span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="sma200-toggle" onchange="toggleIndicator('sma200')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">SMA 200</span>
+                                <span class="w-3 h-3 rounded-full bg-purple-400 ml-auto"></span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="ema12-toggle" onchange="toggleIndicator('ema12')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">EMA 12</span>
+                                <span class="w-3 h-3 rounded-full bg-cyan-400 ml-auto"></span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="ema26-toggle" onchange="toggleIndicator('ema26')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">EMA 26</span>
+                                <span class="w-3 h-3 rounded-full bg-pink-400 ml-auto"></span>
+                            </label>
+                        </div>
+
+                        <!-- Oscillators -->
+                        <div class="space-y-2 mb-4">
+                            <p class="text-xs text-slate-500 uppercase tracking-wider">Osciladores</p>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="rsi-toggle" onchange="toggleIndicator('rsi')" checked class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">RSI (14)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="macd-toggle" onchange="toggleIndicator('macd')" checked class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">MACD</span>
+                            </label>
+                        </div>
+
+                        <!-- Others -->
+                        <div class="space-y-2">
+                            <p class="text-xs text-slate-500 uppercase tracking-wider">Otros</p>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="bollinger-toggle" onchange="toggleIndicator('bollinger')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">Bollinger Bands</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="volume-toggle" onchange="toggleIndicator('volume')" checked class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">Volumen</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Stats Section -->
+                    <div id="stats-section" class="hidden">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                            Estadísticas
+                        </h3>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="stat-card rounded-lg p-3 border border-slate-700">
+                                <span class="text-xs text-slate-500">Máx 52 sem</span>
+                                <div id="stat-high52" class="font-semibold text-green-400">-</div>
+                            </div>
+                            <div class="stat-card rounded-lg p-3 border border-slate-700">
+                                <span class="text-xs text-slate-500">Mín 52 sem</span>
+                                <div id="stat-low52" class="font-semibold text-red-400">-</div>
+                            </div>
+                            <div class="stat-card rounded-lg p-3 border border-slate-700">
+                                <span class="text-xs text-slate-500">Media 50d</span>
+                                <div id="stat-avg50" class="font-semibold">-</div>
+                            </div>
+                            <div class="stat-card rounded-lg p-3 border border-slate-700">
+                                <span class="text-xs text-slate-500">Media 200d</span>
+                                <div id="stat-avg200" class="font-semibold">-</div>
+                            </div>
+                            <div class="stat-card rounded-lg p-3 border border-slate-700">
+                                <span class="text-xs text-slate-500">Volumen</span>
+                                <div id="stat-volume" class="font-semibold">-</div>
+                            </div>
+                            <div class="stat-card rounded-lg p-3 border border-slate-700">
+                                <span class="text-xs text-slate-500">Cap. Mercado</span>
+                                <div id="stat-marketcap" class="font-semibold">-</div>
+                            </div>
+                            <div class="stat-card rounded-lg p-3 border border-slate-700">
+                                <span class="text-xs text-slate-500">PER</span>
+                                <div id="stat-per" class="font-semibold">-</div>
+                            </div>
+                            <div class="stat-card rounded-lg p-3 border border-slate-700">
+                                <span class="text-xs text-slate-500">Dividendo</span>
+                                <div id="stat-dividend" class="font-semibold">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RSI Info -->
+                    <div id="rsi-info" class="hidden">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-2">RSI (14)</h3>
+                        <div class="flex items-center gap-2">
+                            <span id="rsi-value" class="text-2xl font-bold">-</span>
+                            <span id="rsi-signal" class="text-xs px-2 py-1 rounded">-</span>
+                        </div>
+                        <div class="mt-2 h-2 bg-slate-700 rounded-full overflow-hidden">
+                            <div id="rsi-bar" class="h-full bg-blue-500 transition-all duration-300" style="width: 50%"></div>
+                        </div>
+                        <div class="flex justify-between text-xs text-slate-500 mt-1">
+                            <span>Sobrevendido</span>
+                            <span>Sobrecomprado</span>
+                        </div>
+                    </div>
+
+                    <!-- Support/Resistance -->
+                    <div id="sr-section" class="hidden">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                            </svg>
+                            Soportes y Resistencias
+                        </h3>
+                        <div id="sr-levels" class="space-y-2">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // VARIABLES GLOBALES
+        // ============================================
+        let mainChart = null;
+        let mainSeries = null;
+        let volumeChart = null;
+        let volumeSeries = null;
+        let rsiChart = null;
+        let rsiSeries = null;
+        let macdChart = null;
+        let macdLineSeries = null;
+        let macdSignalSeries = null;
+        let macdHistogramSeries = null;
+
+        let indicatorSeries = {
+            sma20: null,
+            sma50: null,
+            sma200: null,
+            ema12: null,
+            ema26: null,
+            bollingerUpper: null,
+            bollingerLower: null,
+            bollingerMiddle: null
+        };
+
+        let currentTicker = null;
+        let currentIsin = null;
+        let currentPeriod = '1y';
+        let currentChartType = 'line';
+        let ohlcvData = [];
+
+        // ============================================
+        // INICIALIZACIÓN
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check URL params for ticker
+            const params = new URLSearchParams(window.location.search);
+            const ticker = params.get('ticker') || params.get('t');
+            if (ticker) {
+                document.getElementById('search-input').value = ticker;
+                buscarActivo();
+            }
+        });
+
+        // ============================================
+        // BÚSQUEDA DE ACTIVOS
+        // ============================================
+        function buscarRapido(ticker) {
+            document.getElementById('search-input').value = ticker;
+            buscarActivo();
+        }
+
+        async function buscarActivo() {
+            const input = document.getElementById('search-input').value.trim();
+            if (!input) return;
+
+            // Detectar si es ISIN
+            const esIsin = /^[A-Z]{2}[A-Z0-9]{10}$/.test(input);
+
+            showLoading(true);
+            hideEmptyState();
+
+            try {
+                let ticker = input;
+                let isin = '';
+
+                if (esIsin) {
+                    isin = input;
+                    // Buscar ticker para el ISIN
+                    const tickerResponse = await fetch(`/api/ticker/search/${encodeURIComponent(input)}`);
+                    const tickerResult = await tickerResponse.json();
+                    if (tickerResult.success && tickerResult.data.ticker) {
+                        ticker = tickerResult.data.ticker;
+                    }
+                }
+
+                currentTicker = ticker;
+                currentIsin = isin || null;
+
+                // Cargar datos OHLCV
+                await cargarDatos(currentPeriod);
+
+                // Cargar estadísticas
+                cargarEstadisticas(ticker);
+
+                // Actualizar URL
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.set('ticker', input);
+                window.history.pushState({}, '', newUrl);
+
+            } catch (error) {
+                console.error('Error buscando activo:', error);
+                showError('Error al cargar el activo. Verifica el ticker o ISIN.');
+            }
+
+            showLoading(false);
+        }
+
+        // ============================================
+        // CARGA DE DATOS
+        // ============================================
+        async function cargarDatos(periodo) {
+            if (!currentTicker) return;
+
+            showLoading(true);
+
+            try {
+                const url = `/api/ohlcv/${encodeURIComponent(currentTicker)}?periodo=${periodo}${currentIsin ? '&isin=' + encodeURIComponent(currentIsin) : ''}`;
+                const response = await fetch(url);
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    ohlcvData = result.data.ohlcv || [];
+
+                    // Actualizar info del activo
+                    actualizarInfoActivo(result.data);
+
+                    // Crear/actualizar gráficos
+                    if (ohlcvData.length > 0) {
+                        crearGraficos();
+                        aplicarIndicadores();
+                    }
+
+                    // Mostrar secciones
+                    document.getElementById('asset-info').classList.remove('hidden');
+                    document.getElementById('main-chart-container').classList.remove('hidden');
+                    document.getElementById('stats-section').classList.remove('hidden');
+
+                } else {
+                    throw new Error(result.error || 'No se pudieron cargar los datos');
+                }
+            } catch (error) {
+                console.error('Error cargando datos:', error);
+                showError('Error al cargar datos: ' + error.message);
+            }
+
+            showLoading(false);
+        }
+
+        function actualizarInfoActivo(data) {
+            const info = data.info || {};
+            document.getElementById('asset-name').textContent = info.name || currentTicker;
+            document.getElementById('asset-ticker').textContent = currentTicker + (currentIsin ? ` · ${currentIsin}` : '');
+
+            const lastPrice = ohlcvData.length > 0 ? ohlcvData[ohlcvData.length - 1].close : null;
+            const firstPrice = ohlcvData.length > 0 ? ohlcvData[0].close : null;
+
+            if (lastPrice !== null) {
+                document.getElementById('asset-price').textContent = formatPrice(lastPrice);
+
+                if (firstPrice !== null && firstPrice > 0) {
+                    const change = lastPrice - firstPrice;
+                    const changePercent = ((change / firstPrice) * 100);
+                    const changeEl = document.getElementById('asset-change');
+
+                    if (change >= 0) {
+                        changeEl.textContent = `+${formatPrice(change)} (+${changePercent.toFixed(2)}%)`;
+                        changeEl.className = 'text-sm px-2 py-1 rounded bg-green-500/20 text-green-400';
+                    } else {
+                        changeEl.textContent = `${formatPrice(change)} (${changePercent.toFixed(2)}%)`;
+                        changeEl.className = 'text-sm px-2 py-1 rounded bg-red-500/20 text-red-400';
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // CREACIÓN DE GRÁFICOS
+        // ============================================
+        function crearGraficos() {
+            const chartOptions = {
+                layout: {
+                    background: { type: 'solid', color: 'transparent' },
+                    textColor: '#94a3b8',
+                },
+                grid: {
+                    vertLines: { color: '#1e293b' },
+                    horzLines: { color: '#1e293b' },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                    vertLine: {
+                        color: '#6366f1',
+                        width: 1,
+                        style: LightweightCharts.LineStyle.Dashed,
+                        labelBackgroundColor: '#6366f1',
+                    },
+                    horzLine: {
+                        color: '#6366f1',
+                        width: 1,
+                        style: LightweightCharts.LineStyle.Dashed,
+                        labelBackgroundColor: '#6366f1',
+                    },
+                },
+                timeScale: {
+                    borderColor: '#334155',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+                rightPriceScale: {
+                    borderColor: '#334155',
+                },
+                handleScroll: { vertTouchDrag: true },
+                handleScale: { axisPressedMouseMove: true },
+            };
+
+            // Main Chart
+            const mainContainer = document.getElementById('main-chart');
+            mainContainer.innerHTML = '';
+            mainChart = LightweightCharts.createChart(mainContainer, {
+                ...chartOptions,
+                height: mainContainer.clientHeight || 400,
+            });
+
+            // Crear serie según tipo
+            if (currentChartType === 'candlestick') {
+                mainSeries = mainChart.addCandlestickSeries({
+                    upColor: '#22c55e',
+                    downColor: '#ef4444',
+                    borderUpColor: '#22c55e',
+                    borderDownColor: '#ef4444',
+                    wickUpColor: '#22c55e',
+                    wickDownColor: '#ef4444',
+                });
+                mainSeries.setData(ohlcvData.map(d => ({
+                    time: d.time,
+                    open: d.open,
+                    high: d.high,
+                    low: d.low,
+                    close: d.close,
+                })));
+            } else {
+                const isPositive = ohlcvData.length > 1 && ohlcvData[ohlcvData.length - 1].close >= ohlcvData[0].close;
+                mainSeries = mainChart.addAreaSeries({
+                    lineColor: isPositive ? '#22c55e' : '#ef4444',
+                    topColor: isPositive ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)',
+                    bottomColor: isPositive ? 'rgba(34, 197, 94, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+                    lineWidth: 2,
+                });
+                mainSeries.setData(ohlcvData.map(d => ({
+                    time: d.time,
+                    value: d.close,
+                })));
+            }
+
+            // Ajustar vista
+            mainChart.timeScale().fitContent();
+
+            // Resize observer
+            const resizeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    if (mainChart) {
+                        mainChart.applyOptions({ height: entry.contentRect.height });
+                    }
+                }
+            });
+            resizeObserver.observe(mainContainer);
+
+            // Crear gráficos de indicadores si están activos
+            if (document.getElementById('volume-toggle').checked) {
+                crearGraficoVolumen();
+            }
+            if (document.getElementById('rsi-toggle').checked) {
+                crearGraficoRSI();
+            }
+            if (document.getElementById('macd-toggle').checked) {
+                crearGraficoMACD();
+            }
+        }
+
+        function crearGraficoVolumen() {
+            const container = document.getElementById('volume-chart');
+            container.innerHTML = '';
+            document.getElementById('volume-chart-container').classList.remove('hidden');
+
+            volumeChart = LightweightCharts.createChart(container, {
+                height: 80,
+                layout: {
+                    background: { type: 'solid', color: 'transparent' },
+                    textColor: '#94a3b8',
+                },
+                grid: {
+                    vertLines: { visible: false },
+                    horzLines: { color: '#1e293b' },
+                },
+                timeScale: { visible: false },
+                rightPriceScale: {
+                    borderColor: '#334155',
+                    scaleMargins: { top: 0.1, bottom: 0 },
+                },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+            });
+
+            volumeSeries = volumeChart.addHistogramSeries({
+                priceFormat: { type: 'volume' },
+                priceScaleId: '',
+            });
+
+            volumeSeries.setData(ohlcvData.map((d, i) => {
+                const prevClose = i > 0 ? ohlcvData[i - 1].close : d.open;
+                return {
+                    time: d.time,
+                    value: d.volume || 0,
+                    color: d.close >= prevClose ? 'rgba(34, 197, 94, 0.5)' : 'rgba(239, 68, 68, 0.5)',
+                };
+            }));
+
+            // Sincronizar crosshair
+            mainChart.subscribeCrosshairMove(param => {
+                if (param.time) {
+                    volumeChart.setCrosshairPosition(0, param.time, volumeSeries);
+                }
+            });
+        }
+
+        function crearGraficoRSI() {
+            const container = document.getElementById('rsi-chart');
+            container.innerHTML = '';
+            document.getElementById('rsi-chart-container').classList.remove('hidden');
+            document.getElementById('rsi-info').classList.remove('hidden');
+
+            rsiChart = LightweightCharts.createChart(container, {
+                height: 96,
+                layout: {
+                    background: { type: 'solid', color: 'transparent' },
+                    textColor: '#94a3b8',
+                },
+                grid: {
+                    vertLines: { visible: false },
+                    horzLines: { color: '#1e293b' },
+                },
+                timeScale: { visible: false },
+                rightPriceScale: {
+                    borderColor: '#334155',
+                    scaleMargins: { top: 0.1, bottom: 0.1 },
+                },
+            });
+
+            // Líneas de sobrecompra/sobreventa
+            const oversoldLine = rsiChart.addLineSeries({
+                color: 'rgba(239, 68, 68, 0.3)',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                priceLineVisible: false,
+                lastValueVisible: false,
+            });
+            const overboughtLine = rsiChart.addLineSeries({
+                color: 'rgba(34, 197, 94, 0.3)',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                priceLineVisible: false,
+                lastValueVisible: false,
+            });
+
+            // RSI
+            rsiSeries = rsiChart.addLineSeries({
+                color: '#a855f7',
+                lineWidth: 2,
+                priceLineVisible: false,
+            });
+
+            // Calcular RSI
+            const rsiData = calcularRSI(ohlcvData.map(d => d.close), 14);
+            const rsiPoints = ohlcvData.map((d, i) => ({
+                time: d.time,
+                value: rsiData[i],
+            })).filter(d => d.value !== null);
+
+            rsiSeries.setData(rsiPoints);
+            oversoldLine.setData(ohlcvData.map(d => ({ time: d.time, value: 30 })));
+            overboughtLine.setData(ohlcvData.map(d => ({ time: d.time, value: 70 })));
+
+            // Actualizar info RSI
+            if (rsiPoints.length > 0) {
+                const lastRsi = rsiPoints[rsiPoints.length - 1].value;
+                actualizarRSIInfo(lastRsi);
+            }
+
+            // Sincronizar crosshair
+            mainChart.subscribeCrosshairMove(param => {
+                if (param.time) {
+                    rsiChart.setCrosshairPosition(0, param.time, rsiSeries);
+                }
+            });
+        }
+
+        function crearGraficoMACD() {
+            const container = document.getElementById('macd-chart');
+            container.innerHTML = '';
+            document.getElementById('macd-chart-container').classList.remove('hidden');
+
+            macdChart = LightweightCharts.createChart(container, {
+                height: 112,
+                layout: {
+                    background: { type: 'solid', color: 'transparent' },
+                    textColor: '#94a3b8',
+                },
+                grid: {
+                    vertLines: { visible: false },
+                    horzLines: { color: '#1e293b' },
+                },
+                timeScale: { visible: false },
+                rightPriceScale: {
+                    borderColor: '#334155',
+                },
+            });
+
+            // MACD Histogram
+            macdHistogramSeries = macdChart.addHistogramSeries({
+                priceFormat: { type: 'price', precision: 4 },
+                priceScaleId: '',
+            });
+
+            // MACD Line
+            macdLineSeries = macdChart.addLineSeries({
+                color: '#3b82f6',
+                lineWidth: 2,
+                priceLineVisible: false,
+            });
+
+            // Signal Line
+            macdSignalSeries = macdChart.addLineSeries({
+                color: '#f97316',
+                lineWidth: 2,
+                priceLineVisible: false,
+            });
+
+            // Calcular MACD
+            const closes = ohlcvData.map(d => d.close);
+            const { macd, signal, histogram } = calcularMACD(closes, 12, 26, 9);
+
+            macdLineSeries.setData(ohlcvData.map((d, i) => ({
+                time: d.time,
+                value: macd[i],
+            })).filter(d => d.value !== null));
+
+            macdSignalSeries.setData(ohlcvData.map((d, i) => ({
+                time: d.time,
+                value: signal[i],
+            })).filter(d => d.value !== null));
+
+            macdHistogramSeries.setData(ohlcvData.map((d, i) => ({
+                time: d.time,
+                value: histogram[i],
+                color: histogram[i] >= 0 ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)',
+            })).filter(d => d.value !== null));
+
+            // Sincronizar crosshair
+            mainChart.subscribeCrosshairMove(param => {
+                if (param.time) {
+                    macdChart.setCrosshairPosition(0, param.time, macdLineSeries);
+                }
+            });
+        }
+
+        // ============================================
+        // INDICADORES TÉCNICOS
+        // ============================================
+        function calcularSMA(data, periodo) {
+            const sma = [];
+            for (let i = 0; i < data.length; i++) {
+                if (i < periodo - 1) {
+                    sma.push(null);
+                } else {
+                    let sum = 0;
+                    for (let j = 0; j < periodo; j++) {
+                        sum += data[i - j];
+                    }
+                    sma.push(sum / periodo);
+                }
+            }
+            return sma;
+        }
+
+        function calcularEMA(data, periodo) {
+            const ema = [];
+            const multiplier = 2 / (periodo + 1);
+
+            // Primer EMA es SMA
+            let sum = 0;
+            for (let i = 0; i < periodo && i < data.length; i++) {
+                sum += data[i];
+            }
+            ema[periodo - 1] = sum / periodo;
+
+            for (let i = 0; i < periodo - 1; i++) {
+                ema[i] = null;
+            }
+
+            for (let i = periodo; i < data.length; i++) {
+                ema[i] = (data[i] - ema[i - 1]) * multiplier + ema[i - 1];
+            }
+
+            return ema;
+        }
+
+        function calcularRSI(data, periodo = 14) {
+            const rsi = new Array(data.length).fill(null);
+            if (data.length < periodo + 1) return rsi;
+
+            let gains = [];
+            let losses = [];
+
+            for (let i = 1; i < data.length; i++) {
+                const change = data[i] - data[i - 1];
+                gains.push(change > 0 ? change : 0);
+                losses.push(change < 0 ? Math.abs(change) : 0);
+            }
+
+            // Primera media
+            let avgGain = gains.slice(0, periodo).reduce((a, b) => a + b, 0) / periodo;
+            let avgLoss = losses.slice(0, periodo).reduce((a, b) => a + b, 0) / periodo;
+
+            if (avgLoss === 0) {
+                rsi[periodo] = 100;
+            } else {
+                const rs = avgGain / avgLoss;
+                rsi[periodo] = 100 - (100 / (1 + rs));
+            }
+
+            // RSI suavizado
+            for (let i = periodo; i < gains.length; i++) {
+                avgGain = (avgGain * (periodo - 1) + gains[i]) / periodo;
+                avgLoss = (avgLoss * (periodo - 1) + losses[i]) / periodo;
+
+                if (avgLoss === 0) {
+                    rsi[i + 1] = 100;
+                } else {
+                    const rs = avgGain / avgLoss;
+                    rsi[i + 1] = 100 - (100 / (1 + rs));
+                }
+            }
+
+            return rsi;
+        }
+
+        function calcularMACD(data, fast = 12, slow = 26, signal = 9) {
+            const emaFast = calcularEMA(data, fast);
+            const emaSlow = calcularEMA(data, slow);
+
+            const macd = data.map((_, i) => {
+                if (emaFast[i] === null || emaSlow[i] === null) return null;
+                return emaFast[i] - emaSlow[i];
+            });
+
+            const macdFiltered = macd.filter(v => v !== null);
+            const signalLine = calcularEMA(macdFiltered, signal);
+
+            // Reconstruir con nulls
+            const signalFull = [];
+            let idx = 0;
+            for (let i = 0; i < macd.length; i++) {
+                if (macd[i] === null) {
+                    signalFull.push(null);
+                } else {
+                    signalFull.push(signalLine[idx] || null);
+                    idx++;
+                }
+            }
+
+            const histogram = macd.map((m, i) => {
+                if (m === null || signalFull[i] === null) return null;
+                return m - signalFull[i];
+            });
+
+            return { macd, signal: signalFull, histogram };
+        }
+
+        function calcularBollinger(data, periodo = 20, desviaciones = 2) {
+            const sma = calcularSMA(data, periodo);
+            const upper = [];
+            const lower = [];
+
+            for (let i = 0; i < data.length; i++) {
+                if (sma[i] === null) {
+                    upper.push(null);
+                    lower.push(null);
+                } else {
+                    // Calcular desviación estándar
+                    const slice = data.slice(Math.max(0, i - periodo + 1), i + 1);
+                    const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+                    const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / slice.length;
+                    const std = Math.sqrt(variance);
+
+                    upper.push(sma[i] + desviaciones * std);
+                    lower.push(sma[i] - desviaciones * std);
+                }
+            }
+
+            return { upper, middle: sma, lower };
+        }
+
+        // ============================================
+        // TOGGLES DE INDICADORES
+        // ============================================
+        function toggleIndicator(indicator) {
+            const checkbox = document.getElementById(`${indicator}-toggle`);
+            const enabled = checkbox ? checkbox.checked : false;
+
+            switch (indicator) {
+                case 'sma20':
+                    toggleSMAIndicator(20, '#facc15', enabled);
+                    break;
+                case 'sma50':
+                    toggleSMAIndicator(50, '#fb923c', enabled);
+                    break;
+                case 'sma200':
+                    toggleSMAIndicator(200, '#a855f7', enabled);
+                    break;
+                case 'ema12':
+                    toggleEMAIndicator(12, '#22d3ee', enabled);
+                    break;
+                case 'ema26':
+                    toggleEMAIndicator(26, '#ec4899', enabled);
+                    break;
+                case 'bollinger':
+                    toggleBollingerIndicator(enabled);
+                    break;
+                case 'rsi':
+                    toggleRSIIndicator(enabled);
+                    break;
+                case 'macd':
+                    toggleMACDIndicator(enabled);
+                    break;
+                case 'volume':
+                    toggleVolumeIndicator(enabled);
+                    break;
+            }
+        }
+
+        function toggleSMAIndicator(periodo, color, enabled) {
+            const key = `sma${periodo}`;
+            if (indicatorSeries[key]) {
+                mainChart.removeSeries(indicatorSeries[key]);
+                indicatorSeries[key] = null;
+            }
+
+            if (enabled && mainChart && ohlcvData.length > 0) {
+                const closes = ohlcvData.map(d => d.close);
+                const sma = calcularSMA(closes, periodo);
+
+                indicatorSeries[key] = mainChart.addLineSeries({
+                    color: color,
+                    lineWidth: 1,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                });
+
+                indicatorSeries[key].setData(ohlcvData.map((d, i) => ({
+                    time: d.time,
+                    value: sma[i],
+                })).filter(d => d.value !== null));
+            }
+        }
+
+        function toggleEMAIndicator(periodo, color, enabled) {
+            const key = `ema${periodo}`;
+            if (indicatorSeries[key]) {
+                mainChart.removeSeries(indicatorSeries[key]);
+                indicatorSeries[key] = null;
+            }
+
+            if (enabled && mainChart && ohlcvData.length > 0) {
+                const closes = ohlcvData.map(d => d.close);
+                const ema = calcularEMA(closes, periodo);
+
+                indicatorSeries[key] = mainChart.addLineSeries({
+                    color: color,
+                    lineWidth: 1,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                });
+
+                indicatorSeries[key].setData(ohlcvData.map((d, i) => ({
+                    time: d.time,
+                    value: ema[i],
+                })).filter(d => d.value !== null));
+            }
+        }
+
+        function toggleBollingerIndicator(enabled) {
+            ['bollingerUpper', 'bollingerMiddle', 'bollingerLower'].forEach(key => {
+                if (indicatorSeries[key]) {
+                    mainChart.removeSeries(indicatorSeries[key]);
+                    indicatorSeries[key] = null;
+                }
+            });
+
+            if (enabled && mainChart && ohlcvData.length > 0) {
+                const closes = ohlcvData.map(d => d.close);
+                const { upper, middle, lower } = calcularBollinger(closes, 20, 2);
+
+                indicatorSeries.bollingerUpper = mainChart.addLineSeries({
+                    color: 'rgba(59, 130, 246, 0.5)',
+                    lineWidth: 1,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                });
+                indicatorSeries.bollingerLower = mainChart.addLineSeries({
+                    color: 'rgba(59, 130, 246, 0.5)',
+                    lineWidth: 1,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                });
+                indicatorSeries.bollingerMiddle = mainChart.addLineSeries({
+                    color: 'rgba(59, 130, 246, 0.8)',
+                    lineWidth: 1,
+                    lineStyle: LightweightCharts.LineStyle.Dashed,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                });
+
+                indicatorSeries.bollingerUpper.setData(ohlcvData.map((d, i) => ({
+                    time: d.time,
+                    value: upper[i],
+                })).filter(d => d.value !== null));
+
+                indicatorSeries.bollingerLower.setData(ohlcvData.map((d, i) => ({
+                    time: d.time,
+                    value: lower[i],
+                })).filter(d => d.value !== null));
+
+                indicatorSeries.bollingerMiddle.setData(ohlcvData.map((d, i) => ({
+                    time: d.time,
+                    value: middle[i],
+                })).filter(d => d.value !== null));
+            }
+        }
+
+        function toggleRSIIndicator(enabled) {
+            const container = document.getElementById('rsi-chart-container');
+            const infoPanel = document.getElementById('rsi-info');
+
+            if (enabled) {
+                crearGraficoRSI();
+            } else {
+                container.classList.add('hidden');
+                infoPanel.classList.add('hidden');
+                if (rsiChart) {
+                    rsiChart.remove();
+                    rsiChart = null;
+                }
+            }
+        }
+
+        function toggleMACDIndicator(enabled) {
+            const container = document.getElementById('macd-chart-container');
+
+            if (enabled) {
+                crearGraficoMACD();
+            } else {
+                container.classList.add('hidden');
+                if (macdChart) {
+                    macdChart.remove();
+                    macdChart = null;
+                }
+            }
+        }
+
+        function toggleVolumeIndicator(enabled) {
+            const container = document.getElementById('volume-chart-container');
+
+            if (enabled) {
+                crearGraficoVolumen();
+            } else {
+                container.classList.add('hidden');
+                if (volumeChart) {
+                    volumeChart.remove();
+                    volumeChart = null;
+                }
+            }
+        }
+
+        function aplicarIndicadores() {
+            // Aplicar indicadores según checkboxes
+            ['sma20', 'sma50', 'sma200', 'ema12', 'ema26', 'bollinger'].forEach(ind => {
+                const checkbox = document.getElementById(`${ind}-toggle`);
+                if (checkbox && checkbox.checked) {
+                    toggleIndicator(ind);
+                }
+            });
+        }
+
+        // ============================================
+        // CAMBIO DE PERÍODO Y TIPO
+        // ============================================
+        function cambiarPeriodo(periodo) {
+            currentPeriod = periodo;
+
+            // Actualizar botones
+            document.querySelectorAll('.period-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.period === periodo) {
+                    btn.classList.add('active');
+                }
+            });
+
+            cargarDatos(periodo);
+        }
+
+        function cambiarTipoGrafico(tipo) {
+            currentChartType = tipo;
+
+            // Actualizar botones
+            document.getElementById('btn-line').classList.toggle('active', tipo === 'line');
+            document.getElementById('btn-candle').classList.toggle('active', tipo === 'candlestick');
+
+            // Recrear gráfico
+            if (ohlcvData.length > 0) {
+                crearGraficos();
+                aplicarIndicadores();
+            }
+        }
+
+        // ============================================
+        // ESTADÍSTICAS
+        // ============================================
+        async function cargarEstadisticas(ticker) {
+            try {
+                const response = await fetch(`/api/stats/${encodeURIComponent(ticker)}`);
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    const data = result.data;
+                    document.getElementById('stat-high52').textContent = data.high52w ? formatPrice(data.high52w) : '-';
+                    document.getElementById('stat-low52').textContent = data.low52w ? formatPrice(data.low52w) : '-';
+                    document.getElementById('stat-avg50').textContent = data.avg50d ? formatPrice(data.avg50d) : '-';
+                    document.getElementById('stat-avg200').textContent = data.avg200d ? formatPrice(data.avg200d) : '-';
+                    document.getElementById('stat-volume').textContent = data.volume ? formatNumber(data.volume) : '-';
+                    document.getElementById('stat-marketcap').textContent = data.marketCap ? formatNumber(data.marketCap) : '-';
+                    document.getElementById('stat-per').textContent = data.per ? data.per.toFixed(2) : '-';
+                    document.getElementById('stat-dividend').textContent = data.dividendYield ? data.dividendYield.toFixed(2) + '%' : '-';
+                }
+            } catch (error) {
+                console.error('Error cargando estadísticas:', error);
+            }
+        }
+
+        function actualizarRSIInfo(rsi) {
+            const valueEl = document.getElementById('rsi-value');
+            const signalEl = document.getElementById('rsi-signal');
+            const barEl = document.getElementById('rsi-bar');
+
+            valueEl.textContent = rsi.toFixed(1);
+            barEl.style.width = `${rsi}%`;
+
+            if (rsi >= 70) {
+                signalEl.textContent = 'Sobrecomprado';
+                signalEl.className = 'text-xs px-2 py-1 rounded bg-red-500/20 text-red-400';
+                barEl.className = 'h-full bg-red-500 transition-all duration-300';
+            } else if (rsi <= 30) {
+                signalEl.textContent = 'Sobrevendido';
+                signalEl.className = 'text-xs px-2 py-1 rounded bg-green-500/20 text-green-400';
+                barEl.className = 'h-full bg-green-500 transition-all duration-300';
+            } else {
+                signalEl.textContent = 'Neutral';
+                signalEl.className = 'text-xs px-2 py-1 rounded bg-slate-600 text-slate-300';
+                barEl.className = 'h-full bg-blue-500 transition-all duration-300';
+            }
+        }
+
+        // ============================================
+        // UTILIDADES
+        // ============================================
+        function formatPrice(value) {
+            if (value === null || value === undefined) return '-';
+            return new Intl.NumberFormat('es-ES', {
+                style: 'currency',
+                currency: 'EUR',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }).format(value);
+        }
+
+        function formatNumber(num) {
+            if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+            return num.toFixed(0);
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading-state').classList.toggle('hidden', !show);
+        }
+
+        function hideEmptyState() {
+            document.getElementById('empty-state').classList.add('hidden');
+        }
+
+        function showError(message) {
+            // Simple alert for now, could be improved with toast
+            alert(message);
+        }
+    </script>
+</body>
+</html>

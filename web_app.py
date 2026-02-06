@@ -8,6 +8,7 @@ import sys
 import json
 import uuid
 import requests
+import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
 from functools import wraps
@@ -4782,6 +4783,134 @@ def api_historical(ticker):
 def details_page():
     """Página de detalles de una posición"""
     return render_template('details.html')
+
+
+@app.route('/marketscanner')
+def marketscanner_page():
+    """Página del Market Scanner con gráficos avanzados"""
+    return render_template('marketscanner.html')
+
+
+@app.route('/api/ohlcv/<ticker>')
+def api_ohlcv(ticker):
+    """
+    API mejorada para Market Scanner con datos OHLCV
+    Params:
+      - periodo: 1mo, 3mo, 6mo, 1y, 2y, 5y, max
+      - isin: para ETFs europeos
+    Returns:
+      - ohlcv: [{time, open, high, low, close, volume}, ...]
+      - info: {name, currency, change, changePercent}
+    """
+    import yfinance as yf
+    from datetime import datetime
+
+    periodo = request.args.get('periodo', '1y')
+    isin = request.args.get('isin', '')
+
+    print(f"[OHLCV] Solicitando ticker={ticker}, isin={isin}, periodo={periodo}")
+
+    # Mapeo de períodos a yfinance
+    periodo_map = {
+        '1mo': '1mo',
+        '3mo': '3mo',
+        '6mo': '6mo',
+        '1y': '1y',
+        '2y': '2y',
+        '5y': '5y',
+        'max': 'max'
+    }
+    yf_periodo = periodo_map.get(periodo, '1y')
+
+    try:
+        # Verificar si el ticker es un ISIN
+        ticker_es_isin = ticker and len(ticker) == 12 and ticker[:2].isalpha() and ticker[2:].isalnum()
+
+        if ticker_es_isin:
+            # Buscar ticker real para el ISIN
+            ticker_real = price_fetcher.buscar_ticker_por_isin(ticker)
+            if ticker_real:
+                ticker = ticker_real
+                print(f"[OHLCV] ISIN convertido a ticker: {ticker}")
+
+        # Obtener datos de Yahoo Finance
+        stock = yf.Ticker(ticker)
+        df = stock.history(period=yf_periodo)
+
+        if df.empty:
+            # Intentar con isin si se proporcionó
+            if isin:
+                ticker_from_isin = price_fetcher.buscar_ticker_por_isin(isin)
+                if ticker_from_isin:
+                    stock = yf.Ticker(ticker_from_isin)
+                    df = stock.history(period=yf_periodo)
+
+        if df.empty:
+            return jsonify({
+                'success': False,
+                'error': 'No se encontraron datos para este activo'
+            })
+
+        # Obtener info del activo
+        try:
+            info = stock.info
+            nombre = info.get('longName') or info.get('shortName') or ticker
+            currency = info.get('currency', 'EUR')
+        except:
+            nombre = ticker
+            currency = 'EUR'
+
+        # Convertir a formato OHLCV para Lightweight Charts
+        ohlcv = []
+        for idx, row in df.iterrows():
+            # Lightweight Charts espera timestamp en segundos o fecha string YYYY-MM-DD
+            date_str = idx.strftime('%Y-%m-%d')
+            ohlcv.append({
+                'time': date_str,
+                'open': round(float(row['Open']), 4) if not pd.isna(row['Open']) else None,
+                'high': round(float(row['High']), 4) if not pd.isna(row['High']) else None,
+                'low': round(float(row['Low']), 4) if not pd.isna(row['Low']) else None,
+                'close': round(float(row['Close']), 4) if not pd.isna(row['Close']) else None,
+                'volume': int(row['Volume']) if not pd.isna(row['Volume']) else 0,
+            })
+
+        # Filtrar entradas con datos incompletos
+        ohlcv = [d for d in ohlcv if d['close'] is not None]
+
+        # Calcular cambio
+        if len(ohlcv) >= 2:
+            first_close = ohlcv[0]['close']
+            last_close = ohlcv[-1]['close']
+            change = last_close - first_close
+            change_percent = ((change / first_close) * 100) if first_close > 0 else 0
+        else:
+            change = 0
+            change_percent = 0
+
+        print(f"[OHLCV] Devolviendo {len(ohlcv)} puntos de datos")
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'ohlcv': ohlcv,
+                'info': {
+                    'name': nombre,
+                    'ticker': ticker,
+                    'currency': currency,
+                    'change': round(change, 4),
+                    'changePercent': round(change_percent, 2)
+                }
+            }
+        })
+
+    except Exception as e:
+        print(f"[OHLCV] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
 
 @app.route('/api/stats/<ticker>')

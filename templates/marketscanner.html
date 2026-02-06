@@ -79,6 +79,13 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #64748b;
         }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen overflow-hidden">
@@ -304,12 +311,12 @@
                                 <span class="text-xs text-slate-500">Mín 52 sem</span>
                                 <div id="stat-low52" class="font-semibold text-red-400">-</div>
                             </div>
-                            <div class="stat-card rounded-lg p-3 border border-slate-700">
-                                <span class="text-xs text-slate-500">Media 50d</span>
+                            <div class="stat-card rounded-lg p-3 border border-slate-700" title="Media móvil simple de 50 días (dato diario de Yahoo Finance)">
+                                <span class="text-xs text-slate-500">SMA 50 <span class="text-slate-600">diaria</span></span>
                                 <div id="stat-avg50" class="font-semibold">-</div>
                             </div>
-                            <div class="stat-card rounded-lg p-3 border border-slate-700">
-                                <span class="text-xs text-slate-500">Media 200d</span>
+                            <div class="stat-card rounded-lg p-3 border border-slate-700" title="Media móvil simple de 200 días (dato diario de Yahoo Finance)">
+                                <span class="text-xs text-slate-500">SMA 200 <span class="text-slate-600">diaria</span></span>
                                 <div id="stat-avg200" class="font-semibold">-</div>
                             </div>
                             <div class="stat-card rounded-lg p-3 border border-slate-700">
@@ -391,6 +398,8 @@
         let macdLineSeries = null;
         let macdSignalSeries = null;
         let macdHistogramSeries = null;
+        let chartResizeObserver = null;
+        let crosshairSubscriptions = []; // Para limpiar suscripciones
 
         let indicatorSeries = {
             sma20: null,
@@ -400,7 +409,9 @@
             ema26: null,
             bollingerUpper: null,
             bollingerLower: null,
-            bollingerMiddle: null
+            bollingerMiddle: null,
+            bollingerFillUpper: null,
+            bollingerFillLower: null
         };
 
         let currentTicker = null;
@@ -568,6 +579,18 @@
         // CREACIÓN DE GRÁFICOS
         // ============================================
         function crearGraficos() {
+            // Limpiar suscripciones de crosshair anteriores
+            crosshairSubscriptions.forEach(fn => {
+                try { if (mainChart) mainChart.unsubscribeCrosshairMove(fn); } catch(e) {}
+            });
+            crosshairSubscriptions = [];
+
+            // Limpiar ResizeObserver anterior
+            if (chartResizeObserver) {
+                chartResizeObserver.disconnect();
+                chartResizeObserver = null;
+            }
+
             // Limpiar gráficos anteriores
             if (mainChart) { try { mainChart.remove(); } catch(e) {} mainChart = null; }
             if (rsiChart) { try { rsiChart.remove(); } catch(e) {} rsiChart = null; }
@@ -654,15 +677,15 @@
             // Ajustar vista
             mainChart.timeScale().fitContent();
 
-            // Resize observer
-            const resizeObserver = new ResizeObserver(entries => {
+            // Resize observer (almacenado para cleanup)
+            chartResizeObserver = new ResizeObserver(entries => {
                 for (let entry of entries) {
                     if (mainChart) {
                         mainChart.applyOptions({ height: entry.contentRect.height });
                     }
                 }
             });
-            resizeObserver.observe(mainContainer);
+            chartResizeObserver.observe(mainContainer);
 
             // Crear gráficos de indicadores si están activos Y hay datos suficientes
             if (document.getElementById('volume-toggle').checked) {
@@ -789,12 +812,14 @@
                 actualizarRSIInfo(lastRsi);
             }
 
-            // Sincronizar crosshair
-            mainChart.subscribeCrosshairMove(param => {
-                if (param.time) {
-                    rsiChart.setCrosshairPosition(0, param.time, rsiSeries);
+            // Sincronizar crosshair (almacenar referencia para cleanup)
+            const rsiCrosshairHandler = param => {
+                if (param.time && rsiChart) {
+                    try { rsiChart.setCrosshairPosition(0, param.time, rsiSeries); } catch(e) {}
                 }
-            });
+            };
+            mainChart.subscribeCrosshairMove(rsiCrosshairHandler);
+            crosshairSubscriptions.push(rsiCrosshairHandler);
         }
 
         function crearGraficoMACD() {
@@ -858,12 +883,14 @@
                 color: (histogram[i] !== null && histogram[i] >= 0) ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)',
             })).filter(d => d.value !== null && d.value !== undefined));
 
-            // Sincronizar crosshair
-            mainChart.subscribeCrosshairMove(param => {
-                if (param.time) {
-                    macdChart.setCrosshairPosition(0, param.time, macdLineSeries);
+            // Sincronizar crosshair (almacenar referencia para cleanup)
+            const macdCrosshairHandler = param => {
+                if (param.time && macdChart) {
+                    try { macdChart.setCrosshairPosition(0, param.time, macdLineSeries); } catch(e) {}
                 }
-            });
+            };
+            mainChart.subscribeCrosshairMove(macdCrosshairHandler);
+            crosshairSubscriptions.push(macdCrosshairHandler);
         }
 
         // ============================================
@@ -1076,7 +1103,21 @@
                     value: sma[i],
                 })).filter(d => d.value !== null));
             } else if (enabled && ohlcvData.length < minDatos) {
-                console.warn(`SMA ${periodo}: datos insuficientes (${ohlcvData.length}/${minDatos}). No se muestra.`);
+                // Desactivar checkbox y mostrar que no hay datos suficientes
+                const checkbox = document.getElementById(`sma${periodo}-toggle`);
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.parentElement.title = `Necesita ${minDatos} datos (hay ${ohlcvData.length})`;
+                    checkbox.parentElement.style.opacity = '0.4';
+                }
+            }
+            // Restaurar opacidad si hay datos suficientes
+            if (ohlcvData.length >= minDatos) {
+                const checkbox = document.getElementById(`sma${periodo}-toggle`);
+                if (checkbox) {
+                    checkbox.parentElement.title = '';
+                    checkbox.parentElement.style.opacity = '1';
+                }
             }
         }
 
@@ -1104,12 +1145,24 @@
                     value: ema[i],
                 })).filter(d => d.value !== null));
             } else if (enabled && ohlcvData.length < minDatos) {
-                console.warn(`EMA ${periodo}: datos insuficientes (${ohlcvData.length}/${minDatos}). No se muestra.`);
+                const checkbox = document.getElementById(`ema${periodo}-toggle`);
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.parentElement.title = `Necesita ${minDatos} datos (hay ${ohlcvData.length})`;
+                    checkbox.parentElement.style.opacity = '0.4';
+                }
+            }
+            if (ohlcvData.length >= minDatos) {
+                const checkbox = document.getElementById(`ema${periodo}-toggle`);
+                if (checkbox) {
+                    checkbox.parentElement.title = '';
+                    checkbox.parentElement.style.opacity = '1';
+                }
             }
         }
 
         function toggleBollingerIndicator(enabled) {
-            ['bollingerUpper', 'bollingerMiddle', 'bollingerLower'].forEach(key => {
+            ['bollingerUpper', 'bollingerMiddle', 'bollingerLower', 'bollingerFillUpper', 'bollingerFillLower'].forEach(key => {
                 if (indicatorSeries[key]) {
                     mainChart.removeSeries(indicatorSeries[key]);
                     indicatorSeries[key] = null;
@@ -1121,40 +1174,69 @@
                 const closes = ohlcvData.map(d => d.close);
                 const { upper, middle, lower } = calcularBollinger(closes, 20, 2);
 
+                // Técnica de dos áreas para rellenar entre bandas:
+                // 1) Área desde upper hacia abajo (con color azul semitransparente)
+                indicatorSeries.bollingerFillUpper = mainChart.addAreaSeries({
+                    lineColor: 'rgba(0, 0, 0, 0)',
+                    topColor: 'rgba(59, 130, 246, 0.12)',
+                    bottomColor: 'rgba(59, 130, 246, 0.12)',
+                    lineWidth: 0,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                    crosshairMarkerVisible: false,
+                });
+                // 2) Área desde lower hacia abajo (con color del fondo para "borrar" debajo de lower)
+                indicatorSeries.bollingerFillLower = mainChart.addAreaSeries({
+                    lineColor: 'rgba(0, 0, 0, 0)',
+                    topColor: 'rgba(15, 23, 42, 1)',
+                    bottomColor: 'rgba(15, 23, 42, 1)',
+                    lineWidth: 0,
+                    priceLineVisible: false,
+                    lastValueVisible: false,
+                    crosshairMarkerVisible: false,
+                });
+
+                // Líneas visibles de las bandas
                 indicatorSeries.bollingerUpper = mainChart.addLineSeries({
-                    color: 'rgba(59, 130, 246, 0.5)',
+                    color: 'rgba(59, 130, 246, 0.6)',
                     lineWidth: 1,
                     priceLineVisible: false,
                     lastValueVisible: false,
                 });
                 indicatorSeries.bollingerLower = mainChart.addLineSeries({
-                    color: 'rgba(59, 130, 246, 0.5)',
+                    color: 'rgba(59, 130, 246, 0.6)',
                     lineWidth: 1,
                     priceLineVisible: false,
                     lastValueVisible: false,
                 });
                 indicatorSeries.bollingerMiddle = mainChart.addLineSeries({
-                    color: 'rgba(59, 130, 246, 0.8)',
+                    color: 'rgba(59, 130, 246, 0.9)',
                     lineWidth: 1,
                     lineStyle: LightweightCharts.LineStyle.Dashed,
                     priceLineVisible: false,
                     lastValueVisible: false,
                 });
 
-                indicatorSeries.bollingerUpper.setData(ohlcvData.map((d, i) => ({
+                const upperData = ohlcvData.map((d, i) => ({
                     time: d.time,
                     value: upper[i],
-                })).filter(d => d.value !== null));
+                })).filter(d => d.value !== null);
 
-                indicatorSeries.bollingerLower.setData(ohlcvData.map((d, i) => ({
+                const lowerData = ohlcvData.map((d, i) => ({
                     time: d.time,
                     value: lower[i],
-                })).filter(d => d.value !== null));
+                })).filter(d => d.value !== null);
 
-                indicatorSeries.bollingerMiddle.setData(ohlcvData.map((d, i) => ({
+                const middleData = ohlcvData.map((d, i) => ({
                     time: d.time,
                     value: middle[i],
-                })).filter(d => d.value !== null));
+                })).filter(d => d.value !== null);
+
+                indicatorSeries.bollingerFillUpper.setData(upperData);
+                indicatorSeries.bollingerFillLower.setData(lowerData);
+                indicatorSeries.bollingerUpper.setData(upperData);
+                indicatorSeries.bollingerLower.setData(lowerData);
+                indicatorSeries.bollingerMiddle.setData(middleData);
             }
         }
 
@@ -1205,6 +1287,15 @@
         }
 
         function aplicarIndicadores() {
+            // Primero restaurar opacidad de TODOS los checkboxes (por si cambiamos de timeframe)
+            ['sma20', 'sma50', 'sma200', 'ema12', 'ema26', 'bollinger'].forEach(ind => {
+                const checkbox = document.getElementById(`${ind}-toggle`);
+                if (checkbox) {
+                    checkbox.parentElement.style.opacity = '1';
+                    checkbox.parentElement.title = '';
+                }
+            });
+
             // Aplicar indicadores según checkboxes
             ['sma20', 'sma50', 'sma200', 'ema12', 'ema26', 'bollinger'].forEach(ind => {
                 const checkbox = document.getElementById(`${ind}-toggle`);
@@ -1256,10 +1347,37 @@
 
                 if (result.success && result.data) {
                     const data = result.data;
+                    const lastPrice = ohlcvData.length > 0 ? ohlcvData[ohlcvData.length - 1].close : null;
+
                     document.getElementById('stat-high52').textContent = data.high52w ? formatPrice(data.high52w) : '-';
                     document.getElementById('stat-low52').textContent = data.low52w ? formatPrice(data.low52w) : '-';
-                    document.getElementById('stat-avg50').textContent = data.avg50d ? formatPrice(data.avg50d) : '-';
-                    document.getElementById('stat-avg200').textContent = data.avg200d ? formatPrice(data.avg200d) : '-';
+
+                    // SMA 50 con color según posición del precio
+                    const avg50El = document.getElementById('stat-avg50');
+                    if (data.avg50d) {
+                        avg50El.textContent = formatPrice(data.avg50d);
+                        if (lastPrice) {
+                            avg50El.className = lastPrice > data.avg50d
+                                ? 'font-semibold text-green-400' : 'font-semibold text-red-400';
+                        }
+                    } else {
+                        avg50El.textContent = '-';
+                        avg50El.className = 'font-semibold';
+                    }
+
+                    // SMA 200 con color según posición del precio
+                    const avg200El = document.getElementById('stat-avg200');
+                    if (data.avg200d) {
+                        avg200El.textContent = formatPrice(data.avg200d);
+                        if (lastPrice) {
+                            avg200El.className = lastPrice > data.avg200d
+                                ? 'font-semibold text-green-400' : 'font-semibold text-red-400';
+                        }
+                    } else {
+                        avg200El.textContent = '-';
+                        avg200El.className = 'font-semibold';
+                    }
+
                     document.getElementById('stat-volume').textContent = data.volume ? formatNumber(data.volume) : '-';
                     document.getElementById('stat-marketcap').textContent = data.marketCap ? formatNumber(data.marketCap) : '-';
                     document.getElementById('stat-per').textContent = data.per ? data.per.toFixed(2) : '-';
@@ -1305,7 +1423,6 @@
             const closes = ohlcvData.map(d => d.close);
             const numDatos = closes.length;
             const lastPrice = closes[closes.length - 1];
-            const prevPrice = closes[closes.length - 2];
             let html = '';
 
             // Detectar si los datos son intradiarios (timestamps unix) o diarios (string)
@@ -1604,19 +1721,23 @@
                 { price: periodLow, label: 'Min periodo', type: 'support' },
             ];
 
+            // Filtrar niveles con precio <= 0
+            levels = levels.filter(l => l.price > 0);
+            if (levels.length === 0 || lastPrice <= 0) return;
+
             // Filtrar duplicados cercanos (< 0.5% diferencia) y ordenar descendente
             levels.sort((a, b) => b.price - a.price);
             const filtered = [levels[0]];
             for (let i = 1; i < levels.length; i++) {
-                const prevPrice = filtered[filtered.length - 1].price;
-                if (Math.abs(levels[i].price - prevPrice) / prevPrice > 0.005) {
+                const prevLevelPrice = filtered[filtered.length - 1].price;
+                if (prevLevelPrice > 0 && Math.abs(levels[i].price - prevLevelPrice) / prevLevelPrice > 0.005) {
                     filtered.push(levels[i]);
                 }
             }
 
             let html = '';
             filtered.forEach(level => {
-                const distancia = ((level.price - lastPrice) / lastPrice * 100).toFixed(2);
+                const distancia = lastPrice !== 0 ? ((level.price - lastPrice) / lastPrice * 100).toFixed(2) : '0.00';
                 const isAbove = level.price > lastPrice;
                 let colorClass, bgClass, icon;
 
@@ -1693,8 +1814,21 @@
         }
 
         function showError(message) {
-            // Simple alert for now, could be improved with toast
-            alert(message);
+            // Toast notification en lugar de alert
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-4 right-4 z-50 bg-red-500/90 backdrop-blur text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-2 text-sm max-w-sm animate-fade-in';
+            toast.innerHTML = `
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>${message}</span>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
         }
     </script>
 </body>

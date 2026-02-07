@@ -420,6 +420,19 @@
                         </div>
                     </div>
 
+                    <!-- Fundamental Analysis -->
+                    <div id="fundamental-section" class="hidden">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                            </svg>
+                            Análisis Fundamental
+                        </h3>
+                        <div id="fundamental-content" class="space-y-2 text-sm">
+                            <!-- Filled dynamically -->
+                        </div>
+                    </div>
+
                     <!-- Strategy Panel -->
                     <div id="strategy-section" class="hidden">
                         <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
@@ -854,8 +867,9 @@
                 // Cargar datos OHLCV
                 await cargarDatos(currentPeriod);
 
-                // Cargar estadísticas
+                // Cargar estadísticas y fundamentales
                 cargarEstadisticas(ticker);
+                cargarFundamentales(ticker);
 
                 // Guardar en historial
                 addToSearchHistory(ticker, document.getElementById('asset-name')?.textContent || ticker);
@@ -2226,6 +2240,395 @@
             }
         }
 
+        // ============================================
+        // ANÁLISIS FUNDAMENTAL
+        // ============================================
+        let fundamentalData = null; // Cache para usar en análisis predictivo
+
+        async function cargarFundamentales(ticker) {
+            const section = document.getElementById('fundamental-section');
+            const container = document.getElementById('fundamental-content');
+            if (!section || !container) return;
+
+            try {
+                const response = await fetch(`/api/fundamental/${encodeURIComponent(ticker)}`);
+                if (!response.ok) throw new Error(`Error ${response.status}`);
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    fundamentalData = result.data;
+
+                    // No mostrar fundamentales para cripto o si no hay datos clave
+                    if (result.data.quoteType === 'CRYPTOCURRENCY') {
+                        section.classList.add('hidden');
+                        return;
+                    }
+
+                    section.classList.remove('hidden');
+                    generarAnalisisFundamental(result.data, container);
+                } else {
+                    section.classList.add('hidden');
+                }
+            } catch (error) {
+                console.error('Error cargando fundamentales:', error);
+                section.classList.add('hidden');
+            }
+        }
+
+        function generarAnalisisFundamental(data, container) {
+            const lastPrice = ohlcvData.length > 0 ? ohlcvData[ohlcvData.length - 1].close : null;
+            let html = '';
+
+            // Helper: formatear números grandes
+            const fmtBig = (n) => {
+                if (!n) return '-';
+                if (Math.abs(n) >= 1e12) return (n / 1e12).toFixed(2) + 'T';
+                if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+                if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+                if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+                return n.toFixed(2);
+            };
+            const fmtPct = (n) => n !== null && n !== undefined ? (n * 100).toFixed(1) + '%' : '-';
+            const fmtNum = (n, d=2) => n !== null && n !== undefined ? n.toFixed(d) : '-';
+
+            // --- INFO GENERAL ---
+            if (data.sector || data.industry) {
+                html += `<div class="p-2 bg-slate-800/50 rounded-lg border border-slate-700 text-xs">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span>&#x1F3E2;</span>
+                        <span class="font-semibold text-slate-200">${data.name || currentTicker}</span>
+                    </div>
+                    <div class="text-slate-400 space-y-0.5">
+                        ${data.sector ? `<p>Sector: <span class="text-slate-300">${data.sector}</span></p>` : ''}
+                        ${data.industry ? `<p>Industria: <span class="text-slate-300">${data.industry}</span></p>` : ''}
+                        ${data.country ? `<p>País: <span class="text-slate-300">${data.country}</span></p>` : ''}
+                        ${data.employees ? `<p>Empleados: <span class="text-slate-300">${data.employees.toLocaleString()}</span></p>` : ''}
+                    </div>
+                </div>`;
+            }
+
+            // --- PUNTUACIÓN FUNDAMENTAL ---
+            let fundScore = 0;
+            let maxFundScore = 0;
+            let fundDetails = [];
+
+            // Valoración
+            const pe = data.trailingPE;
+            const fpe = data.forwardPE;
+            const peg = data.pegRatio;
+            const pb = data.priceToBook;
+            const evEbitda = data.evToEbitda;
+
+            html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                <p class="text-xs font-semibold text-slate-300 mb-2">&#x1F4B0; Valoración</p>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">`;
+
+            // PER
+            if (pe !== null && pe !== undefined) {
+                maxFundScore += 2;
+                let peColor = 'text-slate-300';
+                let peLabel = '';
+                if (pe < 0) { peColor = 'text-red-400'; peLabel = '(pérdidas)'; fundDetails.push({t:'PER negativo', s:'bearish'}); }
+                else if (pe < 15) { peColor = 'text-green-400'; peLabel = '(barata)'; fundScore += 2; fundDetails.push({t:'PER bajo — infravalorada', s:'bullish'}); }
+                else if (pe < 25) { peColor = 'text-cyan-400'; peLabel = '(justa)'; fundScore += 1; fundDetails.push({t:'PER justo', s:'neutral'}); }
+                else if (pe < 40) { peColor = 'text-yellow-400'; peLabel = '(cara)'; fundDetails.push({t:'PER alto — cara', s:'bearish'}); }
+                else { peColor = 'text-red-400'; peLabel = '(muy cara)'; fundScore -= 1; fundDetails.push({t:'PER muy alto — sobrevalorada', s:'bearish'}); }
+                html += `<div>PER <span class="text-slate-500">${peLabel}</span></div><div class="${peColor} font-semibold text-right">${fmtNum(pe)}</div>`;
+            }
+
+            // Forward PER
+            if (fpe !== null && fpe !== undefined) {
+                let fpeColor = 'text-slate-300';
+                if (fpe < 15) fpeColor = 'text-green-400';
+                else if (fpe < 25) fpeColor = 'text-cyan-400';
+                else if (fpe < 40) fpeColor = 'text-yellow-400';
+                else fpeColor = 'text-red-400';
+                html += `<div>PER Futuro</div><div class="${fpeColor} font-semibold text-right">${fmtNum(fpe)}</div>`;
+                if (pe && fpe < pe * 0.85) {
+                    fundScore += 1;
+                    fundDetails.push({t:'PER futuro mejora — se espera crecimiento', s:'bullish'});
+                }
+            }
+
+            // PEG
+            if (peg !== null && peg !== undefined) {
+                maxFundScore += 1;
+                let pegColor = 'text-slate-300';
+                let pegLabel = '';
+                if (peg < 0) { pegColor = 'text-red-400'; pegLabel = '(negativo)'; }
+                else if (peg < 1) { pegColor = 'text-green-400'; pegLabel = '(infravalorada)'; fundScore += 1; fundDetails.push({t:'PEG < 1 — crecimiento a buen precio', s:'bullish'}); }
+                else if (peg < 2) { pegColor = 'text-cyan-400'; pegLabel = '(justa)'; }
+                else { pegColor = 'text-red-400'; pegLabel = '(cara vs crecimiento)'; fundDetails.push({t:'PEG alto — caro para su crecimiento', s:'bearish'}); }
+                html += `<div>PEG <span class="text-slate-500">${pegLabel}</span></div><div class="${pegColor} font-semibold text-right">${fmtNum(peg)}</div>`;
+            }
+
+            // P/B
+            if (pb !== null && pb !== undefined) {
+                maxFundScore += 1;
+                let pbColor = pb < 1 ? 'text-green-400' : pb < 3 ? 'text-cyan-400' : pb < 5 ? 'text-yellow-400' : 'text-red-400';
+                if (pb < 1) { fundScore += 1; fundDetails.push({t:'P/B < 1 — cotiza por debajo de su valor contable', s:'bullish'}); }
+                else if (pb > 5) { fundDetails.push({t:'P/B alto — prima excesiva sobre valor contable', s:'bearish'}); }
+                html += `<div>P/B (Precio/Valor)</div><div class="${pbColor} font-semibold text-right">${fmtNum(pb)}</div>`;
+            }
+
+            // EV/EBITDA
+            if (evEbitda !== null && evEbitda !== undefined) {
+                maxFundScore += 1;
+                let evColor = evEbitda < 10 ? 'text-green-400' : evEbitda < 15 ? 'text-cyan-400' : evEbitda < 25 ? 'text-yellow-400' : 'text-red-400';
+                if (evEbitda < 10 && evEbitda > 0) { fundScore += 1; fundDetails.push({t:'EV/EBITDA bajo — valoración atractiva', s:'bullish'}); }
+                html += `<div>EV/EBITDA</div><div class="${evColor} font-semibold text-right">${fmtNum(evEbitda)}</div>`;
+            }
+
+            html += `</div></div>`;
+
+            // --- RENTABILIDAD ---
+            const gm = data.grossMargin;
+            const om = data.operatingMargin;
+            const pm = data.profitMargin;
+            const roe = data.roe;
+            const roa = data.roa;
+
+            if (gm !== null || om !== null || pm !== null || roe !== null) {
+                html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                    <p class="text-xs font-semibold text-slate-300 mb-2">&#x1F4C8; Rentabilidad</p>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">`;
+
+                if (gm !== null && gm !== undefined) {
+                    let gmColor = gm > 0.5 ? 'text-green-400' : gm > 0.3 ? 'text-cyan-400' : gm > 0.1 ? 'text-yellow-400' : 'text-red-400';
+                    html += `<div>Margen Bruto</div><div class="${gmColor} font-semibold text-right">${fmtPct(gm)}</div>`;
+                }
+                if (om !== null && om !== undefined) {
+                    let omColor = om > 0.2 ? 'text-green-400' : om > 0.1 ? 'text-cyan-400' : om > 0 ? 'text-yellow-400' : 'text-red-400';
+                    html += `<div>Margen Operativo</div><div class="${omColor} font-semibold text-right">${fmtPct(om)}</div>`;
+                }
+                if (pm !== null && pm !== undefined) {
+                    maxFundScore += 2;
+                    let pmColor = pm > 0.15 ? 'text-green-400' : pm > 0.05 ? 'text-cyan-400' : pm > 0 ? 'text-yellow-400' : 'text-red-400';
+                    if (pm > 0.15) { fundScore += 2; fundDetails.push({t:`Margen neto excelente (${fmtPct(pm)})`, s:'bullish'}); }
+                    else if (pm > 0.05) { fundScore += 1; fundDetails.push({t:'Margen neto aceptable', s:'neutral'}); }
+                    else if (pm <= 0) { fundScore -= 1; fundDetails.push({t:'Empresa con pérdidas', s:'bearish'}); }
+                    html += `<div>Margen Neto</div><div class="${pmColor} font-semibold text-right">${fmtPct(pm)}</div>`;
+                }
+                if (roe !== null && roe !== undefined) {
+                    maxFundScore += 1;
+                    let roeColor = roe > 0.2 ? 'text-green-400' : roe > 0.1 ? 'text-cyan-400' : roe > 0 ? 'text-yellow-400' : 'text-red-400';
+                    if (roe > 0.2) { fundScore += 1; fundDetails.push({t:`ROE alto (${fmtPct(roe)}) — genera mucho valor`, s:'bullish'}); }
+                    else if (roe < 0) { fundDetails.push({t:'ROE negativo — destruye valor', s:'bearish'}); }
+                    html += `<div>ROE</div><div class="${roeColor} font-semibold text-right">${fmtPct(roe)}</div>`;
+                }
+                if (roa !== null && roa !== undefined) {
+                    html += `<div>ROA</div><div class="${roa > 0.1 ? 'text-green-400' : roa > 0.05 ? 'text-cyan-400' : 'text-yellow-400'} font-semibold text-right">${fmtPct(roa)}</div>`;
+                }
+
+                html += `</div></div>`;
+            }
+
+            // --- CRECIMIENTO ---
+            const revGrowth = data.revenueGrowth;
+            const earnGrowth = data.earningsGrowth;
+            const revenue = data.revenue;
+            const netIncome = data.netIncome;
+            const ebitda = data.ebitda;
+
+            if (revGrowth !== null || revenue !== null) {
+                html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                    <p class="text-xs font-semibold text-slate-300 mb-2">&#x1F680; Crecimiento</p>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">`;
+
+                if (revenue) html += `<div>Ingresos (TTM)</div><div class="text-slate-200 font-semibold text-right">${fmtBig(revenue)}</div>`;
+                if (netIncome) {
+                    let niColor = netIncome > 0 ? 'text-green-400' : 'text-red-400';
+                    html += `<div>Beneficio Neto</div><div class="${niColor} font-semibold text-right">${fmtBig(netIncome)}</div>`;
+                }
+                if (ebitda) html += `<div>EBITDA</div><div class="text-slate-200 font-semibold text-right">${fmtBig(ebitda)}</div>`;
+
+                if (revGrowth !== null && revGrowth !== undefined) {
+                    maxFundScore += 2;
+                    let rgColor = revGrowth > 0.2 ? 'text-green-400' : revGrowth > 0.05 ? 'text-cyan-400' : revGrowth > 0 ? 'text-yellow-400' : 'text-red-400';
+                    if (revGrowth > 0.2) { fundScore += 2; fundDetails.push({t:`Ingresos creciendo ${fmtPct(revGrowth)} — crecimiento fuerte`, s:'bullish'}); }
+                    else if (revGrowth > 0.05) { fundScore += 1; }
+                    else if (revGrowth < 0) { fundScore -= 1; fundDetails.push({t:'Ingresos cayendo — tendencia negativa', s:'bearish'}); }
+                    html += `<div>Crecimiento Ingresos</div><div class="${rgColor} font-semibold text-right">${fmtPct(revGrowth)}</div>`;
+                }
+                if (earnGrowth !== null && earnGrowth !== undefined) {
+                    let egColor = earnGrowth > 0.2 ? 'text-green-400' : earnGrowth > 0 ? 'text-cyan-400' : 'text-red-400';
+                    html += `<div>Crecimiento Beneficios</div><div class="${egColor} font-semibold text-right">${fmtPct(earnGrowth)}</div>`;
+                }
+
+                html += `</div></div>`;
+            }
+
+            // --- SALUD FINANCIERA ---
+            const debt = data.totalDebt;
+            const cash = data.totalCash;
+            const dte = data.debtToEquity;
+            const cr = data.currentRatio;
+            const fcf = data.freeCashflow;
+            const ocf = data.operatingCashflow;
+
+            if (debt !== null || cash !== null || fcf !== null) {
+                html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                    <p class="text-xs font-semibold text-slate-300 mb-2">&#x1F3E6; Salud Financiera</p>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">`;
+
+                if (cash) html += `<div>Cash</div><div class="text-green-400 font-semibold text-right">${fmtBig(cash)}</div>`;
+                if (debt) html += `<div>Deuda Total</div><div class="text-red-400 font-semibold text-right">${fmtBig(debt)}</div>`;
+
+                if (dte !== null && dte !== undefined) {
+                    maxFundScore += 1;
+                    let dteColor = dte < 50 ? 'text-green-400' : dte < 100 ? 'text-cyan-400' : dte < 200 ? 'text-yellow-400' : 'text-red-400';
+                    if (dte < 50) { fundScore += 1; fundDetails.push({t:'Deuda baja — sólida financieramente', s:'bullish'}); }
+                    else if (dte > 200) { fundScore -= 1; fundDetails.push({t:'Deuda muy alta — riesgo financiero', s:'bearish'}); }
+                    html += `<div>Deuda/Equity</div><div class="${dteColor} font-semibold text-right">${fmtNum(dte, 0)}%</div>`;
+                }
+                if (cr !== null && cr !== undefined) {
+                    let crColor = cr > 2 ? 'text-green-400' : cr > 1 ? 'text-cyan-400' : 'text-red-400';
+                    html += `<div>Ratio Corriente</div><div class="${crColor} font-semibold text-right">${fmtNum(cr)}</div>`;
+                }
+                if (fcf) {
+                    maxFundScore += 1;
+                    let fcfColor = fcf > 0 ? 'text-green-400' : 'text-red-400';
+                    if (fcf > 0) { fundScore += 1; fundDetails.push({t:'Cash Flow libre positivo — genera caja', s:'bullish'}); }
+                    else { fundScore -= 1; fundDetails.push({t:'Cash Flow libre negativo — consume caja', s:'bearish'}); }
+                    html += `<div>Free Cash Flow</div><div class="${fcfColor} font-semibold text-right">${fmtBig(fcf)}</div>`;
+                }
+                if (ocf) html += `<div>Cash Flow Operativo</div><div class="${ocf > 0 ? 'text-green-400' : 'text-red-400'} font-semibold text-right">${fmtBig(ocf)}</div>`;
+
+                html += `</div></div>`;
+            }
+
+            // --- DIVIDENDOS ---
+            const divYield = data.dividendYield;
+            const divRate = data.dividendRate;
+            const payoutRatio = data.payoutRatio;
+
+            if (divYield || divRate) {
+                html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                    <p class="text-xs font-semibold text-slate-300 mb-2">&#x1F4B8; Dividendos</p>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">`;
+
+                if (divYield) {
+                    let dyColor = divYield > 4 ? 'text-green-400' : divYield > 2 ? 'text-cyan-400' : divYield > 0 ? 'text-yellow-400' : 'text-slate-400';
+                    html += `<div>Rentabilidad Div.</div><div class="${dyColor} font-semibold text-right">${divYield.toFixed(2)}%</div>`;
+                    if (divYield > 3) fundDetails.push({t:`Dividendo atractivo (${divYield.toFixed(1)}%)`, s:'bullish'});
+                }
+                if (divRate) html += `<div>Dividendo/Acción</div><div class="text-slate-200 font-semibold text-right">${data.currency || '$'}${divRate.toFixed(2)}</div>`;
+                if (payoutRatio) {
+                    let prColor = payoutRatio < 60 ? 'text-green-400' : payoutRatio < 80 ? 'text-yellow-400' : 'text-red-400';
+                    html += `<div>Payout Ratio</div><div class="${prColor} font-semibold text-right">${payoutRatio.toFixed(0)}%</div>`;
+                    if (payoutRatio > 90) fundDetails.push({t:'Payout ratio muy alto — dividendo en riesgo', s:'bearish'});
+                }
+
+                html += `</div></div>`;
+            }
+
+            // --- ANALISTAS ---
+            const targetMean = data.targetMean;
+            const targetHigh = data.targetHigh;
+            const targetLow = data.targetLow;
+            const recommendation = data.recommendation;
+            const numAnalysts = data.numAnalysts;
+
+            if (targetMean && lastPrice) {
+                const upside = ((targetMean - lastPrice) / lastPrice * 100).toFixed(1);
+                const upsideHigh = targetHigh ? ((targetHigh - lastPrice) / lastPrice * 100).toFixed(1) : null;
+                const upsideLow = targetLow ? ((targetLow - lastPrice) / lastPrice * 100).toFixed(1) : null;
+
+                maxFundScore += 2;
+                if (parseFloat(upside) > 20) { fundScore += 2; fundDetails.push({t:`Analistas ven +${upside}% potencial`, s:'bullish'}); }
+                else if (parseFloat(upside) > 5) { fundScore += 1; }
+                else if (parseFloat(upside) < -10) { fundScore -= 1; fundDetails.push({t:`Analistas ven ${upside}% — precio por encima del target`, s:'bearish'}); }
+
+                const recMap = {
+                    'strong_buy': { label: 'COMPRA FUERTE', color: 'text-green-400', bg: 'bg-green-500/20' },
+                    'buy': { label: 'COMPRAR', color: 'text-green-400', bg: 'bg-green-500/15' },
+                    'hold': { label: 'MANTENER', color: 'text-yellow-400', bg: 'bg-yellow-500/15' },
+                    'sell': { label: 'VENDER', color: 'text-red-400', bg: 'bg-red-500/15' },
+                    'strong_sell': { label: 'VENTA FUERTE', color: 'text-red-400', bg: 'bg-red-500/20' },
+                };
+                const rec = recMap[recommendation] || { label: recommendation || '-', color: 'text-slate-400', bg: 'bg-slate-700' };
+
+                html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                    <p class="text-xs font-semibold text-slate-300 mb-2">&#x1F9D1;&#x200D;&#x1F4BC; Analistas ${numAnalysts ? `(${numAnalysts})` : ''}</p>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="px-2 py-1 rounded text-xs font-bold ${rec.color} ${rec.bg}">${rec.label}</span>
+                        <span class="text-xs text-slate-400 ml-auto">Potencial: <span class="${parseFloat(upside) >= 0 ? 'text-green-400' : 'text-red-400'} font-semibold">${parseFloat(upside) >= 0 ? '+' : ''}${upside}%</span></span>
+                    </div>
+                    <div class="text-xs space-y-1">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Target Medio</span>
+                            <span class="text-slate-200 font-semibold">${formatPrice(targetMean)}</span>
+                        </div>
+                        ${targetHigh ? `<div class="flex justify-between"><span class="text-slate-500">Target Máximo</span><span class="text-green-400">${formatPrice(targetHigh)} <span class="text-green-600">(+${upsideHigh}%)</span></span></div>` : ''}
+                        ${targetLow ? `<div class="flex justify-between"><span class="text-slate-500">Target Mínimo</span><span class="text-red-400">${formatPrice(targetLow)} <span class="text-red-600">(${upsideLow}%)</span></span></div>` : ''}
+                    </div>
+                    <!-- Barra visual precio vs targets -->
+                    ${targetLow && targetHigh ? (() => {
+                        const range = targetHigh - targetLow;
+                        const pricePos = range > 0 ? Math.max(0, Math.min(100, ((lastPrice - targetLow) / range) * 100)) : 50;
+                        const meanPos = range > 0 ? Math.max(0, Math.min(100, ((targetMean - targetLow) / range) * 100)) : 50;
+                        return `<div class="mt-2 relative">
+                            <div class="h-2 bg-gradient-to-r from-red-500/30 via-yellow-500/30 to-green-500/30 rounded-full"></div>
+                            <div class="absolute top-0 h-2 w-0.5 bg-blue-400" style="left:${pricePos}%" title="Precio actual"></div>
+                            <div class="absolute top-0 h-2 w-0.5 bg-yellow-400" style="left:${meanPos}%" title="Target medio"></div>
+                            <div class="flex justify-between text-xs mt-0.5 text-slate-600">
+                                <span>${formatPrice(targetLow)}</span>
+                                <span class="text-blue-400">&#x25CF; Actual</span>
+                                <span>${formatPrice(targetHigh)}</span>
+                            </div>
+                        </div>`;
+                    })() : ''}
+                </div>`;
+            }
+
+            // --- PUNTUACIÓN FUNDAMENTAL RESUMEN ---
+            const maxScore = Math.max(maxFundScore, 1);
+            const fundPct = Math.round(Math.max(0, Math.min(100, ((fundScore + maxScore) / (maxScore * 2)) * 100)));
+            let fundLabel, fundColor, fundBg, fundIcon;
+
+            if (fundPct >= 75) {
+                fundLabel = 'FUNDAMENTALES SÓLIDOS'; fundColor = 'text-green-400'; fundBg = 'border-green-500/30 bg-green-500/10'; fundIcon = '&#x2705;';
+            } else if (fundPct >= 55) {
+                fundLabel = 'FUNDAMENTALES ACEPTABLES'; fundColor = 'text-cyan-400'; fundBg = 'border-cyan-500/30 bg-cyan-500/10'; fundIcon = '&#x1F4CA;';
+            } else if (fundPct >= 40) {
+                fundLabel = 'FUNDAMENTALES MIXTOS'; fundColor = 'text-yellow-400'; fundBg = 'border-yellow-500/30 bg-yellow-500/10'; fundIcon = '&#x26A0;&#xFE0F;';
+            } else {
+                fundLabel = 'FUNDAMENTALES DÉBILES'; fundColor = 'text-red-400'; fundBg = 'border-red-500/30 bg-red-500/10'; fundIcon = '&#x1F534;';
+            }
+
+            html += `<div class="p-2.5 rounded-lg border ${fundBg}">
+                <div class="flex items-center gap-2 mb-2">
+                    <span>${fundIcon}</span>
+                    <span class="${fundColor} font-bold text-xs">${fundLabel}</span>
+                    <span class="text-xs text-slate-500 ml-auto">${fundPct}%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden mb-2">
+                    <div class="h-full rounded-full transition-all ${fundPct >= 75 ? 'bg-green-500' : fundPct >= 55 ? 'bg-cyan-500' : fundPct >= 40 ? 'bg-yellow-500' : 'bg-red-500'}" style="width:${fundPct}%"></div>
+                </div>`;
+
+            // Detalles del scoring
+            if (fundDetails.length > 0) {
+                html += `<div class="space-y-0.5">`;
+                fundDetails.forEach(d => {
+                    const icon = d.s === 'bullish' ? '&#x1F7E2;' : d.s === 'bearish' ? '&#x1F534;' : '&#x1F7E1;';
+                    const color = d.s === 'bullish' ? 'text-green-400' : d.s === 'bearish' ? 'text-red-400' : 'text-yellow-400';
+                    html += `<p class="text-xs ${color}">${icon} ${d.t}</p>`;
+                });
+                html += `</div>`;
+            }
+
+            html += `</div>`;
+
+            // Earnings date
+            if (data.earningsDate) {
+                html += `<div class="p-2 bg-amber-500/10 rounded border border-amber-500/30 text-xs text-amber-400">
+                    &#x1F4C5; Próximos resultados: <span class="font-semibold">${data.earningsDate}</span>
+                </div>`;
+            }
+
+            container.innerHTML = html;
+        }
+
         function actualizarRSIInfo(rsi) {
             const valueEl = document.getElementById('rsi-value');
             const signalEl = document.getElementById('rsi-signal');
@@ -2881,7 +3284,8 @@
                 bullSignals, bearSignals, resumen,
                 periodoTexto, esIntradiario,
                 lastSma20, lastSma50, lastSma200,
-                stochSignal
+                stochSignal,
+                fundamental: fundamentalData
             });
 
             container.innerHTML = html;
@@ -2902,7 +3306,7 @@
                 bullSignals, bearSignals, resumen,
                 periodoTexto, esIntradiario,
                 lastSma20, lastSma50, lastSma200,
-                stochSignal
+                stochSignal, fundamental
             } = params;
 
             const totalSeñales = bullSignals + bearSignals;
@@ -2914,6 +3318,7 @@
             let diagnosticoMomentum = '';
             let diagnosticoVolatilidad = '';
             let diagnosticoFuerza = '';
+            let diagnosticoFundamental = '';
             let pronostico = '';
             let riesgos = [];
             let oportunidades = [];
@@ -3042,6 +3447,56 @@
                 }
             }
 
+            // --- DIAGNÓSTICO FUNDAMENTAL ---
+            if (fundamental && fundamental.quoteType !== 'CRYPTOCURRENCY') {
+                let fundParts = [];
+                const fpe = fundamental.trailingPE;
+                const fwd = fundamental.forwardPE;
+                const pm = fundamental.profitMargin;
+                const rg = fundamental.revenueGrowth;
+                const dte = fundamental.debtToEquity;
+                const fcf = fundamental.freeCashflow;
+                const tgt = fundamental.targetMean;
+                const rec = fundamental.recommendation;
+
+                if (fpe !== null && fpe !== undefined) {
+                    if (fpe < 0) fundParts.push('La empresa tiene <span class="text-red-400">pérdidas</span> (PER negativo), lo que limita la valoración tradicional.');
+                    else if (fpe < 15) fundParts.push(`Con un PER de <span class="text-green-400">${fpe.toFixed(1)}</span>, la acción está <span class="text-green-400">infravalorada</span> respecto a la media del mercado (~20).`);
+                    else if (fpe < 25) fundParts.push(`El PER de ${fpe.toFixed(1)} indica una valoración <span class="text-cyan-400">razonable</span>.`);
+                    else fundParts.push(`Un PER de <span class="text-yellow-400">${fpe.toFixed(1)}</span> indica que el mercado paga una prima alta por este activo.`);
+                }
+                if (fwd && fpe && fwd < fpe * 0.85) {
+                    fundParts.push(`El PER futuro (${fwd.toFixed(1)}) es significativamente menor al actual, lo que sugiere que <span class="text-green-400">se espera mejora de beneficios</span>.`);
+                }
+                if (pm !== null && pm !== undefined) {
+                    if (pm > 0.2) fundParts.push(`El margen neto del <span class="text-green-400">${(pm*100).toFixed(1)}%</span> es excelente — negocio muy rentable.`);
+                    else if (pm > 0.05) fundParts.push(`Margen neto del ${(pm*100).toFixed(1)}% — rentabilidad aceptable.`);
+                    else if (pm <= 0) fundParts.push(`<span class="text-red-400">Margen neto negativo</span> — la empresa no es rentable actualmente.`);
+                }
+                if (rg !== null && rg !== undefined) {
+                    if (rg > 0.2) fundParts.push(`Los ingresos crecen un <span class="text-green-400 font-semibold">${(rg*100).toFixed(1)}%</span> — crecimiento fuerte que justifica primas.`);
+                    else if (rg < 0) fundParts.push(`<span class="text-red-400">Los ingresos están cayendo</span> (${(rg*100).toFixed(1)}%), señal de contracción del negocio.`);
+                }
+                if (dte !== null && dte !== undefined) {
+                    if (dte > 200) fundParts.push(`La relación deuda/equity de <span class="text-red-400">${dte.toFixed(0)}%</span> es alta — riesgo financiero elevado.`);
+                    else if (dte < 50) fundParts.push(`Deuda baja (${dte.toFixed(0)}%) — <span class="text-green-400">balance sólido</span>.`);
+                }
+                if (fcf !== null && fcf !== undefined) {
+                    if (fcf > 0) fundParts.push(`Genera <span class="text-green-400">cash flow libre positivo</span>, lo que le permite invertir, reducir deuda o devolver valor al accionista.`);
+                    else fundParts.push(`<span class="text-red-400">Cash flow libre negativo</span> — consume más caja de la que genera.`);
+                }
+                if (tgt && lastPrice) {
+                    const upside = ((tgt - lastPrice) / lastPrice * 100).toFixed(1);
+                    if (parseFloat(upside) > 0) {
+                        fundParts.push(`Los analistas fijan un precio objetivo medio de <span class="text-green-400">${formatPrice(tgt)}</span> (<span class="text-green-400">+${upside}%</span> de potencial).`);
+                    } else {
+                        fundParts.push(`El precio actual supera el target medio de analistas (${formatPrice(tgt)}), lo que sugiere <span class="text-yellow-400">posible sobrevaloración</span>.`);
+                    }
+                }
+
+                diagnosticoFundamental = fundParts.length > 0 ? fundParts.join(' ') : '';
+            }
+
             // --- PRONÓSTICO INTEGRADO ---
             const score = bullSignals - bearSignals;
             const momentum = lastRsiValue ? (lastRsiValue > 50 ? 'positivo' : 'negativo') : 'neutral';
@@ -3109,6 +3564,11 @@
                     ${diagnosticoVWAP ? `<div>
                         <p class="font-semibold text-slate-300 mb-1">&#x1F4B0; Flujo de Capital (VWAP)</p>
                         <p class="text-slate-400">${diagnosticoVWAP}</p>
+                    </div>` : ''}
+
+                    ${diagnosticoFundamental ? `<div>
+                        <p class="font-semibold text-slate-300 mb-1">&#x1F3E2; Fundamentales</p>
+                        <p class="text-slate-400">${diagnosticoFundamental}</p>
                     </div>` : ''}
 
                     <!-- Separador -->

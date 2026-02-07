@@ -4977,6 +4977,153 @@ def api_stats(ticker):
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/fundamental/<ticker>')
+def api_fundamental(ticker):
+    """Obtiene datos fundamentales completos del activo"""
+    try:
+        import yfinance as yf
+        stock = yf.Ticker(ticker)
+        info = stock.info
+
+        # --- Datos de valoración ---
+        trailing_pe = info.get('trailingPE')
+        forward_pe = info.get('forwardPE')
+        peg = info.get('pegRatio')
+        pb = info.get('priceToBook')
+        ps = info.get('priceToSalesTrailing12Months')
+        ev_ebitda = info.get('enterpriseToEbitda')
+        ev_revenue = info.get('enterpriseToRevenue')
+
+        # --- Rentabilidad ---
+        profit_margin = info.get('profitMargins')
+        operating_margin = info.get('operatingMargins')
+        gross_margin = info.get('grossMargins')
+        roe = info.get('returnOnEquity')
+        roa = info.get('returnOnAssets')
+
+        # --- Income Statement ---
+        revenue = info.get('totalRevenue')
+        net_income = info.get('netIncomeToCommon')
+        ebitda = info.get('ebitda')
+        revenue_growth = info.get('revenueGrowth')
+        earnings_growth = info.get('earningsGrowth')
+
+        # --- Balance Sheet ---
+        total_debt = info.get('totalDebt')
+        total_cash = info.get('totalCash')
+        debt_to_equity = info.get('debtToEquity')
+        current_ratio = info.get('currentRatio')
+        book_value = info.get('bookValue')
+
+        # --- Cash Flow ---
+        free_cashflow = info.get('freeCashflow')
+        operating_cashflow = info.get('operatingCashflow')
+
+        # --- Dividendos ---
+        raw_dividend = info.get('dividendYield') or 0
+        dividend_yield = None
+        if 0 < raw_dividend < 1:
+            dividend_yield = round(raw_dividend * 100, 2)
+        elif 1 <= raw_dividend <= 25:
+            dividend_yield = round(raw_dividend, 2)
+        dividend_rate = info.get('dividendRate')
+        payout_ratio = info.get('payoutRatio')
+
+        # --- Info general ---
+        sector = info.get('sector')
+        industry = info.get('industry')
+        market_cap = info.get('marketCap')
+        enterprise_value = info.get('enterpriseValue')
+        employees = info.get('fullTimeEmployees')
+        country = info.get('country')
+        currency = info.get('currency', 'USD')
+        name = info.get('shortName') or info.get('longName') or ticker
+
+        # --- Target de analistas ---
+        target_mean = info.get('targetMeanPrice')
+        target_high = info.get('targetHighPrice')
+        target_low = info.get('targetLowPrice')
+        recommendation = info.get('recommendationKey')
+        num_analysts = info.get('numberOfAnalystOpinions')
+
+        # --- Earnings recientes ---
+        earnings_date = None
+        try:
+            cal = stock.calendar
+            if cal is not None:
+                if isinstance(cal, dict) and 'Earnings Date' in cal:
+                    ed = cal['Earnings Date']
+                    if isinstance(ed, list) and len(ed) > 0:
+                        earnings_date = str(ed[0])
+                    else:
+                        earnings_date = str(ed)
+        except:
+            pass
+
+        # Tipo de activo (para saber si mostrar fundamentales o no)
+        quote_type = info.get('quoteType', 'EQUITY')  # EQUITY, ETF, MUTUALFUND, CRYPTOCURRENCY
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'name': name,
+                'quoteType': quote_type,
+                'sector': sector,
+                'industry': industry,
+                'country': country,
+                'currency': currency,
+                'employees': employees,
+                'marketCap': market_cap,
+                'enterpriseValue': enterprise_value,
+                # Valoración
+                'trailingPE': trailing_pe,
+                'forwardPE': forward_pe,
+                'pegRatio': peg,
+                'priceToBook': pb,
+                'priceToSales': ps,
+                'evToEbitda': ev_ebitda,
+                'evToRevenue': ev_revenue,
+                # Rentabilidad
+                'profitMargin': profit_margin,
+                'operatingMargin': operating_margin,
+                'grossMargin': gross_margin,
+                'roe': roe,
+                'roa': roa,
+                # Income
+                'revenue': revenue,
+                'netIncome': net_income,
+                'ebitda': ebitda,
+                'revenueGrowth': revenue_growth,
+                'earningsGrowth': earnings_growth,
+                # Balance
+                'totalDebt': total_debt,
+                'totalCash': total_cash,
+                'debtToEquity': debt_to_equity,
+                'currentRatio': current_ratio,
+                'bookValue': book_value,
+                # Cash flow
+                'freeCashflow': free_cashflow,
+                'operatingCashflow': operating_cashflow,
+                # Dividendos
+                'dividendYield': dividend_yield,
+                'dividendRate': dividend_rate,
+                'payoutRatio': round(payout_ratio * 100, 1) if payout_ratio and payout_ratio < 5 else None,
+                # Analistas
+                'targetMean': target_mean,
+                'targetHigh': target_high,
+                'targetLow': target_low,
+                'recommendation': recommendation,
+                'numAnalysts': num_analysts,
+                # Otros
+                'earningsDate': earnings_date,
+            }
+        })
+
+    except Exception as e:
+        print(f"[Fundamental] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/ticker/search/<isin>')
 def api_search_ticker(isin):
     """Busca el ticker de Yahoo Finance para un ISIN"""

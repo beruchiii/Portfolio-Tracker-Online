@@ -4811,6 +4811,7 @@ def api_ohlcv(ticker):
     # Mapeo de períodos a yfinance con intervalo adaptativo
     # Para periodos cortos usamos datos horarios para tener más puntos
     periodo_map = {
+        '1d': '1d',
         '1mo': '1mo',
         '3mo': '3mo',
         '6mo': '6mo',
@@ -4819,10 +4820,11 @@ def api_ohlcv(ticker):
         '5y': '5y',
         'max': 'max'
     }
-    # Intervalo adaptativo: horario para periodos hasta 1 año, diario para más largos
-    # Yahoo Finance permite datos horarios (1h) hasta ~730 días atrás
+    # Intervalo adaptativo: minutos para 1 día, horario hasta 1 año, diario para más
+    # Yahoo Finance permite datos de 5min hasta 60 días, 1h hasta ~730 días
     # Más velas = mejor análisis técnico (SMA 200, cruces, divergencias...)
     interval_map = {
+        '1d': '5m',     # ~78 velas de 5 minutos (1 día de mercado)
         '1mo': '1h',    # ~500 velas horarias
         '3mo': '1h',    # ~1,500 velas horarias - permite SMA 200 con margen
         '6mo': '1h',    # ~3,000 velas horarias - análisis detallado

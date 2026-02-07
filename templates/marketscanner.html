@@ -161,6 +161,7 @@
 
                         <!-- Period Selector -->
                         <div class="flex items-center gap-1 bg-slate-700/50 rounded-lg p-1">
+                            <button onclick="cambiarPeriodo('1d')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="1d">1D</button>
                             <button onclick="cambiarPeriodo('1mo')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="1mo">1M</button>
                             <button onclick="cambiarPeriodo('3mo')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="3mo">3M</button>
                             <button onclick="cambiarPeriodo('6mo')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="6mo">6M</button>
@@ -239,6 +240,11 @@
                         <div id="stoch-chart" class="indicator-chart h-full"></div>
                     </div>
 
+                    <!-- ADX Chart -->
+                    <div id="adx-chart-container" class="h-24 hidden">
+                        <div id="adx-chart" class="indicator-chart h-full"></div>
+                    </div>
+
                     <!-- Volume Chart -->
                     <div id="volume-chart-container" class="h-20 hidden">
                         <div id="volume-chart" class="indicator-chart h-full"></div>
@@ -302,6 +308,10 @@
                             <label class="flex items-center gap-2 cursor-pointer group">
                                 <input type="checkbox" id="stoch-toggle" onchange="toggleIndicator('stoch')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
                                 <span class="text-sm group-hover:text-white transition">Estocástico</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" id="adx-toggle" onchange="toggleIndicator('adx')" class="w-4 h-4 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0">
+                                <span class="text-sm group-hover:text-white transition">ADX (14)</span>
                             </label>
                         </div>
 
@@ -444,6 +454,10 @@
         let stochChart = null;
         let stochKSeries = null;
         let stochDSeries = null;
+        let adxChart = null;
+        let adxSeries = null;
+        let adxDiPlusSeries = null;
+        let adxDiMinusSeries = null;
         let chartResizeObserver = null;
         let crosshairSubscriptions = []; // Para limpiar suscripciones
 
@@ -607,6 +621,9 @@
                 if (stochChart && !document.getElementById('stoch-chart-container').classList.contains('hidden')) {
                     try { chartScreenshots.push({ label: 'Estocástico', canvas: stochChart.takeScreenshot() }); } catch(e) {}
                 }
+                if (adxChart && !document.getElementById('adx-chart-container').classList.contains('hidden')) {
+                    try { chartScreenshots.push({ label: 'ADX', canvas: adxChart.takeScreenshot() }); } catch(e) {}
+                }
                 if (volumeChart && !document.getElementById('volume-chart-container').classList.contains('hidden')) {
                     try { chartScreenshots.push({ label: 'Volumen', canvas: volumeChart.takeScreenshot() }); } catch(e) {}
                 }
@@ -671,7 +688,7 @@
 
                 // 4. Descargar
                 const link = document.createElement('a');
-                const periodoLabel = { '1mo': '1M', '3mo': '3M', '6mo': '6M', '1y': '1A', '2y': '2A', '5y': '5A', 'max': 'MAX' }[currentPeriod] || currentPeriod;
+                const periodoLabel = { '1d': '1D', '1mo': '1M', '3mo': '3M', '6mo': '6M', '1y': '1A', '2y': '2A', '5y': '5A', 'max': 'MAX' }[currentPeriod] || currentPeriod;
                 link.download = `analisis_${currentTicker}_${periodoLabel}_${new Date().toISOString().slice(0,10)}.png`;
                 link.href = finalCanvas.toDataURL('image/png');
                 link.click();
@@ -694,7 +711,7 @@
             const srContent = document.getElementById('sr-levels')?.innerHTML || '';
             const strategyContent = document.getElementById('strategy-content')?.innerHTML || '';
 
-            const periodoLabel = { '1mo': '1 mes', '3mo': '3 meses', '6mo': '6 meses', '1y': '1 año', '2y': '2 años', '5y': '5 años', 'max': 'Máximo' }[currentPeriod] || currentPeriod;
+            const periodoLabel = { '1d': '1 día', '1mo': '1 mes', '3mo': '3 meses', '6mo': '6 meses', '1y': '1 año', '2y': '2 años', '5y': '5 años', 'max': 'Máximo' }[currentPeriod] || currentPeriod;
             const fecha = new Date().toLocaleDateString('es-ES', {
                 day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
             });
@@ -1082,6 +1099,11 @@
                 crearGraficoEstocastico();
             } else if (document.getElementById('stoch-toggle').checked) {
                 document.getElementById('stoch-chart-container').classList.add('hidden');
+            }
+            if (document.getElementById('adx-toggle').checked && ohlcvData.length >= 30) {
+                crearGraficoADX();
+            } else if (document.getElementById('adx-toggle').checked) {
+                document.getElementById('adx-chart-container').classList.add('hidden');
             }
         }
 
@@ -1493,6 +1515,109 @@
             return { k, d };
         }
 
+        // ATR (Average True Range) — mide la volatilidad real del activo
+        function calcularATR(highs, lows, closes, periodo = 14) {
+            const tr = new Array(closes.length).fill(null);
+            tr[0] = highs[0] - lows[0]; // primer TR = rango del primer periodo
+
+            for (let i = 1; i < closes.length; i++) {
+                const hl = highs[i] - lows[i];
+                const hc = Math.abs(highs[i] - closes[i - 1]);
+                const lc = Math.abs(lows[i] - closes[i - 1]);
+                tr[i] = Math.max(hl, hc, lc);
+            }
+
+            // ATR = media móvil exponencial (Wilder) del True Range
+            const atr = new Array(closes.length).fill(null);
+            // Primer ATR = media simple de los primeros 'periodo' TRs
+            let sum = 0;
+            for (let i = 0; i < periodo; i++) sum += tr[i];
+            atr[periodo - 1] = sum / periodo;
+
+            // Wilder smoothing: ATR[i] = (ATR[i-1] * (periodo-1) + TR[i]) / periodo
+            for (let i = periodo; i < closes.length; i++) {
+                atr[i] = (atr[i - 1] * (periodo - 1) + tr[i]) / periodo;
+            }
+
+            return atr;
+        }
+
+        // ADX (Average Directional Index) — mide la FUERZA de la tendencia (no la dirección)
+        function calcularADX(highs, lows, closes, periodo = 14) {
+            const len = closes.length;
+            const plusDM = new Array(len).fill(0);
+            const minusDM = new Array(len).fill(0);
+            const tr = new Array(len).fill(0);
+
+            // Paso 1: calcular +DM, -DM y TR
+            for (let i = 1; i < len; i++) {
+                const upMove = highs[i] - highs[i - 1];
+                const downMove = lows[i - 1] - lows[i];
+
+                plusDM[i] = (upMove > downMove && upMove > 0) ? upMove : 0;
+                minusDM[i] = (downMove > upMove && downMove > 0) ? downMove : 0;
+
+                const hl = highs[i] - lows[i];
+                const hc = Math.abs(highs[i] - closes[i - 1]);
+                const lc = Math.abs(lows[i] - closes[i - 1]);
+                tr[i] = Math.max(hl, hc, lc);
+            }
+
+            // Paso 2: suavizar con Wilder (periodo)
+            const smoothTR = new Array(len).fill(null);
+            const smoothPlusDM = new Array(len).fill(null);
+            const smoothMinusDM = new Array(len).fill(null);
+
+            let sumTR = 0, sumPDM = 0, sumMDM = 0;
+            for (let i = 1; i <= periodo; i++) {
+                sumTR += tr[i];
+                sumPDM += plusDM[i];
+                sumMDM += minusDM[i];
+            }
+            smoothTR[periodo] = sumTR;
+            smoothPlusDM[periodo] = sumPDM;
+            smoothMinusDM[periodo] = sumMDM;
+
+            for (let i = periodo + 1; i < len; i++) {
+                smoothTR[i] = smoothTR[i - 1] - smoothTR[i - 1] / periodo + tr[i];
+                smoothPlusDM[i] = smoothPlusDM[i - 1] - smoothPlusDM[i - 1] / periodo + plusDM[i];
+                smoothMinusDM[i] = smoothMinusDM[i - 1] - smoothMinusDM[i - 1] / periodo + minusDM[i];
+            }
+
+            // Paso 3: calcular +DI y -DI
+            const plusDI = new Array(len).fill(null);
+            const minusDI = new Array(len).fill(null);
+            const dx = new Array(len).fill(null);
+
+            for (let i = periodo; i < len; i++) {
+                if (smoothTR[i] > 0) {
+                    plusDI[i] = (smoothPlusDM[i] / smoothTR[i]) * 100;
+                    minusDI[i] = (smoothMinusDM[i] / smoothTR[i]) * 100;
+                } else {
+                    plusDI[i] = 0;
+                    minusDI[i] = 0;
+                }
+                const diSum = plusDI[i] + minusDI[i];
+                dx[i] = diSum > 0 ? (Math.abs(plusDI[i] - minusDI[i]) / diSum) * 100 : 0;
+            }
+
+            // Paso 4: ADX = media suavizada de DX
+            const adx = new Array(len).fill(null);
+            let sumDX = 0;
+            const adxStart = periodo * 2;
+            for (let i = periodo; i < adxStart && i < len; i++) {
+                sumDX += (dx[i] || 0);
+            }
+            if (adxStart < len) {
+                adx[adxStart - 1] = sumDX / periodo;
+                for (let i = adxStart; i < len; i++) {
+                    adx[i] = (adx[i - 1] * (periodo - 1) + (dx[i] || 0)) / periodo;
+                }
+            }
+
+            return { adx, plusDI, minusDI };
+        }
+
         // ============================================
         // TOGGLES DE INDICADORES
         // ============================================
@@ -1533,6 +1658,9 @@
                     break;
                 case 'stoch':
                     toggleStochasticIndicator(enabled);
+                    break;
+                case 'adx':
+                    toggleADXIndicator(enabled);
                     break;
             }
         }
@@ -1877,9 +2005,128 @@
             });
         }
 
+        function toggleADXIndicator(enabled) {
+            const container = document.getElementById('adx-chart-container');
+
+            // ADX necesita al menos 30 datos (14 periodo × 2 + margen)
+            if (enabled && ohlcvData.length >= 30) {
+                crearGraficoADX();
+            } else {
+                container.classList.add('hidden');
+                if (adxChart) {
+                    adxChart.remove();
+                    adxChart = null;
+                    adxSeries = null;
+                    adxDiPlusSeries = null;
+                    adxDiMinusSeries = null;
+                }
+                if (enabled) {
+                    const checkbox = document.getElementById('adx-toggle');
+                    if (checkbox) {
+                        checkbox.checked = false;
+                        checkbox.parentElement.title = `Necesita 30 datos (hay ${ohlcvData.length})`;
+                        checkbox.parentElement.style.opacity = '0.4';
+                    }
+                }
+            }
+        }
+
+        function crearGraficoADX() {
+            const container = document.getElementById('adx-chart');
+            container.innerHTML = '';
+            document.getElementById('adx-chart-container').classList.remove('hidden');
+
+            adxChart = LightweightCharts.createChart(container, {
+                height: 96,
+                layout: {
+                    background: { type: 'solid', color: 'transparent' },
+                    textColor: '#94a3b8',
+                },
+                grid: {
+                    vertLines: { visible: false },
+                    horzLines: { color: '#1e293b' },
+                },
+                timeScale: { visible: false },
+                rightPriceScale: {
+                    borderColor: '#334155',
+                    scaleMargins: { top: 0.05, bottom: 0.05 },
+                },
+                crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+            });
+
+            const highs = ohlcvData.map(d => d.high);
+            const lows = ohlcvData.map(d => d.low);
+            const closes = ohlcvData.map(d => d.close);
+            const { adx, plusDI, minusDI } = calcularADX(highs, lows, closes, 14);
+
+            // Línea ADX — blanca gruesa (fuerza de la tendencia)
+            adxSeries = adxChart.addLineSeries({
+                color: '#e2e8f0',
+                lineWidth: 2,
+                priceLineVisible: false,
+                lastValueVisible: true,
+                title: 'ADX',
+            });
+
+            // +DI — verde (presión compradora)
+            adxDiPlusSeries = adxChart.addLineSeries({
+                color: '#22c55e',
+                lineWidth: 1,
+                priceLineVisible: false,
+                lastValueVisible: false,
+                title: '+DI',
+            });
+
+            // -DI — rojo (presión vendedora)
+            adxDiMinusSeries = adxChart.addLineSeries({
+                color: '#ef4444',
+                lineWidth: 1,
+                priceLineVisible: false,
+                lastValueVisible: false,
+                title: '-DI',
+            });
+
+            adxSeries.setData(ohlcvData.map((candle, i) => ({
+                time: candle.time,
+                value: adx[i],
+            })).filter(item => item.value !== null));
+
+            adxDiPlusSeries.setData(ohlcvData.map((candle, i) => ({
+                time: candle.time,
+                value: plusDI[i],
+            })).filter(item => item.value !== null));
+
+            adxDiMinusSeries.setData(ohlcvData.map((candle, i) => ({
+                time: candle.time,
+                value: minusDI[i],
+            })).filter(item => item.value !== null));
+
+            // Líneas de referencia: 20 (sin tendencia), 40 (tendencia fuerte)
+            adxSeries.createPriceLine({ price: 40, color: '#f59e0b80', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: false });
+            adxSeries.createPriceLine({ price: 20, color: '#64748b60', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, axisLabelVisible: false });
+
+            adxChart.timeScale().fitContent();
+
+            // Crosshair sync: Main → ADX
+            const adxCrosshairHandler = param => {
+                if (param.time && adxChart) {
+                    try { adxChart.setCrosshairPosition(0, param.time, adxSeries); } catch(e) {}
+                }
+            };
+            mainChart.subscribeCrosshairMove(adxCrosshairHandler);
+            crosshairSubscriptions.push(adxCrosshairHandler);
+
+            // Reverse: ADX → Main
+            adxChart.subscribeCrosshairMove(param => {
+                if (param.time && mainChart) {
+                    try { mainChart.setCrosshairPosition(0, param.time, mainSeries); } catch(e) {}
+                }
+            });
+        }
+
         function aplicarIndicadores() {
             // Primero restaurar opacidad de TODOS los checkboxes (por si cambiamos de timeframe)
-            ['sma20', 'sma50', 'sma200', 'ema12', 'ema26', 'bollinger', 'vwap', 'stoch'].forEach(ind => {
+            ['sma20', 'sma50', 'sma200', 'ema12', 'ema26', 'bollinger', 'vwap', 'stoch', 'adx'].forEach(ind => {
                 const checkbox = document.getElementById(`${ind}-toggle`);
                 if (checkbox) {
                     checkbox.parentElement.style.opacity = '1';
@@ -2329,6 +2576,106 @@
                 }
             }
 
+            // --- 5.7 ATR (VOLATILIDAD) ---
+            let lastATR = null, atrPct = null;
+            if (numDatos >= 20) {
+                const atrArr = calcularATR(highs, lows, closes, 14);
+                const atrValid = atrArr.filter(v => v !== null);
+                lastATR = atrValid.length > 0 ? atrValid[atrValid.length - 1] : null;
+
+                if (lastATR !== null) {
+                    atrPct = (lastATR / lastPrice * 100);
+                    let atrNivel = '', atrColor = '', atrIcon = '', atrExplicacion = '';
+
+                    if (atrPct >= 5) {
+                        atrNivel = 'MUY ALTA';
+                        atrColor = 'text-red-400';
+                        atrIcon = '&#x1F525;';
+                        atrExplicacion = 'Volatilidad extrema. El precio se mueve mucho cada día. Alto riesgo pero también alto potencial. Usar stops amplios.';
+                    } else if (atrPct >= 3) {
+                        atrNivel = 'ALTA';
+                        atrColor = 'text-orange-400';
+                        atrIcon = '&#x26A1;';
+                        atrExplicacion = 'Volatilidad elevada. Movimientos diarios significativos. Ideal para trading activo, cuidado con stops muy ajustados.';
+                    } else if (atrPct >= 1.5) {
+                        atrNivel = 'MODERADA';
+                        atrColor = 'text-cyan-400';
+                        atrIcon = '&#x1F4CA;';
+                        atrExplicacion = 'Volatilidad normal. Movimientos predecibles. Bueno para la mayoría de estrategias.';
+                    } else {
+                        atrNivel = 'BAJA';
+                        atrColor = 'text-green-400';
+                        atrIcon = '&#x1F7E2;';
+                        atrExplicacion = 'Volatilidad baja. El precio se mueve poco. Buen momento para acumular posición. Posible movimiento fuerte próximamente.';
+                    }
+
+                    html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span>${atrIcon}</span>
+                            <span class="font-semibold text-slate-200">ATR — Volatilidad (14)</span>
+                            <span class="${atrColor} font-bold ml-auto text-xs">${atrPct.toFixed(2)}%</span>
+                        </div>
+                        <p class="text-xs"><span class="${atrColor} font-bold">${atrNivel}</span></p>
+                        <p class="text-xs text-slate-500">${atrExplicacion}</p>
+                        <p class="text-xs text-slate-400 mt-1">ATR: ${formatPrice(lastATR)} | Rango diario medio: ±${(atrPct / 2).toFixed(2)}%</p>
+                    </div>`;
+                }
+            }
+
+            // --- 5.8 ADX (FUERZA DE TENDENCIA) ---
+            let lastADX = null, lastPlusDI = null, lastMinusDI = null;
+            if (numDatos >= 30) {
+                const adxResult = calcularADX(highs, lows, closes, 14);
+                const adxValid = adxResult.adx.filter(v => v !== null);
+                const diPlusValid = adxResult.plusDI.filter(v => v !== null);
+                const diMinusValid = adxResult.minusDI.filter(v => v !== null);
+                lastADX = adxValid.length > 0 ? adxValid[adxValid.length - 1] : null;
+                lastPlusDI = diPlusValid.length > 0 ? diPlusValid[diPlusValid.length - 1] : null;
+                lastMinusDI = diMinusValid.length > 0 ? diMinusValid[diMinusValid.length - 1] : null;
+
+                if (lastADX !== null) {
+                    let adxNivel = '', adxColor = '', adxIcon = '', adxExplicacion = '';
+                    let diDireccion = '';
+
+                    if (lastADX >= 50) {
+                        adxNivel = 'TENDENCIA MUY FUERTE';
+                        adxColor = 'text-purple-400';
+                        adxIcon = '&#x1F4AA;';
+                        adxExplicacion = 'Tendencia extremadamente fuerte. El precio tiene una dirección clara y decidida.';
+                    } else if (lastADX >= 25) {
+                        adxNivel = 'TENDENCIA FUERTE';
+                        adxColor = 'text-cyan-400';
+                        adxIcon = '&#x1F4C8;';
+                        adxExplicacion = 'Tendencia bien definida. Buen momento para seguir la dirección del mercado.';
+                    } else {
+                        adxNivel = 'SIN TENDENCIA';
+                        adxColor = 'text-yellow-400';
+                        adxIcon = '&#x21C4;';
+                        adxExplicacion = 'No hay tendencia clara. El mercado está lateral o indeciso. Mejor esperar a que se defina una dirección.';
+                    }
+
+                    // Dirección: +DI vs -DI
+                    if (lastPlusDI !== null && lastMinusDI !== null) {
+                        if (lastPlusDI > lastMinusDI) {
+                            diDireccion = `<span class="text-green-400">Compradores dominan</span> (+DI: ${lastPlusDI.toFixed(1)} > -DI: ${lastMinusDI.toFixed(1)})`;
+                        } else {
+                            diDireccion = `<span class="text-red-400">Vendedores dominan</span> (-DI: ${lastMinusDI.toFixed(1)} > +DI: ${lastPlusDI.toFixed(1)})`;
+                        }
+                    }
+
+                    html += `<div class="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span>${adxIcon}</span>
+                            <span class="font-semibold text-slate-200">ADX — Fuerza (14)</span>
+                            <span class="${adxColor} font-bold ml-auto text-xs">${lastADX.toFixed(1)}</span>
+                        </div>
+                        <p class="text-xs"><span class="${adxColor} font-bold">${adxNivel}</span></p>
+                        <p class="text-xs text-slate-500">${adxExplicacion}</p>
+                        ${diDireccion ? `<p class="text-xs text-slate-400 mt-1">${diDireccion}</p>` : ''}
+                    </div>`;
+                }
+            }
+
             // --- 6. RESUMEN GENERAL + NARRATIVA INTELIGENTE ---
             let bullSignals = 0, bearSignals = 0;
             if (tendencia === 'alcista') bullSignals += 2; else if (tendencia === 'bajista') bearSignals += 2;
@@ -2370,10 +2717,16 @@
                 }
             }
 
+            // ADX: confirma la dirección de la tendencia si es fuerte
+            if (lastADX !== null && lastADX >= 25) {
+                if (lastPlusDI > lastMinusDI) bullSignals++;
+                else if (lastMinusDI > lastPlusDI) bearSignals++;
+            }
+
             let resumen, resColor, resBg, resIcon;
-            if (bullSignals >= 4 && bearSignals <= 1) {
+            if (bullSignals >= 5 && bearSignals <= 1) {
                 resumen = 'SEÑAL ALCISTA FUERTE'; resColor = 'text-green-400'; resBg = 'bg-green-500/10 border-green-500/30'; resIcon = '&#x2705;';
-            } else if (bearSignals >= 4 && bullSignals <= 1) {
+            } else if (bearSignals >= 5 && bullSignals <= 1) {
                 resumen = 'SEÑAL BAJISTA FUERTE'; resColor = 'text-red-400'; resBg = 'bg-red-500/10 border-red-500/30'; resIcon = '&#x1F6D1;';
             } else if (bullSignals > bearSignals) {
                 resumen = 'LIGERAMENTE ALCISTA'; resColor = 'text-green-300'; resBg = 'bg-green-500/5 border-green-500/20'; resIcon = '&#x1F4C8;';
@@ -2389,7 +2742,7 @@
             const cambio = ((lastPrice - firstCloseVal) / firstCloseVal * 100).toFixed(1);
             const cambioAbs = Math.abs(cambio);
             const subeBaja = parseFloat(cambio) >= 0 ? 'subió' : 'cayó';
-            const periodoTexto = currentPeriod === '1mo' ? 'en el último mes' : currentPeriod === '3mo' ? 'en los últimos 3 meses' : currentPeriod === '6mo' ? 'en 6 meses' : currentPeriod === '1y' ? 'en el último año' : currentPeriod === '2y' ? 'en 2 años' : currentPeriod === '5y' ? 'en 5 años' : 'en el período';
+            const periodoTexto = currentPeriod === '1d' ? 'en el último día' : currentPeriod === '1mo' ? 'en el último mes' : currentPeriod === '3mo' ? 'en los últimos 3 meses' : currentPeriod === '6mo' ? 'en 6 meses' : currentPeriod === '1y' ? 'en el último año' : currentPeriod === '2y' ? 'en 2 años' : currentPeriod === '5y' ? 'en 5 años' : 'en el período';
 
             let narrativa = `<span class="font-semibold text-slate-200">${ticker}</span> ${subeBaja} un <span class="${parseFloat(cambio) >= 0 ? 'text-green-400' : 'text-red-400'} font-semibold">${cambioAbs}%</span> ${periodoTexto}. `;
 
@@ -2470,10 +2823,36 @@
                 }
             }
 
+            // ATR (volatilidad)
+            if (atrPct !== null) {
+                if (atrPct >= 5) {
+                    narrativa += `La volatilidad es <span class="text-red-400 font-semibold">muy alta</span> (ATR ${atrPct.toFixed(1)}%), lo que implica movimientos bruscos y mayor riesgo. `;
+                } else if (atrPct >= 3) {
+                    narrativa += `La volatilidad es <span class="text-orange-400">elevada</span> (ATR ${atrPct.toFixed(1)}%). `;
+                } else if (atrPct < 1.5) {
+                    narrativa += `La volatilidad es <span class="text-green-400">baja</span> (ATR ${atrPct.toFixed(1)}%), lo que podría preceder un movimiento importante. `;
+                }
+            }
+
+            // ADX (fuerza de tendencia)
+            if (lastADX !== null) {
+                if (lastADX >= 50) {
+                    const adxDir = lastPlusDI > lastMinusDI ? 'alcista' : 'bajista';
+                    const adxDirColor = adxDir === 'alcista' ? 'text-green-400' : 'text-red-400';
+                    narrativa += `El ADX en <span class="text-purple-400 font-semibold">${lastADX.toFixed(0)}</span> confirma una <span class="${adxDirColor} font-semibold">tendencia ${adxDir} muy fuerte</span>. `;
+                } else if (lastADX >= 25) {
+                    const adxDir = lastPlusDI > lastMinusDI ? 'alcista' : 'bajista';
+                    const adxDirColor = adxDir === 'alcista' ? 'text-green-400' : 'text-red-400';
+                    narrativa += `El ADX en ${lastADX.toFixed(0)} indica <span class="${adxDirColor}">tendencia ${adxDir} definida</span>. `;
+                } else {
+                    narrativa += `El ADX en ${lastADX.toFixed(0)} sugiere <span class="text-yellow-400">ausencia de tendencia clara</span>. `;
+                }
+            }
+
             // Conclusión
-            if (bullSignals >= 4 && bearSignals <= 1) {
+            if (bullSignals >= 5 && bearSignals <= 1) {
                 narrativa += `<span class="text-green-400 font-semibold">Las señales apuntan claramente al alza.</span>`;
-            } else if (bearSignals >= 4 && bullSignals <= 1) {
+            } else if (bearSignals >= 5 && bullSignals <= 1) {
                 narrativa += `<span class="text-red-400 font-semibold">Las señales apuntan claramente a la baja.</span>`;
             } else if (hayContradiccion) {
                 narrativa += `<span class="text-yellow-400">Precaución: hay señales contradictorias.</span> Vigilar confirmación en próximas ${esIntradiario ? 'horas' : 'sesiones'}.`;
@@ -2488,7 +2867,329 @@
                 <p class="text-xs text-slate-400 leading-relaxed">${narrativa}</p>
             </div>`;
 
+            // ====================================================
+            // 7. ANÁLISIS PREDICTIVO EXTENSO — Diagnóstico completo
+            // ====================================================
+            html += generarAnalisisPredictivo({
+                ticker, lastPrice, closes, highs, lows,
+                tendencia, tipoCruce, diasCruce,
+                macdAlcista, hayContradiccion,
+                lastRsiValue, bbPos,
+                lastVwap, lastK, lastD,
+                lastATR, atrPct,
+                lastADX, lastPlusDI, lastMinusDI,
+                bullSignals, bearSignals, resumen,
+                periodoTexto, esIntradiario,
+                lastSma20, lastSma50, lastSma200,
+                stochSignal
+            });
+
             container.innerHTML = html;
+        }
+
+        // ============================================
+        // ANÁLISIS PREDICTIVO EXTENSO
+        // ============================================
+        function generarAnalisisPredictivo(params) {
+            const {
+                ticker, lastPrice, closes, highs, lows,
+                tendencia, tipoCruce, diasCruce,
+                macdAlcista, hayContradiccion,
+                lastRsiValue, bbPos,
+                lastVwap, lastK, lastD,
+                lastATR, atrPct,
+                lastADX, lastPlusDI, lastMinusDI,
+                bullSignals, bearSignals, resumen,
+                periodoTexto, esIntradiario,
+                lastSma20, lastSma50, lastSma200,
+                stochSignal
+            } = params;
+
+            const totalSeñales = bullSignals + bearSignals;
+            const pctAlcista = totalSeñales > 0 ? Math.round(bullSignals / totalSeñales * 100) : 50;
+            const pctBajista = 100 - pctAlcista;
+
+            // --- Diagnóstico por categorías ---
+            let diagnosticoTendencia = '';
+            let diagnosticoMomentum = '';
+            let diagnosticoVolatilidad = '';
+            let diagnosticoFuerza = '';
+            let pronostico = '';
+            let riesgos = [];
+            let oportunidades = [];
+            let horizonte = esIntradiario ? 'próximas horas/días' : 'próximas semanas';
+
+            // 1. TENDENCIA
+            if (tendencia === 'alcista') {
+                diagnosticoTendencia = `La estructura de precios es claramente <span class="text-green-400 font-semibold">alcista</span>. El precio se mantiene por encima de las medias móviles clave`;
+                if (lastSma50 && lastSma200 && lastSma50 > lastSma200) {
+                    diagnosticoTendencia += ` y la SMA 50 está por encima de la SMA 200 (estructura saludable)`;
+                }
+                diagnosticoTendencia += '.';
+                if (tipoCruce === 'dorado') {
+                    diagnosticoTendencia += ` El <span class="text-green-400">cruce dorado</span> reciente refuerza la tendencia alcista. Históricamente este patrón anticipa subidas sostenidas.`;
+                    oportunidades.push('Cruce dorado activo — señal históricamente alcista');
+                }
+                oportunidades.push('Tendencia alcista confirmada por medias móviles');
+            } else if (tendencia === 'bajista') {
+                diagnosticoTendencia = `La estructura de precios es <span class="text-red-400 font-semibold">bajista</span>. El precio cotiza por debajo de las medias móviles`;
+                if (lastSma50 && lastSma200 && lastSma50 < lastSma200) {
+                    diagnosticoTendencia += ` y la SMA 50 está por debajo de la SMA 200 (debilidad estructural)`;
+                }
+                diagnosticoTendencia += '.';
+                if (tipoCruce === 'mortal') {
+                    diagnosticoTendencia += ` El <span class="text-red-400">cruce mortal</span> indica presión vendedora sostenida. La recuperación podría tardar.`;
+                    riesgos.push('Cruce mortal activo — señal de debilidad prolongada');
+                }
+                riesgos.push('Tendencia bajista confirmada — riesgo de más caídas');
+            } else {
+                diagnosticoTendencia = `El activo se encuentra en fase <span class="text-yellow-400 font-semibold">lateral/indecisa</span>. No hay una dirección clara definida por las medias móviles. Este tipo de mercado suele preceder un movimiento importante en una u otra dirección.`;
+                riesgos.push('Sin tendencia clara — difícil anticipar dirección');
+                oportunidades.push('Lateralidad suele preceder movimientos explosivos');
+            }
+
+            // 2. MOMENTUM (RSI + Estocástico + MACD)
+            let momentumParts = [];
+            if (lastRsiValue !== null) {
+                if (lastRsiValue <= 30) {
+                    momentumParts.push(`El RSI en <span class="text-green-400">${lastRsiValue.toFixed(1)}</span> indica <span class="text-green-400">sobreventa extrema</span>. Históricamente, estos niveles generan rebotes significativos`);
+                    oportunidades.push(`RSI sobrevendido (${lastRsiValue.toFixed(0)}) — probable rebote`);
+                } else if (lastRsiValue <= 40) {
+                    momentumParts.push(`El RSI en ${lastRsiValue.toFixed(1)} está en zona baja, indicando debilidad pero no extrema`);
+                } else if (lastRsiValue >= 70) {
+                    momentumParts.push(`El RSI en <span class="text-red-400">${lastRsiValue.toFixed(1)}</span> indica <span class="text-red-400">sobrecompra</span>. El precio podría necesitar una corrección para recuperar equilibrio`);
+                    riesgos.push(`RSI sobrecomprado (${lastRsiValue.toFixed(0)}) — riesgo de corrección`);
+                } else if (lastRsiValue >= 60) {
+                    momentumParts.push(`El RSI en ${lastRsiValue.toFixed(1)} muestra momentum positivo sin llegar a extremos`);
+                } else {
+                    momentumParts.push(`El RSI en ${lastRsiValue.toFixed(1)} se mantiene en zona neutral`);
+                }
+            }
+
+            if (lastK !== null) {
+                if (lastK <= 20 && lastD !== null && lastK > lastD) {
+                    momentumParts.push(`El Estocástico está en <span class="text-green-400">sobreventa con cruce alcista</span> — señal potente de giro al alza`);
+                    oportunidades.push('Estocástico: cruce alcista en sobreventa');
+                } else if (lastK >= 80 && lastD !== null && lastK < lastD) {
+                    momentumParts.push(`El Estocástico está en <span class="text-red-400">sobrecompra con cruce bajista</span> — señal de posible giro a la baja`);
+                    riesgos.push('Estocástico: cruce bajista en sobrecompra');
+                } else if (lastK <= 20) {
+                    momentumParts.push(`El Estocástico en sobreventa (${lastK.toFixed(0)}) sugiere agotamiento vendedor`);
+                } else if (lastK >= 80) {
+                    momentumParts.push(`El Estocástico en sobrecompra (${lastK.toFixed(0)}) sugiere agotamiento comprador`);
+                }
+            }
+
+            if (macdAlcista) {
+                momentumParts.push(`El MACD está en <span class="text-green-400">señal alcista</span> (línea MACD por encima de la señal)`);
+            } else {
+                momentumParts.push(`El MACD está en <span class="text-red-400">señal bajista</span> (línea MACD por debajo de la señal)`);
+            }
+
+            diagnosticoMomentum = momentumParts.join('. ') + '.';
+
+            // 3. VOLATILIDAD (ATR + Bollinger)
+            if (atrPct !== null) {
+                if (atrPct >= 5) {
+                    diagnosticoVolatilidad = `La volatilidad es <span class="text-red-400 font-semibold">extremadamente alta</span> (ATR ${atrPct.toFixed(2)}%). Cada ${esIntradiario ? 'hora' : 'sesión'} el precio se mueve en promedio un ±${(atrPct/2).toFixed(2)}%. Esto significa movimientos bruscos en ambas direcciones. Se recomienda <span class="text-yellow-400">reducir tamaño de posición</span> y usar stops más amplios.`;
+                    riesgos.push(`Volatilidad extrema (${atrPct.toFixed(1)}%) — movimientos impredecibles`);
+                } else if (atrPct >= 3) {
+                    diagnosticoVolatilidad = `La volatilidad es <span class="text-orange-400 font-semibold">elevada</span> (ATR ${atrPct.toFixed(2)}%). Hay actividad significativa en el precio. Bueno para operaciones a corto plazo pero exige gestión de riesgo estricta.`;
+                } else if (atrPct >= 1.5) {
+                    diagnosticoVolatilidad = `La volatilidad es <span class="text-cyan-400">moderada</span> (ATR ${atrPct.toFixed(2)}%). El activo se mueve de forma predecible, lo que facilita establecer objetivos y stops realistas.`;
+                    oportunidades.push('Volatilidad moderada — stops y targets predecibles');
+                } else {
+                    diagnosticoVolatilidad = `La volatilidad es <span class="text-green-400">baja</span> (ATR ${atrPct.toFixed(2)}%). El precio apenas se mueve. Esto suele indicar una <span class="text-yellow-400">fase de acumulación</span> que puede preceder un movimiento explosivo. Históricamente, períodos de baja volatilidad terminan con rupturas significativas.`;
+                    oportunidades.push('Volatilidad muy baja — posible ruptura importante próximamente');
+                }
+
+                if (bbPos === 'lower') {
+                    diagnosticoVolatilidad += ` El precio en la <span class="text-green-400">banda inferior de Bollinger</span> refuerza la posibilidad de rebote.`;
+                } else if (bbPos === 'upper') {
+                    diagnosticoVolatilidad += ` El precio en la <span class="text-red-400">banda superior de Bollinger</span> indica posible sobreextensión.`;
+                }
+            } else {
+                diagnosticoVolatilidad = 'No hay datos suficientes para evaluar la volatilidad en este período.';
+            }
+
+            // 4. FUERZA DE TENDENCIA (ADX)
+            if (lastADX !== null) {
+                const dirADX = (lastPlusDI > lastMinusDI) ? 'compradora' : 'vendedora';
+                const dirColor = (lastPlusDI > lastMinusDI) ? 'text-green-400' : 'text-red-400';
+
+                if (lastADX >= 50) {
+                    diagnosticoFuerza = `El ADX en <span class="text-purple-400 font-semibold">${lastADX.toFixed(0)}</span> indica una tendencia <span class="text-purple-400">extremadamente fuerte</span>. La presión ${dirADX} es dominante y probablemente continuará. No es momento de ir en contra de la tendencia. ${lastPlusDI > lastMinusDI ? '<span class="text-green-400">Los compradores tienen el control total.</span>' : '<span class="text-red-400">Los vendedores tienen el control total.</span>'}`;
+                    if (lastPlusDI > lastMinusDI) oportunidades.push(`ADX ${lastADX.toFixed(0)}: tendencia alcista muy fuerte — seguir la dirección`);
+                    else riesgos.push(`ADX ${lastADX.toFixed(0)}: tendencia bajista muy fuerte — no ir en contra`);
+                } else if (lastADX >= 25) {
+                    diagnosticoFuerza = `El ADX en <span class="text-cyan-400">${lastADX.toFixed(0)}</span> confirma una <span class="text-cyan-400">tendencia definida</span>. La fuerza <span class="${dirColor}">${dirADX}</span> está presente. Las estrategias de seguimiento de tendencia son las más adecuadas en este contexto.`;
+                } else {
+                    diagnosticoFuerza = `El ADX en <span class="text-yellow-400">${lastADX.toFixed(0)}</span> indica <span class="text-yellow-400">ausencia de tendencia fuerte</span>. El mercado está indeciso o en rango lateral. Las estrategias de rango (comprar en soportes, vender en resistencias) son más apropiadas que las de tendencia.`;
+                    riesgos.push('ADX bajo — sin tendencia definida, movimientos erráticos posibles');
+                }
+            } else {
+                diagnosticoFuerza = 'No hay datos suficientes para evaluar la fuerza de la tendencia.';
+            }
+
+            // VWAP
+            let diagnosticoVWAP = '';
+            if (lastVwap) {
+                const vwapDiff = ((lastPrice - lastVwap) / lastVwap * 100).toFixed(2);
+                if (lastPrice > lastVwap) {
+                    diagnosticoVWAP = `El precio cotiza un <span class="text-green-400">${vwapDiff}%</span> por encima del VWAP, lo que indica que los compradores recientes están en ganancias. Esto genera un entorno favorable ya que no hay presión por vender. El VWAP actúa como soporte dinámico.`;
+                } else {
+                    diagnosticoVWAP = `El precio cotiza un <span class="text-red-400">${Math.abs(parseFloat(vwapDiff)).toFixed(2)}%</span> por debajo del VWAP, lo que indica que los compradores recientes están en pérdidas. Esto puede generar presión vendedora adicional. El VWAP actúa como resistencia.`;
+                }
+            }
+
+            // --- PRONÓSTICO INTEGRADO ---
+            const score = bullSignals - bearSignals;
+            const momentum = lastRsiValue ? (lastRsiValue > 50 ? 'positivo' : 'negativo') : 'neutral';
+            const volatilidad = atrPct ? (atrPct >= 3 ? 'alta' : atrPct >= 1.5 ? 'moderada' : 'baja') : 'desconocida';
+            const fuerzaTendencia = lastADX ? (lastADX >= 25 ? 'fuerte' : 'débil') : 'sin datos';
+
+            if (score >= 4) {
+                pronostico = `<span class="text-green-400 font-semibold">Escenario más probable: continuación alcista.</span> La confluencia de ${bullSignals} señales alcistas frente a solo ${bearSignals} bajistas crea un panorama claramente favorable. ${fuerzaTendencia === 'fuerte' ? 'La tendencia fuerte (ADX) respalda esta proyección.' : ''} ${volatilidad === 'baja' ? 'La baja volatilidad podría preceder una aceleración al alza.' : ''} Se espera que el precio busque los niveles de resistencia próximos en las ${horizonte}.`;
+            } else if (score >= 2) {
+                pronostico = `<span class="text-green-300 font-semibold">Escenario probable: sesgo alcista moderado.</span> Hay más señales positivas que negativas (${bullSignals} vs ${bearSignals}), pero no es una señal aplastante. ${hayContradiccion ? 'Existen algunas contradicciones entre indicadores que invitan a la cautela.' : 'Los indicadores tienden a confirmar la dirección alcista.'} Lo más probable es un avance gradual hacia resistencias, con posibles retrocesos puntuales.`;
+            } else if (score <= -4) {
+                pronostico = `<span class="text-red-400 font-semibold">Escenario más probable: continuación bajista.</span> La presión vendedora es dominante con ${bearSignals} señales bajistas. ${fuerzaTendencia === 'fuerte' ? 'El ADX confirma que esta tendencia bajista tiene fuerza.' : ''} Se espera que el precio busque los niveles de soporte próximos. No es momento de comprar; mejor esperar estabilización.`;
+            } else if (score <= -2) {
+                pronostico = `<span class="text-red-300 font-semibold">Escenario probable: presión bajista moderada.</span> Las señales bajistas (${bearSignals}) superan a las alcistas (${bullSignals}). ${lastRsiValue && lastRsiValue <= 35 ? 'Sin embargo, el RSI bajo podría generar rebotes técnicos puntuales.' : ''} Se recomienda precaución y esperar confirmación antes de tomar posiciones.`;
+            } else {
+                pronostico = `<span class="text-yellow-400 font-semibold">Escenario: indefinido/lateral.</span> Las fuerzas alcistas y bajistas están prácticamente equilibradas (${bullSignals} vs ${bearSignals}). ${volatilidad === 'baja' ? 'La baja volatilidad sugiere que se está acumulando energía para un movimiento importante.' : ''} Es el momento de mayor incertidumbre. Se recomienda esperar a que se resuelva esta indecisión antes de actuar.`;
+            }
+
+            // --- Componer HTML ---
+            let predictHTML = `
+            <div class="p-3 bg-slate-800/80 rounded-lg border border-indigo-500/30 mt-1">
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-lg">&#x1F52E;</span>
+                    <span class="font-bold text-indigo-300 text-sm">Análisis Predictivo Completo</span>
+                    <span class="text-xs text-slate-500 ml-auto">${ticker} · ${periodoTexto}</span>
+                </div>
+
+                <div class="space-y-3 text-xs leading-relaxed">
+                    <!-- Barra visual de sesgo -->
+                    <div class="mb-3">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-green-400">Alcista ${pctAlcista}%</span>
+                            <span class="text-red-400">Bajista ${pctBajista}%</span>
+                        </div>
+                        <div class="w-full h-2.5 bg-slate-700 rounded-full overflow-hidden flex">
+                            <div class="h-full bg-gradient-to-r from-green-500 to-green-400 transition-all" style="width:${pctAlcista}%"></div>
+                            <div class="h-full bg-gradient-to-r from-red-400 to-red-500 transition-all" style="width:${pctBajista}%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tendencia -->
+                    <div>
+                        <p class="font-semibold text-slate-300 mb-1">&#x1F4C8; Tendencia</p>
+                        <p class="text-slate-400">${diagnosticoTendencia}</p>
+                    </div>
+
+                    <!-- Momentum -->
+                    <div>
+                        <p class="font-semibold text-slate-300 mb-1">&#x26A1; Momentum</p>
+                        <p class="text-slate-400">${diagnosticoMomentum}</p>
+                    </div>
+
+                    <!-- Volatilidad -->
+                    <div>
+                        <p class="font-semibold text-slate-300 mb-1">&#x1F525; Volatilidad</p>
+                        <p class="text-slate-400">${diagnosticoVolatilidad}</p>
+                    </div>
+
+                    <!-- Fuerza -->
+                    <div>
+                        <p class="font-semibold text-slate-300 mb-1">&#x1F4AA; Fuerza de la Tendencia</p>
+                        <p class="text-slate-400">${diagnosticoFuerza}</p>
+                    </div>
+
+                    ${diagnosticoVWAP ? `<div>
+                        <p class="font-semibold text-slate-300 mb-1">&#x1F4B0; Flujo de Capital (VWAP)</p>
+                        <p class="text-slate-400">${diagnosticoVWAP}</p>
+                    </div>` : ''}
+
+                    <!-- Separador -->
+                    <div class="border-t border-indigo-500/20 pt-3">
+                        <p class="font-semibold text-indigo-300 mb-1">&#x1F52E; Pronóstico</p>
+                        <p class="text-slate-300">${pronostico}</p>
+                    </div>`;
+
+            // Oportunidades y riesgos
+            if (oportunidades.length > 0 || riesgos.length > 0) {
+                predictHTML += `<div class="grid grid-cols-2 gap-2 pt-1">`;
+
+                if (oportunidades.length > 0) {
+                    predictHTML += `<div class="p-2 bg-green-500/5 rounded border border-green-500/20">
+                        <p class="font-semibold text-green-400 text-xs mb-1">&#x2705; Oportunidades</p>
+                        <ul class="space-y-0.5">`;
+                    oportunidades.forEach(o => {
+                        predictHTML += `<li class="text-slate-400" style="font-size:10px">• ${o}</li>`;
+                    });
+                    predictHTML += `</ul></div>`;
+                }
+
+                if (riesgos.length > 0) {
+                    predictHTML += `<div class="p-2 bg-red-500/5 rounded border border-red-500/20">
+                        <p class="font-semibold text-red-400 text-xs mb-1">&#x26A0;&#xFE0F; Riesgos</p>
+                        <ul class="space-y-0.5">`;
+                    riesgos.forEach(r => {
+                        predictHTML += `<li class="text-slate-400" style="font-size:10px">• ${r}</li>`;
+                    });
+                    predictHTML += `</ul></div>`;
+                }
+
+                predictHTML += `</div>`;
+            }
+
+            // Qué vigilar
+            let vigilar = [];
+            if (lastSma50 && Math.abs(lastPrice - lastSma50) / lastPrice < 0.02) {
+                vigilar.push('Precio muy cerca de SMA 50 — posible rebote o ruptura');
+            }
+            if (lastSma200 && Math.abs(lastPrice - lastSma200) / lastPrice < 0.02) {
+                vigilar.push('Precio muy cerca de SMA 200 — nivel clave de soporte/resistencia');
+            }
+            if (lastRsiValue && lastRsiValue >= 65 && lastRsiValue < 70) {
+                vigilar.push('RSI acercándose a sobrecompra — vigilar rechazo en 70');
+            }
+            if (lastRsiValue && lastRsiValue <= 35 && lastRsiValue > 30) {
+                vigilar.push('RSI acercándose a sobreventa — vigilar rebote en 30');
+            }
+            if (lastADX && lastADX >= 20 && lastADX < 25) {
+                vigilar.push('ADX cerca de 25 — si lo supera, la tendencia gana fuerza');
+            }
+            if (atrPct && atrPct < 1.5) {
+                vigilar.push('Volatilidad comprimida — posible ruptura explosiva próximamente');
+            }
+            if (lastK !== null && lastK >= 75 && lastK < 80) {
+                vigilar.push('Estocástico acercándose a sobrecompra');
+            }
+            if (lastK !== null && lastK <= 25 && lastK > 20) {
+                vigilar.push('Estocástico acercándose a sobreventa');
+            }
+
+            if (vigilar.length > 0) {
+                predictHTML += `<div class="pt-1">
+                    <p class="font-semibold text-amber-400 text-xs mb-1">&#x1F440; Qué vigilar</p>
+                    <ul class="space-y-0.5">`;
+                vigilar.forEach(v => {
+                    predictHTML += `<li class="text-slate-400" style="font-size:10px">• ${v}</li>`;
+                });
+                predictHTML += `</ul></div>`;
+            }
+
+            // Disclaimer
+            predictHTML += `
+                    <div class="pt-2 border-t border-slate-700">
+                        <p class="text-slate-600" style="font-size:9px">&#x26A0;&#xFE0F; Este análisis es generado automáticamente a partir de indicadores técnicos. No constituye asesoramiento financiero. Los mercados son impredecibles y el rendimiento pasado no garantiza resultados futuros. Consulta con un profesional antes de invertir.</p>
+                    </div>
+                </div>
+            </div>`;
+
+            return predictHTML;
         }
 
         // ============================================
@@ -2656,6 +3357,24 @@
             const stratK = stochRes.k.filter(v => v !== null);
             const lastStochK = stratK.length > 0 ? stratK[stratK.length - 1] : null;
 
+            // ATR — volatilidad (para Stop Loss dinámico)
+            const stratATR = numDatos >= 20 ? calcularATR(highs, lows, closes, 14) : [];
+            const stratATRValid = stratATR.filter(v => v !== null);
+            const lastStratATR = stratATRValid.length > 0 ? stratATRValid[stratATRValid.length - 1] : null;
+            const stratATRPct = lastStratATR ? (lastStratATR / lastPrice * 100) : null;
+
+            // ADX — fuerza de tendencia (para confirmar dirección)
+            let stratADX = null, stratDiPlus = null, stratDiMinus = null;
+            if (numDatos >= 30) {
+                const adxRes = calcularADX(highs, lows, closes, 14);
+                const adxV = adxRes.adx.filter(v => v !== null);
+                const diPV = adxRes.plusDI.filter(v => v !== null);
+                const diMV = adxRes.minusDI.filter(v => v !== null);
+                stratADX = adxV.length > 0 ? adxV[adxV.length - 1] : null;
+                stratDiPlus = diPV.length > 0 ? diPV[diPV.length - 1] : null;
+                stratDiMinus = diMV.length > 0 ? diMV[diMV.length - 1] : null;
+            }
+
             // Pivot points y niveles de S/R para targets
             const recentHigh = Math.max(...highs.slice(-20));
             const recentLow = Math.min(...lows.slice(-20));
@@ -2683,10 +3402,17 @@
             const tpMinimo = lastPrice * 1.05; // al menos 5% de ganancia
             const tpDefault = tpFromResistance && tpFromResistance > tpMinimo ? tpFromResistance : tpMinimo;
 
-            // Seleccionar Stop Loss inteligente: primer soporte por debajo, máximo -8%
+            // Seleccionar Stop Loss inteligente: combina soporte + ATR, máximo -8%
             const slFromSupport = soportesAbajo.length > 0 ? soportesAbajo[0] : null;
             const slMaximo = lastPrice * 0.92; // máximo -8%
-            const slDefault = slFromSupport && slFromSupport > slMaximo ? slFromSupport : slMaximo;
+            // ATR-based SL: precio - 2×ATR (se adapta a la volatilidad del activo)
+            const slFromATR = lastStratATR ? lastPrice - (lastStratATR * 2) : null;
+            // Elegir el mejor SL: el más alto entre soporte y ATR (más protector), pero nunca peor que -8%
+            let slCandidate = slFromSupport || slMaximo;
+            if (slFromATR && slFromATR > slCandidate && slFromATR < lastPrice) {
+                slCandidate = slFromATR; // ATR da un nivel más cercano = menos riesgo
+            }
+            const slDefault = Math.max(slCandidate, slMaximo);
 
             // Nivel de entrada en soporte (para órdenes limit)
             const entryFromSupport = soportesAbajo.length > 0 ? soportesAbajo[0] : lastPrice * 0.97;
@@ -2721,6 +3447,11 @@
             if (lastStochK !== null) {
                 if (lastStochK <= 20) score += 1;
                 else if (lastStochK >= 80) score -= 1;
+            }
+            // ADX: confirma dirección si hay tendencia fuerte
+            if (stratADX !== null && stratADX >= 25) {
+                if (stratDiPlus > stratDiMinus) score += 1;
+                else if (stratDiMinus > stratDiPlus) score -= 1;
             }
 
             // ---- Lógica de estrategia ----

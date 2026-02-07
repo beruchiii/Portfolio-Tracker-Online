@@ -721,6 +721,8 @@
             const assetChange = document.getElementById('asset-change')?.textContent || '';
 
             const analysisContent = document.getElementById('analysis-content')?.innerHTML || '';
+            const fundamentalContent = document.getElementById('fundamental-content')?.innerHTML || '';
+            const fundamentalVisible = !document.getElementById('fundamental-section')?.classList.contains('hidden');
             const srContent = document.getElementById('sr-levels')?.innerHTML || '';
             const strategyContent = document.getElementById('strategy-content')?.innerHTML || '';
 
@@ -728,6 +730,17 @@
             const fecha = new Date().toLocaleDateString('es-ES', {
                 day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
             });
+
+            // Estadísticas del sidebar
+            const h52 = document.getElementById('stat-high52')?.textContent || '-';
+            const l52 = document.getElementById('stat-low52')?.textContent || '-';
+            const avg50 = document.getElementById('stat-avg50')?.textContent || '-';
+            const avg200 = document.getElementById('stat-avg200')?.textContent || '-';
+            const vol = document.getElementById('stat-volume')?.textContent || '-';
+            const mcap = document.getElementById('stat-marketcap')?.textContent || '-';
+            const per = document.getElementById('stat-per')?.textContent || '-';
+            const div = document.getElementById('stat-dividend')?.textContent || '-';
+            const statsVisible = !document.getElementById('stats-section')?.classList.contains('hidden');
 
             return `
                 <div style="border-bottom:2px solid #3b82f6;padding-bottom:16px;margin-bottom:16px;">
@@ -743,8 +756,51 @@
                     </div>
                 </div>
 
+                ${statsVisible ? `
+                <div style="font-size:16px;font-weight:bold;color:#94a3b8;margin-bottom:8px;">📋 Estadísticas Clave</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px;">
+                    <div style="background:#1e293b;padding:8px 10px;border-radius:8px;border:1px solid #334155;">
+                        <div style="font-size:10px;color:#64748b;">Máx 52 sem</div>
+                        <div style="font-size:13px;font-weight:600;color:#4ade80;">${h52}</div>
+                    </div>
+                    <div style="background:#1e293b;padding:8px 10px;border-radius:8px;border:1px solid #334155;">
+                        <div style="font-size:10px;color:#64748b;">Mín 52 sem</div>
+                        <div style="font-size:13px;font-weight:600;color:#f87171;">${l52}</div>
+                    </div>
+                    <div style="background:#1e293b;padding:8px 10px;border-radius:8px;border:1px solid #334155;">
+                        <div style="font-size:10px;color:#64748b;">SMA 50</div>
+                        <div style="font-size:13px;font-weight:600;color:#e2e8f0;">${avg50}</div>
+                    </div>
+                    <div style="background:#1e293b;padding:8px 10px;border-radius:8px;border:1px solid #334155;">
+                        <div style="font-size:10px;color:#64748b;">SMA 200</div>
+                        <div style="font-size:13px;font-weight:600;color:#e2e8f0;">${avg200}</div>
+                    </div>
+                    <div style="background:#1e293b;padding:8px 10px;border-radius:8px;border:1px solid #334155;">
+                        <div style="font-size:10px;color:#64748b;">Volumen</div>
+                        <div style="font-size:13px;font-weight:600;color:#e2e8f0;">${vol}</div>
+                    </div>
+                    <div style="background:#1e293b;padding:8px 10px;border-radius:8px;border:1px solid #334155;">
+                        <div style="font-size:10px;color:#64748b;">Cap. Mercado</div>
+                        <div style="font-size:13px;font-weight:600;color:#e2e8f0;">${mcap}</div>
+                    </div>
+                    <div style="background:#1e293b;padding:8px 10px;border-radius:8px;border:1px solid #334155;">
+                        <div style="font-size:10px;color:#64748b;">PER</div>
+                        <div style="font-size:13px;font-weight:600;color:#e2e8f0;">${per}</div>
+                    </div>
+                    <div style="background:#1e293b;padding:8px 10px;border-radius:8px;border:1px solid #334155;">
+                        <div style="font-size:10px;color:#64748b;">Dividendo</div>
+                        <div style="font-size:13px;font-weight:600;color:#e2e8f0;">${div}</div>
+                    </div>
+                </div>
+                ` : ''}
+
                 <div style="font-size:16px;font-weight:bold;color:#94a3b8;margin-bottom:8px;">📊 Análisis Técnico</div>
                 <div style="display:grid;gap:8px;margin-bottom:16px;">${analysisContent}</div>
+
+                ${fundamentalVisible && fundamentalContent ? `
+                <div style="font-size:16px;font-weight:bold;color:#94a3b8;margin-bottom:8px;">🏢 Análisis Fundamental</div>
+                <div style="display:grid;gap:8px;margin-bottom:16px;">${fundamentalContent}</div>
+                ` : ''}
 
                 <div style="font-size:16px;font-weight:bold;color:#94a3b8;margin-bottom:8px;">📐 Soportes y Resistencias</div>
                 <div style="display:grid;gap:4px;margin-bottom:16px;">${srContent}</div>

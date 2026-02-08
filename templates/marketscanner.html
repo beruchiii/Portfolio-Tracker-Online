@@ -87,6 +87,26 @@
         .animate-fade-in {
             animation: fadeIn 0.3s ease;
         }
+        /* Screener table */
+        .screener-th {
+            font-weight: 600;
+            color: #94a3b8;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+            transition: color 0.15s;
+        }
+        .screener-th:hover {
+            color: #e2e8f0;
+        }
+        .screener-th::after {
+            content: ' ↕';
+            opacity: 0.3;
+            font-size: 9px;
+        }
+        .screener-th:hover::after {
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen overflow-hidden">
@@ -150,6 +170,14 @@
                 <div id="asset-info" class="bg-slate-800/50 border-b border-slate-700 px-4 py-3 flex-shrink-0 hidden">
                     <div class="flex items-center justify-between flex-wrap gap-4">
                         <div class="flex items-center gap-4">
+                            <button id="btn-back-screener" onclick="volverAlScreener()"
+                                class="hidden px-3 py-2 text-xs font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition flex items-center gap-1.5"
+                                title="Volver al ranking de dividendos">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                                </svg>
+                                Screener
+                            </button>
                             <div>
                                 <h2 id="asset-name" class="text-lg font-bold">-</h2>
                                 <span id="asset-ticker" class="text-sm text-slate-400">-</span>
@@ -201,8 +229,8 @@
                     </div>
 
                     <!-- Empty State -->
-                    <div id="empty-state" class="flex-1 flex items-center justify-center">
-                        <div class="text-center max-w-lg px-4">
+                    <div id="empty-state" class="flex-1 overflow-y-auto">
+                        <div class="text-center max-w-lg mx-auto px-4 pt-8">
                             <div class="text-6xl mb-4">📈</div>
                             <h3 class="text-xl font-bold mb-2">Market Scanner</h3>
                             <p class="text-slate-400 mb-6">Analiza cualquier activo con gráficos avanzados e indicadores técnicos profesionales</p>
@@ -218,6 +246,75 @@
 
                             <!-- Recent & Top Searches -->
                             <div id="empty-state-history" class="text-left"></div>
+                        </div>
+
+                        <!-- ================================== -->
+                        <!-- DIVIDEND SCREENER TABLE            -->
+                        <!-- ================================== -->
+                        <div id="dividend-screener-section" class="max-w-6xl mx-auto px-4 pb-8 mt-6">
+                            <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-5">
+                                <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                    <h3 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                                        <span class="text-2xl">🏆</span>
+                                        Top 50 Acciones con Mejores Dividendos
+                                    </h3>
+                                    <div class="flex items-center gap-3">
+                                        <span id="screener-last-updated" class="text-xs text-slate-500"></span>
+                                        <button onclick="cargarScreenerDividendos(true)" id="screener-refresh-btn"
+                                            class="text-xs px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg transition flex items-center gap-1.5"
+                                            title="Forzar actualización de datos">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                            </svg>
+                                            Actualizar
+                                        </button>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mb-4">Ranking basado en: rentabilidad por dividendo, sostenibilidad del payout, márgenes, ROE, deuda, valoración y consenso de analistas. Haz clic en cualquier fila para ver su análisis técnico completo.</p>
+
+                                <!-- Loading state -->
+                                <div id="screener-loading" class="hidden text-center py-10">
+                                    <div class="loader mx-auto mb-3"></div>
+                                    <p class="text-slate-400 text-sm">Analizando empresas con dividendos...</p>
+                                    <p id="screener-progress" class="text-slate-500 text-xs mt-2"></p>
+                                </div>
+
+                                <!-- Error state -->
+                                <div id="screener-error" class="hidden text-center py-8">
+                                    <div class="text-4xl mb-2">⚠️</div>
+                                    <p class="text-red-400 text-sm mb-3">Error al cargar el screener de dividendos</p>
+                                    <button onclick="cargarScreenerDividendos()" class="text-xs px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition">
+                                        Reintentar
+                                    </button>
+                                </div>
+
+                                <!-- Table -->
+                                <div id="screener-table-container" class="hidden">
+                                    <div class="overflow-x-auto rounded-lg border border-slate-700/50" style="max-height:65vh; overflow-y:auto;">
+                                        <table class="w-full text-xs" id="screener-table">
+                                            <thead class="bg-slate-800 sticky top-0 z-10">
+                                                <tr>
+                                                    <th class="screener-th px-3 py-2.5 text-left" onclick="ordenarScreener('rank')">#</th>
+                                                    <th class="screener-th px-3 py-2.5 text-left" onclick="ordenarScreener('ticker')">Ticker</th>
+                                                    <th class="screener-th px-3 py-2.5 text-left hidden sm:table-cell" onclick="ordenarScreener('name')">Nombre</th>
+                                                    <th class="screener-th px-3 py-2.5 text-left hidden lg:table-cell" onclick="ordenarScreener('sector')">Sector</th>
+                                                    <th class="screener-th px-3 py-2.5 text-right" onclick="ordenarScreener('price')">Precio</th>
+                                                    <th class="screener-th px-3 py-2.5 text-right" onclick="ordenarScreener('dividendYield')">Div.%</th>
+                                                    <th class="screener-th px-3 py-2.5 text-right hidden sm:table-cell" onclick="ordenarScreener('payoutRatio')">Payout%</th>
+                                                    <th class="screener-th px-3 py-2.5 text-right hidden md:table-cell" onclick="ordenarScreener('trailingPE')">PER</th>
+                                                    <th class="screener-th px-3 py-2.5 text-right hidden md:table-cell" onclick="ordenarScreener('profitMargin')">Margen%</th>
+                                                    <th class="screener-th px-3 py-2.5 text-right hidden lg:table-cell" onclick="ordenarScreener('roe')">ROE%</th>
+                                                    <th class="screener-th px-3 py-2.5 text-right" onclick="ordenarScreener('score')">Score</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="screener-tbody">
+                                                <!-- Filled dynamically -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -571,6 +668,13 @@
         let currentCurrency = 'EUR';
         let ohlcvData = [];
 
+        // Screener de dividendos
+        let screenerData = null;
+        let screenerSortField = 'score';
+        let screenerSortAsc = false;
+        let screenerCameFromScreener = false;
+        let screenerPollInterval = null;
+
         // ============================================
         // HISTORIAL DE BÚSQUEDAS
         // ============================================
@@ -918,11 +1022,239 @@
         }
 
         // ============================================
+        // DIVIDEND SCREENER
+        // ============================================
+        async function cargarScreenerDividendos(forceRefresh = false) {
+            const loading = document.getElementById('screener-loading');
+            const tableContainer = document.getElementById('screener-table-container');
+            const errorDiv = document.getElementById('screener-error');
+            const progressEl = document.getElementById('screener-progress');
+
+            loading.classList.remove('hidden');
+            tableContainer.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+
+            try {
+                const url = forceRefresh
+                    ? '/api/screener/dividends?refresh=1'
+                    : '/api/screener/dividends';
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Error ${response.status}`);
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    // Datos listos (desde caché o ya calculados)
+                    screenerData = result.data;
+                    renderizarTablaScreener(screenerData);
+                    tableContainer.classList.remove('hidden');
+                    loading.classList.add('hidden');
+                    actualizarTimestampScreener(result.last_updated, result.cached);
+                    if (screenerPollInterval) {
+                        clearInterval(screenerPollInterval);
+                        screenerPollInterval = null;
+                    }
+                } else if (result.running) {
+                    // Background refresh en marcha — poll status
+                    progressEl.textContent = `Analizando ${result.progress || 0} de ${result.total || '~95'} empresas...`;
+                    iniciarPollingScreener();
+                } else {
+                    throw new Error(result.error || 'Error desconocido');
+                }
+            } catch (error) {
+                console.error('Error cargando screener:', error);
+                loading.classList.add('hidden');
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        function iniciarPollingScreener() {
+            if (screenerPollInterval) return; // Ya hay uno corriendo
+            const progressEl = document.getElementById('screener-progress');
+            const loading = document.getElementById('screener-loading');
+            const tableContainer = document.getElementById('screener-table-container');
+
+            screenerPollInterval = setInterval(async () => {
+                try {
+                    const res = await fetch('/api/screener/dividends/status');
+                    const data = await res.json();
+
+                    if (data.success && data.data) {
+                        // Terminó: mostrar resultados
+                        clearInterval(screenerPollInterval);
+                        screenerPollInterval = null;
+                        screenerData = data.data;
+                        renderizarTablaScreener(screenerData);
+                        tableContainer.classList.remove('hidden');
+                        loading.classList.add('hidden');
+                        actualizarTimestampScreener(data.last_updated, false);
+                    } else if (data.running) {
+                        progressEl.textContent = `Analizando ${data.progress} de ${data.total} empresas...`;
+                    }
+                } catch (e) {
+                    console.error('Error polling screener:', e);
+                }
+            }, 3000); // Poll cada 3 segundos
+        }
+
+        function actualizarTimestampScreener(timestamp, cached) {
+            const el = document.getElementById('screener-last-updated');
+            if (!el || !timestamp) return;
+            const fecha = new Date(timestamp);
+            el.textContent = `${fecha.toLocaleString('es-ES', {
+                day: '2-digit', month: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            })}${cached ? ' (caché)' : ' ✓'}`;
+        }
+
+        function renderizarTablaScreener(data) {
+            const tbody = document.getElementById('screener-tbody');
+            if (!tbody) return;
+
+            let html = '';
+            data.forEach((stock, idx) => {
+                const scoreColor = stock.score >= 75 ? 'text-green-400'
+                                 : stock.score >= 55 ? 'text-cyan-400'
+                                 : stock.score >= 40 ? 'text-yellow-400'
+                                 : 'text-red-400';
+                const scoreBg = stock.score >= 75 ? 'bg-green-500/20'
+                              : stock.score >= 55 ? 'bg-cyan-500/20'
+                              : stock.score >= 40 ? 'bg-yellow-500/20'
+                              : 'bg-red-500/20';
+                const divColor = stock.dividendYield >= 5 ? 'text-green-400'
+                               : stock.dividendYield >= 3 ? 'text-cyan-400'
+                               : stock.dividendYield >= 2 ? 'text-yellow-400'
+                               : 'text-slate-300';
+                const peColor = !stock.trailingPE ? 'text-slate-500'
+                              : stock.trailingPE < 15 ? 'text-green-400'
+                              : stock.trailingPE < 25 ? 'text-cyan-400'
+                              : stock.trailingPE < 40 ? 'text-yellow-400'
+                              : 'text-red-400';
+                const marginColor = stock.profitMargin == null ? 'text-slate-500'
+                                  : stock.profitMargin > 15 ? 'text-green-400'
+                                  : stock.profitMargin > 5 ? 'text-cyan-400'
+                                  : stock.profitMargin > 0 ? 'text-yellow-400'
+                                  : 'text-red-400';
+                const roeColor = stock.roe == null ? 'text-slate-500'
+                               : stock.roe > 20 ? 'text-green-400'
+                               : stock.roe > 10 ? 'text-cyan-400'
+                               : stock.roe > 0 ? 'text-yellow-400'
+                               : 'text-red-400';
+                const payoutColor = stock.payoutRatio == null ? 'text-slate-500'
+                                  : stock.payoutRatio <= 60 ? 'text-green-400'
+                                  : stock.payoutRatio <= 75 ? 'text-cyan-400'
+                                  : stock.payoutRatio <= 90 ? 'text-yellow-400'
+                                  : 'text-red-400';
+
+                html += `
+                <tr onclick="seleccionarDesdeScreener('${stock.ticker}')"
+                    class="border-b border-slate-700/50 hover:bg-blue-500/10 cursor-pointer transition group">
+                    <td class="px-3 py-2.5 text-slate-500 font-mono">${stock.rank || idx + 1}</td>
+                    <td class="px-3 py-2.5">
+                        <span class="text-blue-400 font-bold group-hover:text-blue-300">${stock.ticker}</span>
+                    </td>
+                    <td class="px-3 py-2.5 text-slate-300 truncate max-w-[180px] hidden sm:table-cell" title="${stock.name}">
+                        ${stock.name || '-'}
+                    </td>
+                    <td class="px-3 py-2.5 hidden lg:table-cell">
+                        <span class="text-xs text-slate-400 bg-slate-700/50 px-1.5 py-0.5 rounded">${stock.sector || '-'}</span>
+                    </td>
+                    <td class="px-3 py-2.5 text-right text-slate-200 font-mono">
+                        ${stock.price ? stock.price.toFixed(2) : '-'}
+                        <span class="text-slate-600 text-[10px]">${stock.currency || ''}</span>
+                    </td>
+                    <td class="px-3 py-2.5 text-right font-bold ${divColor}">
+                        ${stock.dividendYield != null ? stock.dividendYield.toFixed(2) + '%' : '-'}
+                    </td>
+                    <td class="px-3 py-2.5 text-right ${payoutColor} hidden sm:table-cell">
+                        ${stock.payoutRatio != null ? stock.payoutRatio.toFixed(0) + '%' : '-'}
+                    </td>
+                    <td class="px-3 py-2.5 text-right ${peColor} hidden md:table-cell">
+                        ${stock.trailingPE != null ? stock.trailingPE.toFixed(1) : '-'}
+                    </td>
+                    <td class="px-3 py-2.5 text-right ${marginColor} hidden md:table-cell">
+                        ${stock.profitMargin != null ? stock.profitMargin.toFixed(1) + '%' : '-'}
+                    </td>
+                    <td class="px-3 py-2.5 text-right ${roeColor} hidden lg:table-cell">
+                        ${stock.roe != null ? stock.roe.toFixed(1) + '%' : '-'}
+                    </td>
+                    <td class="px-3 py-2.5 text-right">
+                        <span class="font-bold ${scoreColor} ${scoreBg} px-2 py-0.5 rounded text-xs inline-block min-w-[36px] text-center">
+                            ${stock.score}
+                        </span>
+                    </td>
+                </tr>`;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        function ordenarScreener(field) {
+            if (!screenerData) return;
+            if (screenerSortField === field) {
+                screenerSortAsc = !screenerSortAsc;
+            } else {
+                screenerSortField = field;
+                screenerSortAsc = ['ticker', 'name', 'sector'].includes(field);
+            }
+            screenerData.sort((a, b) => {
+                let valA = a[field];
+                let valB = b[field];
+                if (valA == null) valA = screenerSortAsc ? Infinity : -Infinity;
+                if (valB == null) valB = screenerSortAsc ? Infinity : -Infinity;
+                if (typeof valA === 'string') {
+                    return screenerSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+                return screenerSortAsc ? valA - valB : valB - valA;
+            });
+            // Re-rank
+            screenerData.forEach((item, i) => item.rank = i + 1);
+            renderizarTablaScreener(screenerData);
+        }
+
+        function seleccionarDesdeScreener(ticker) {
+            screenerCameFromScreener = true;
+            document.getElementById('btn-back-screener')?.classList.remove('hidden');
+            document.getElementById('btn-back-screener')?.classList.add('flex');
+            buscarRapido(ticker);
+        }
+
+        function volverAlScreener() {
+            screenerCameFromScreener = false;
+            const backBtn = document.getElementById('btn-back-screener');
+            if (backBtn) { backBtn.classList.add('hidden'); backBtn.classList.remove('flex'); }
+
+            // Ocultar todo del scanner
+            document.getElementById('asset-info')?.classList.add('hidden');
+            document.getElementById('main-chart-container')?.classList.add('hidden');
+            document.getElementById('rsi-chart-container')?.classList.add('hidden');
+            document.getElementById('macd-chart-container')?.classList.add('hidden');
+            document.getElementById('stoch-chart-container')?.classList.add('hidden');
+            document.getElementById('adx-chart-container')?.classList.add('hidden');
+            document.getElementById('volume-chart-container')?.classList.add('hidden');
+            document.getElementById('bottom-analysis-panel')?.classList.add('hidden');
+            document.getElementById('btn-export')?.classList.add('hidden');
+
+            // Mostrar empty state con el screener
+            document.getElementById('empty-state')?.classList.remove('hidden');
+
+            // Limpiar URL
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.delete('ticker');
+            window.history.pushState({}, '', newUrl);
+
+            // Scroll arriba
+            document.getElementById('main-scroll-container')?.scrollTo(0, 0);
+        }
+
+        // ============================================
         // INICIALIZACIÓN
         // ============================================
         document.addEventListener('DOMContentLoaded', () => {
             // Mostrar historial en el empty state
             actualizarHistorialEmptyState();
+
+            // Cargar screener de dividendos automáticamente
+            cargarScreenerDividendos();
 
             // Check URL params for ticker
             const params = new URLSearchParams(window.location.search);

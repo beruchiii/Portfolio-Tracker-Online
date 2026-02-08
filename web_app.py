@@ -153,9 +153,161 @@ PORTFOLIO_FILE = DATA_DIR / "portfolio.json"
 CACHE_FILE = DATA_DIR / "price_cache.json"
 ALERTS_FILE = DATA_DIR / "alerts.json"
 FAVORITES_FILE = DATA_DIR / "favorites.json"
+SCREENER_CACHE_FILE = DATA_DIR / "screener_dividends_cache.json"
 
 # Duración del caché en minutos
 CACHE_DURATION_MINUTES = 15
+SCREENER_CACHE_DURATION_MINUTES = 60  # 1 hora para el screener de dividendos
+
+# =============================================================================
+# DIVIDEND SCREENER - Universo de tickers
+# =============================================================================
+DIVIDEND_UNIVERSE = [
+    # Dividend Aristocrats (S&P 500, 25+ años de dividendos crecientes)
+    'JNJ', 'PG', 'KO', 'PEP', 'MMM', 'ABT', 'ABBV', 'MCD', 'CL', 'EMR',
+    'XOM', 'CVX', 'IBM', 'TGT', 'WMT', 'LOW', 'SHW', 'ADP', 'AFL',
+    'ED', 'GD', 'ITW', 'CAH', 'BDX', 'SYY', 'CINF', 'DOV', 'PPG',
+    'CLX', 'HRL', 'NUE', 'SPGI', 'BEN', 'ATO', 'TROW',
+    # High-Yield populares
+    'T', 'VZ', 'MO', 'PM', 'BTI', 'BMY', 'GILD',
+    'EPD', 'ENB', 'KMI', 'WMB',
+    # REITs (altos dividendos)
+    'O', 'VICI', 'NNN', 'STAG', 'WPC', 'SPG', 'AMT', 'DLR',
+    'AVB', 'EQR', 'PSA', 'ARE',
+    # Utilities (estables)
+    'NEE', 'DUK', 'SO', 'D', 'AEP', 'EXC', 'SRE', 'WEC', 'ES',
+    # Financieras
+    'JPM', 'BAC', 'WFC', 'USB', 'PNC', 'BLK', 'SCHW', 'MET', 'PRU',
+    # Consumer Staples
+    'KHC', 'GIS', 'K', 'SJM', 'HSY', 'CAG',
+    # Healthcare
+    'PFE', 'MRK', 'AMGN', 'MDT', 'UNH',
+    # Internacionales (ADRs)
+    'UL', 'HSBC', 'NVS', 'GSK', 'BP', 'SHEL', 'RIO', 'BHP', 'TTE', 'SAN',
+]
+
+# Estado global del refresh del screener
+screener_refresh_status = {'running': False, 'progress': 0, 'total': 0}
+
+
+def calcular_score_dividendo(info):
+    """
+    Calcula un score compuesto de calidad de dividendo (0-100).
+    6 dimensiones: Yield, Payout, Rentabilidad, Salud, Valoración, Analistas.
+    """
+    score = 0
+
+    # 1. DIVIDEND YIELD (0-25 pts)
+    raw_yield = info.get('dividendYield') or 0
+    if 0 < raw_yield < 1:
+        div_yield = raw_yield * 100
+    elif 1 <= raw_yield <= 25:
+        div_yield = raw_yield
+    else:
+        div_yield = 0
+
+    if div_yield >= 5:
+        score += 25
+    elif div_yield >= 4:
+        score += 22
+    elif div_yield >= 3:
+        score += 18
+    elif div_yield >= 2:
+        score += 14
+    elif div_yield >= 1:
+        score += 8
+    elif div_yield > 0:
+        score += 3
+
+    # 2. PAYOUT RATIO HEALTH (0-20 pts)
+    payout = info.get('payoutRatio')
+    if payout is not None:
+        payout_pct = payout * 100 if payout < 5 else payout
+        if 20 <= payout_pct <= 60:
+            score += 20
+        elif 60 < payout_pct <= 75:
+            score += 15
+        elif 75 < payout_pct <= 90:
+            score += 8
+        elif payout_pct > 90:
+            score += 2
+        elif 0 < payout_pct < 20:
+            score += 12
+    else:
+        score += 5
+
+    # 3. RENTABILIDAD (0-15 pts)
+    pm = info.get('profitMargins')
+    roe = info.get('returnOnEquity')
+    if pm is not None:
+        if pm > 0.20:
+            score += 8
+        elif pm > 0.10:
+            score += 6
+        elif pm > 0.05:
+            score += 4
+        elif pm > 0:
+            score += 2
+    if roe is not None:
+        if roe > 0.20:
+            score += 7
+        elif roe > 0.15:
+            score += 5
+        elif roe > 0.10:
+            score += 3
+        elif roe > 0:
+            score += 1
+
+    # 4. SALUD FINANCIERA (0-15 pts)
+    dte = info.get('debtToEquity')
+    cr = info.get('currentRatio')
+    fcf = info.get('freeCashflow')
+    if dte is not None:
+        if dte < 50:
+            score += 6
+        elif dte < 100:
+            score += 4
+        elif dte < 150:
+            score += 2
+    else:
+        score += 2
+    if cr is not None:
+        if cr > 2.0:
+            score += 4
+        elif cr > 1.5:
+            score += 3
+        elif cr > 1.0:
+            score += 2
+    else:
+        score += 1
+    if fcf is not None and fcf > 0:
+        score += 5
+    elif fcf is None:
+        score += 2
+
+    # 5. VALORACIÓN (0-15 pts)
+    pe = info.get('trailingPE')
+    if pe is not None and pe > 0:
+        if pe < 12:
+            score += 15
+        elif pe < 18:
+            score += 12
+        elif pe < 25:
+            score += 8
+        elif pe < 35:
+            score += 4
+    else:
+        score += 5
+
+    # 6. ANALISTAS (0-10 pts)
+    rec = info.get('recommendationKey', '')
+    rec_map = {
+        'strong_buy': 10, 'buy': 8, 'hold': 5,
+        'underperform': 3, 'sell': 2, 'strong_sell': 0,
+    }
+    score += rec_map.get(rec, 4)
+
+    return min(100, max(0, score))
 
 
 # =============================================================================
@@ -5122,6 +5274,171 @@ def api_fundamental(ticker):
     except Exception as e:
         print(f"[Fundamental] Error: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+
+# =============================================================================
+# DIVIDEND SCREENER
+# =============================================================================
+
+def _refresh_screener_cache():
+    """Ejecuta el refresh del screener en background."""
+    import yfinance as yf
+    from datetime import datetime
+
+    global screener_refresh_status
+    screener_refresh_status = {'running': True, 'progress': 0, 'total': len(DIVIDEND_UNIVERSE)}
+
+    results = []
+    for i, ticker_symbol in enumerate(DIVIDEND_UNIVERSE):
+        screener_refresh_status['progress'] = i + 1
+        try:
+            stock = yf.Ticker(ticker_symbol)
+            info = stock.info
+
+            # Skip si no tiene dividendo
+            raw_div = info.get('dividendYield') or 0
+            if raw_div <= 0:
+                continue
+
+            # Normalizar dividendYield
+            if 0 < raw_div < 1:
+                div_yield = round(raw_div * 100, 2)
+            elif 1 <= raw_div <= 25:
+                div_yield = round(raw_div, 2)
+            else:
+                continue
+
+            if div_yield > 20:
+                continue
+
+            score = calcular_score_dividendo(info)
+
+            # Normalizar payout
+            payout = info.get('payoutRatio')
+            payout_pct = None
+            if payout is not None:
+                payout_pct = round(payout * 100, 1) if payout < 5 else round(payout, 1)
+
+            results.append({
+                'ticker': ticker_symbol,
+                'name': info.get('shortName') or info.get('longName') or ticker_symbol,
+                'sector': info.get('sector') or '-',
+                'price': round(info.get('currentPrice') or info.get('regularMarketPrice') or 0, 2),
+                'currency': info.get('currency', 'USD'),
+                'dividendYield': div_yield,
+                'trailingPE': round(info.get('trailingPE'), 2) if info.get('trailingPE') else None,
+                'profitMargin': round(info.get('profitMargins') * 100, 1) if info.get('profitMargins') else None,
+                'roe': round(info.get('returnOnEquity') * 100, 1) if info.get('returnOnEquity') else None,
+                'debtToEquity': round(info.get('debtToEquity'), 0) if info.get('debtToEquity') else None,
+                'payoutRatio': payout_pct,
+                'marketCap': info.get('marketCap'),
+                'recommendation': info.get('recommendationKey'),
+                'score': score
+            })
+            print(f"  [Screener] {i+1}/{len(DIVIDEND_UNIVERSE)} - {ticker_symbol}: score={score}, div={div_yield}%")
+
+        except Exception as e:
+            print(f"  [Screener] Error {ticker_symbol}: {e}")
+            continue
+
+    # Ordenar por score, top 50
+    results.sort(key=lambda x: x['score'], reverse=True)
+    top_50 = results[:50]
+    for i, item in enumerate(top_50):
+        item['rank'] = i + 1
+
+    # Guardar caché
+    try:
+        DATA_DIR.mkdir(exist_ok=True)
+        cache_data = {
+            'timestamp': datetime.now().isoformat(),
+            'results': top_50
+        }
+        with open(SCREENER_CACHE_FILE, 'w') as f:
+            json.dump(cache_data, f, indent=2)
+        print(f"  [Screener] Cache guardada: {len(top_50)} resultados")
+    except Exception as e:
+        print(f"  [Screener] Error guardando cache: {e}")
+
+    screener_refresh_status = {'running': False, 'progress': 0, 'total': 0}
+    return top_50
+
+
+@app.route('/api/screener/dividends')
+def api_screener_dividends():
+    """Top 50 Dividend Stocks Screener. Cached 1 hora."""
+    from datetime import datetime, timedelta
+    import threading
+
+    force_refresh = request.args.get('refresh') == '1'
+
+    # Comprobar caché
+    if not force_refresh:
+        try:
+            if SCREENER_CACHE_FILE.exists():
+                with open(SCREENER_CACHE_FILE, 'r') as f:
+                    cached = json.load(f)
+                cached_time = datetime.fromisoformat(cached['timestamp'])
+                if (datetime.now() - cached_time) < timedelta(minutes=SCREENER_CACHE_DURATION_MINUTES):
+                    return jsonify({
+                        'success': True,
+                        'data': cached['results'],
+                        'cached': True,
+                        'last_updated': cached['timestamp']
+                    })
+        except Exception as e:
+            print(f"[Screener] Error leyendo cache: {e}")
+
+    # Si ya hay un refresh en marcha, devolver status
+    if screener_refresh_status['running']:
+        return jsonify({
+            'success': False,
+            'running': True,
+            'progress': screener_refresh_status['progress'],
+            'total': screener_refresh_status['total'],
+            'error': 'Refresh en progreso'
+        })
+
+    # Lanzar refresh en background
+    print(f"[Screener] Iniciando scan de {len(DIVIDEND_UNIVERSE)} tickers...")
+    thread = threading.Thread(target=_refresh_screener_cache, daemon=True)
+    thread.start()
+
+    return jsonify({
+        'success': False,
+        'running': True,
+        'progress': 0,
+        'total': len(DIVIDEND_UNIVERSE),
+        'error': 'Scan iniciado, consulta el progreso'
+    })
+
+
+@app.route('/api/screener/dividends/status')
+def api_screener_status():
+    """Estado del refresh del screener."""
+    from datetime import datetime, timedelta
+
+    # Si terminó y hay caché, devolver resultados
+    if not screener_refresh_status['running']:
+        try:
+            if SCREENER_CACHE_FILE.exists():
+                with open(SCREENER_CACHE_FILE, 'r') as f:
+                    cached = json.load(f)
+                return jsonify({
+                    'success': True,
+                    'running': False,
+                    'data': cached['results'],
+                    'last_updated': cached['timestamp']
+                })
+        except:
+            pass
+
+    return jsonify({
+        'success': False,
+        'running': screener_refresh_status['running'],
+        'progress': screener_refresh_status['progress'],
+        'total': screener_refresh_status['total']
+    })
 
 
 @app.route('/api/ticker/search/<isin>')

@@ -3177,13 +3177,16 @@
             // País
             const countryEl = document.getElementById('company-desc-country');
             if (countryEl) {
-                const flags = {'United States':'🇺🇸','United Kingdom':'🇬🇧','Germany':'🇩🇪','France':'🇫🇷',
-                    'Japan':'🇯🇵','China':'🇨🇳','Canada':'🇨🇦','Australia':'🇦🇺','Switzerland':'🇨🇭',
-                    'Netherlands':'🇳🇱','Spain':'🇪🇸','Italy':'🇮🇹','Brazil':'🇧🇷','India':'🇮🇳',
-                    'South Korea':'🇰🇷','Mexico':'🇲🇽','Norway':'🇳🇴','Sweden':'🇸🇪','Denmark':'🇩🇰',
-                    'Finland':'🇫🇮','Belgium':'🇧🇪','Ireland':'🇮🇪','South Africa':'🇿🇦','Israel':'🇮🇱',
-                    'Singapore':'🇸🇬','Hong Kong':'🇭🇰','Taiwan':'🇹🇼','Indonesia':'🇮🇩','Chile':'🇨🇱',
-                    'Colombia':'🇨🇴','Argentina':'🇦🇷','Portugal':'🇵🇹','Luxembourg':'🇱🇺'};
+                const flags = {'Estados Unidos':'🇺🇸','Reino Unido':'🇬🇧','Alemania':'🇩🇪','Francia':'🇫🇷',
+                    'Japón':'🇯🇵','China':'🇨🇳','Canadá':'🇨🇦','Australia':'🇦🇺','Suiza':'🇨🇭',
+                    'Países Bajos':'🇳🇱','España':'🇪🇸','Italia':'🇮🇹','Brasil':'🇧🇷','India':'🇮🇳',
+                    'Corea del Sur':'🇰🇷','México':'🇲🇽','Noruega':'🇳🇴','Suecia':'🇸🇪','Dinamarca':'🇩🇰',
+                    'Finlandia':'🇫🇮','Bélgica':'🇧🇪','Irlanda':'🇮🇪','Sudáfrica':'🇿🇦','Israel':'🇮🇱',
+                    'Singapur':'🇸🇬','Hong Kong':'🇭🇰','Taiwán':'🇹🇼','Indonesia':'🇮🇩','Chile':'🇨🇱',
+                    'Colombia':'🇨🇴','Argentina':'🇦🇷','Portugal':'🇵🇹','Luxemburgo':'🇱🇺',
+                    'Austria':'🇦🇹','Grecia':'🇬🇷','Polonia':'🇵🇱','Turquía':'🇹🇷','Rusia':'🇷🇺',
+                    'Nueva Zelanda':'🇳🇿','Filipinas':'🇵🇭','Tailandia':'🇹🇭','Malasia':'🇲🇾',
+                    'Perú':'🇵🇪','Puerto Rico':'🇵🇷','Bermudas':'🇧🇲','Islas Caimán':'🇰🇾'};
                 const flag = flags[data.country] || '🌍';
                 countryEl.textContent = data.country ? `${flag} ${data.country}` : '';
             }

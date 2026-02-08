@@ -5303,15 +5303,52 @@ def api_fundamental(ticker):
         payout_ratio = info.get('payoutRatio')
 
         # --- Info general ---
-        sector = info.get('sector')
-        industry = info.get('industry')
+        sector_en = info.get('sector')
+        industry_en = info.get('industry')
         market_cap = info.get('marketCap')
         enterprise_value = info.get('enterpriseValue')
         employees = info.get('fullTimeEmployees')
-        country = info.get('country')
+        country_en = info.get('country')
         currency = info.get('currency', 'USD')
         name = info.get('shortName') or info.get('longName') or ticker
         long_business_summary = info.get('longBusinessSummary')
+
+        # Diccionarios de traducción al español
+        SECTORES_ES = {
+            'Technology': 'Tecnología', 'Healthcare': 'Salud', 'Financial Services': 'Servicios Financieros',
+            'Consumer Cyclical': 'Consumo Cíclico', 'Consumer Defensive': 'Consumo Defensivo',
+            'Industrials': 'Industriales', 'Energy': 'Energía', 'Utilities': 'Servicios Públicos',
+            'Real Estate': 'Inmobiliario', 'Communication Services': 'Comunicaciones',
+            'Basic Materials': 'Materiales Básicos',
+        }
+        PAISES_ES = {
+            'United States': 'Estados Unidos', 'United Kingdom': 'Reino Unido', 'Germany': 'Alemania',
+            'France': 'Francia', 'Japan': 'Japón', 'China': 'China', 'Canada': 'Canadá',
+            'Australia': 'Australia', 'Switzerland': 'Suiza', 'Netherlands': 'Países Bajos',
+            'Spain': 'España', 'Italy': 'Italia', 'Brazil': 'Brasil', 'India': 'India',
+            'South Korea': 'Corea del Sur', 'Mexico': 'México', 'Norway': 'Noruega',
+            'Sweden': 'Suecia', 'Denmark': 'Dinamarca', 'Finland': 'Finlandia', 'Belgium': 'Bélgica',
+            'Ireland': 'Irlanda', 'South Africa': 'Sudáfrica', 'Israel': 'Israel',
+            'Singapore': 'Singapur', 'Hong Kong': 'Hong Kong', 'Taiwan': 'Taiwán',
+            'Indonesia': 'Indonesia', 'Chile': 'Chile', 'Colombia': 'Colombia',
+            'Argentina': 'Argentina', 'Portugal': 'Portugal', 'Luxembourg': 'Luxemburgo',
+            'Austria': 'Austria', 'Greece': 'Grecia', 'Poland': 'Polonia',
+            'Czech Republic': 'República Checa', 'Turkey': 'Turquía', 'Russia': 'Rusia',
+            'New Zealand': 'Nueva Zelanda', 'Philippines': 'Filipinas', 'Thailand': 'Tailandia',
+            'Malaysia': 'Malasia', 'Peru': 'Perú', 'Puerto Rico': 'Puerto Rico',
+            'Bermuda': 'Bermudas', 'Cayman Islands': 'Islas Caimán',
+        }
+        sector = SECTORES_ES.get(sector_en, sector_en)
+        country = PAISES_ES.get(country_en, country_en)
+
+        # Traducir industria al español con Google Translate (son muchas para mapear)
+        industry = industry_en
+        if industry_en:
+            try:
+                from deep_translator import GoogleTranslator
+                industry = GoogleTranslator(source='en', target='es').translate(industry_en)
+            except Exception:
+                industry = industry_en
 
         # Traducir descripción al español
         if long_business_summary:

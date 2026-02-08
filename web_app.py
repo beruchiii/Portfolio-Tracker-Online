@@ -5445,7 +5445,6 @@ def api_screener_status():
 def api_screener_correlaciones():
     """Calcula correlación de cada ticker del top 50 con la cartera del usuario."""
     import yfinance as yf
-    import numpy as np
     from datetime import datetime, timedelta
 
     CORR_CACHE_FILE = DATA_DIR / "screener_correlaciones_cache.json"
@@ -5463,13 +5462,18 @@ def api_screener_correlaciones():
         pass
 
     try:
-        # 1. Obtener cartera del usuario
-        portfolio_data = json.loads(PORTFOLIO_FILE.read_text()) if PORTFOLIO_FILE.exists() else []
-        posiciones = [p for p in portfolio_data if hasattr(p, 'get') or isinstance(p, dict)]
-        posiciones = [p for p in posiciones if p.get('ticker') or p.get('isin')]
-
-        if not posiciones:
+        # 1. Obtener cartera del usuario usando la función existente
+        portfolio = cargar_portfolio()
+        if not portfolio.posiciones:
             return jsonify({'success': False, 'error': 'No hay posiciones en cartera'})
+
+        # Actualizar precios para tener valor_actual
+        analyzer = PortfolioAnalyzer(portfolio)
+        posiciones_actualizadas = analyzer.actualizar_precios()
+
+        posiciones = [p for p in posiciones_actualizadas if p.ticker or p.isin]
+        if not posiciones:
+            return jsonify({'success': False, 'error': 'No hay posiciones con ticker en cartera'})
 
         # 2. Obtener tickers del top 50 (del caché del screener)
         if not SCREENER_CACHE_FILE.exists():
@@ -5480,17 +5484,16 @@ def api_screener_correlaciones():
         screener_tickers = [s['ticker'] for s in screener_cache['results']]
 
         # 3. Descargar históricos de la cartera (1 año) y calcular retornos ponderados
-        # Simplificar: calcular retornos individuales de cada posición y ponderar por valor
-        total_valor = sum(p.get('valor_actual', p.get('valor', 0)) or 0 for p in posiciones)
+        total_valor = sum(p.valor_actual or 0 for p in posiciones)
         if total_valor <= 0:
-            total_valor = len(posiciones)  # Equiponderar si no hay valores
+            total_valor = len(posiciones)
 
-        portfolio_returns = {}  # {fecha: retorno_ponderado}
+        portfolio_returns = {}
         cartera_tickers = []
 
-        for pos in posiciones[:10]:  # Máximo 10 posiciones para eficiencia
-            ticker = pos.get('ticker') or pos.get('isin', '')
-            peso = (pos.get('valor_actual', pos.get('valor', 0)) or 0) / total_valor if total_valor > 0 else 1 / len(posiciones)
+        for pos in posiciones[:10]:
+            ticker = pos.ticker or pos.isin or ''
+            peso = (pos.valor_actual or 0) / total_valor if total_valor > 0 else 1 / len(posiciones)
             if peso <= 0:
                 peso = 1 / len(posiciones)
 
@@ -5499,7 +5502,7 @@ def api_screener_correlaciones():
                 hist = stock.history(period='1y')
                 if len(hist) < 30:
                     continue
-                cartera_tickers.append(pos.get('nombre', ticker))
+                cartera_tickers.append(pos.nombre or ticker)
                 closes = hist['Close'].values
                 dates = [d.strftime('%Y-%m-%d') for d in hist.index]
 

@@ -720,6 +720,14 @@
                         <div id="monthly-heatmap" class="overflow-x-auto"></div>
                     </div>
                 </div>
+
+                <!-- Fila 4: Historial de Dividendos (ancho completo, solo si paga dividendo) -->
+                <div id="dividend-history-section" class="hidden bg-slate-800/60 rounded-xl p-5 border border-slate-700/50 mb-6">
+                    <h3 class="text-base font-semibold text-slate-200 mb-4 flex items-center gap-2">
+                        💰 Historial de Dividendos
+                    </h3>
+                    <div id="dividend-history-content"></div>
+                </div>
             </div>
           </div>
         </div>
@@ -1014,6 +1022,8 @@
             const heatmapVisible = !document.getElementById('heatmap-section')?.classList.contains('hidden');
             const correlacionContent = document.getElementById('correlacion-list-ms')?.innerHTML || '';
             const correlacionVisible = !document.getElementById('correlacion-section')?.classList.contains('hidden') && !document.getElementById('correlacion-results-ms')?.classList.contains('hidden');
+            const dividendHistoryContent = document.getElementById('dividend-history-content')?.innerHTML || '';
+            const dividendHistoryVisible = !document.getElementById('dividend-history-section')?.classList.contains('hidden');
 
             const periodoLabel = { '1d': '1 día', '1mo': '1 mes', '3mo': '3 meses', '6mo': '6 meses', '1y': '1 año', '2y': '2 años', '5y': '5 años', 'max': 'Máximo' }[currentPeriod] || currentPeriod;
             const fecha = new Date().toLocaleDateString('es-ES', {
@@ -1109,6 +1119,11 @@
                         <div>${heatmapContent}</div>
                     </div>` : ''}
                 </div>
+                ` : ''}
+
+                ${dividendHistoryVisible && dividendHistoryContent ? `
+                <div style="font-size:16px;font-weight:bold;color:#94a3b8;margin-bottom:8px;">💰 Historial de Dividendos</div>
+                <div style="margin-bottom:16px;">${dividendHistoryContent}</div>
                 ` : ''}
 
                 ${correlacionVisible && correlacionContent ? `
@@ -1775,6 +1790,7 @@
                         generarEstrategia100();
                         calcularRentabilidadAnual();
                         calcularHeatmapMensual();
+                        calcularHistorialDividendos(currentTicker);
                     }
 
                     // Mostrar secciones
@@ -4733,6 +4749,142 @@
             if (valor === 0) return 'bg-slate-600 text-slate-300';
             if (valor <= 5) return 'bg-green-400/50 text-green-200';
             return 'bg-green-600 text-white';
+        }
+
+        // ============================================
+        // HISTORIAL DE DIVIDENDOS
+        // ============================================
+        async function calcularHistorialDividendos(ticker) {
+            const section = document.getElementById('dividend-history-section');
+            const container = document.getElementById('dividend-history-content');
+            if (!section || !container) return;
+
+            try {
+                const response = await fetch(`/api/dividend_history/${encodeURIComponent(ticker)}`);
+                const result = await response.json();
+
+                if (!result.success || !result.data) {
+                    section.classList.add('hidden');
+                    return;
+                }
+
+                const d = result.data;
+                const curr = d.currency || 'USD';
+                let html = '';
+
+                // ===== ZONA A: Resumen rápido (4 tarjetas) =====
+                html += `<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">`;
+
+                // Tarjeta 1: Por cada 100€
+                const per100Text = d.per100euros ? `${d.per100euros.toFixed(2)}€` : '-';
+                const yieldText = d.dividendYield ? `(${d.dividendYield.toFixed(2)}%)` : '';
+                html += `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700/50 text-center">
+                    <div class="text-lg mb-0.5">💵</div>
+                    <div class="text-xs text-slate-500 mb-1">Por cada 100€</div>
+                    <div class="text-lg font-bold text-green-400">${per100Text}<span class="text-xs text-slate-500 ml-1">/año</span></div>
+                    <div class="text-xs text-slate-500 mt-0.5">${d.dividendRate ? curr + ' ' + d.dividendRate.toFixed(2) + '/acción' : ''} ${yieldText}</div>
+                </div>`;
+
+                // Tarjeta 2: Frecuencia
+                const freqColor = d.frequency === 'Mensual' ? 'text-green-400' : d.frequency === 'Trimestral' ? 'text-cyan-400' : 'text-yellow-400';
+                html += `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700/50 text-center">
+                    <div class="text-lg mb-0.5">📅</div>
+                    <div class="text-xs text-slate-500 mb-1">Frecuencia de pago</div>
+                    <div class="text-lg font-bold ${freqColor}">${d.frequency || '-'}</div>
+                    <div class="text-xs text-slate-500 mt-0.5">${d.paymentsPerYear || 0} pagos/año</div>
+                </div>`;
+
+                // Tarjeta 3: Racha de crecimiento
+                const streakColor = d.streakYears >= 25 ? 'text-green-400' : d.streakYears >= 10 ? 'text-cyan-400' : d.streakYears >= 5 ? 'text-yellow-400' : 'text-slate-400';
+                const streakLabel = d.streakYears >= 50 ? '👑 Dividend King' : d.streakYears >= 25 ? '🏆 Dividend Aristocrat' : d.streakYears >= 10 ? '⭐ Fiable' : '';
+                html += `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700/50 text-center">
+                    <div class="text-lg mb-0.5">📈</div>
+                    <div class="text-xs text-slate-500 mb-1">Racha de crecimiento</div>
+                    <div class="text-lg font-bold ${streakColor}">${d.streakYears} año${d.streakYears !== 1 ? 's' : ''}</div>
+                    <div class="text-xs ${streakColor} mt-0.5">${streakLabel}</div>
+                </div>`;
+
+                // Tarjeta 4: Próxima fecha ex-dividendo
+                let exDivText = '-';
+                if (d.exDividendDate) {
+                    const exDate = new Date(d.exDividendDate + 'T00:00:00');
+                    exDivText = exDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+                    const hoy = new Date();
+                    const diffDays = Math.ceil((exDate - hoy) / (1000 * 60 * 60 * 24));
+                    if (diffDays > 0 && diffDays <= 30) {
+                        exDivText += ` <span class="text-yellow-400">(en ${diffDays}d)</span>`;
+                    }
+                }
+                html += `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700/50 text-center">
+                    <div class="text-lg mb-0.5">🔜</div>
+                    <div class="text-xs text-slate-500 mb-1">Próx. ex-dividendo</div>
+                    <div class="text-sm font-bold text-slate-200">${exDivText}</div>
+                    <div class="text-xs text-slate-500 mt-0.5">Comprar antes para cobrar</div>
+                </div>`;
+
+                html += `</div>`; // cierre grid tarjetas
+
+                // ===== ZONA B: Historial anual (barras) =====
+                const history = d.yearlyHistory || [];
+                if (history.length > 0) {
+                    // Mostrar últimos 10 años máximo
+                    const recent = history.slice(-10);
+                    const maxTotal = Math.max(...recent.map(h => h.total), 0.01);
+                    const maxGrowth = Math.max(...recent.map(h => Math.abs(h.growthPct || 0)), 1);
+
+                    html += `<div class="mb-5">`;
+                    html += `<p class="text-xs font-semibold text-slate-400 mb-2">📊 Dividendo anual por acción (últimos ${recent.length} años)</p>`;
+
+                    recent.forEach(y => {
+                        const barWidth = (y.total / maxTotal) * 100;
+                        const growthPct = y.growthPct;
+                        const growthText = growthPct !== null && growthPct !== undefined
+                            ? (growthPct >= 0 ? `+${growthPct.toFixed(1)}%` : `${growthPct.toFixed(1)}%`)
+                            : '';
+                        const growthColor = growthPct > 0 ? 'text-green-400' : growthPct < 0 ? 'text-red-400' : 'text-slate-500';
+                        const barColor = growthPct !== null && growthPct < 0 ? 'bg-red-500' : 'bg-green-500';
+
+                        html += `<div class="flex items-center gap-2 mb-1">
+                            <span class="w-10 text-xs text-slate-500 text-right">${y.year}</span>
+                            <div class="flex-1 h-5 bg-slate-700 rounded overflow-hidden relative">
+                                <div class="${barColor} h-full rounded transition-all" style="width:${barWidth}%"></div>
+                                <span class="absolute inset-0 flex items-center px-2 text-xs text-white font-medium" style="font-size:10px">
+                                    ${curr} ${y.total.toFixed(2)} (${y.payments}x)
+                                </span>
+                            </div>
+                            <span class="w-14 text-right text-xs font-semibold ${growthColor}">${growthText}</span>
+                        </div>`;
+                    });
+
+                    html += `</div>`;
+                }
+
+                // ===== ZONA C: Últimos pagos individuales =====
+                const payments = d.recentPayments || [];
+                if (payments.length > 0) {
+                    html += `<div>`;
+                    html += `<p class="text-xs font-semibold text-slate-400 mb-2">🧾 Últimos pagos (${payments.length} más recientes)</p>`;
+                    html += `<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">`;
+
+                    payments.forEach(p => {
+                        const fecha = new Date(p.date + 'T00:00:00');
+                        const fechaStr = fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+                        html += `<div class="flex items-center justify-between bg-slate-800 rounded px-2.5 py-1.5 border border-slate-700/40">
+                            <span class="text-xs text-slate-500">${fechaStr}</span>
+                            <span class="text-xs font-semibold text-slate-300">${curr} ${p.amount.toFixed(4)}</span>
+                        </div>`;
+                    });
+
+                    html += `</div></div>`;
+                }
+
+                container.innerHTML = html;
+                section.classList.remove('hidden');
+
+            } catch (err) {
+                console.error('[DividendHistory] Error:', err);
+                section.classList.add('hidden');
+            }
         }
 
         async function calcularCorrelacionesMS() {

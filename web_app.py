@@ -5473,6 +5473,150 @@ def api_fundamental(ticker):
 
 
 # =============================================================================
+# DIVIDEND HISTORY
+# =============================================================================
+
+@app.route('/api/dividend_history/<ticker>')
+def api_dividend_history(ticker):
+    """Historial completo de dividendos de un ticker."""
+    import yfinance as yf
+    from datetime import datetime
+    from collections import defaultdict
+
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info or {}
+
+        # Obtener serie de dividendos
+        dividends = stock.dividends
+        if dividends is None or dividends.empty:
+            return jsonify({'success': False, 'error': 'No tiene historial de dividendos'})
+
+        # Info básica
+        current_price = info.get('currentPrice') or info.get('regularMarketPrice') or 0
+        currency = info.get('currency', 'USD')
+
+        # Normalizar dividendYield
+        raw_div = info.get('dividendYield') or 0
+        if 0 < raw_div < 1:
+            dividend_yield = round(raw_div * 100, 2)
+        elif 1 <= raw_div <= 25:
+            dividend_yield = round(raw_div, 2)
+        else:
+            dividend_yield = None
+
+        dividend_rate = info.get('dividendRate')
+
+        # Ex-dividend date
+        ex_div_ts = info.get('exDividendDate')
+        ex_dividend_date = None
+        if ex_div_ts:
+            try:
+                if isinstance(ex_div_ts, (int, float)):
+                    ex_dividend_date = datetime.fromtimestamp(ex_div_ts).strftime('%Y-%m-%d')
+                else:
+                    ex_dividend_date = str(ex_div_ts)[:10]
+            except Exception:
+                pass
+
+        # --- Agrupar dividendos por año ---
+        yearly = defaultdict(lambda: {'total': 0.0, 'payments': 0})
+        for date_idx, amount in dividends.items():
+            year = date_idx.year
+            yearly[year]['total'] += float(amount)
+            yearly[year]['payments'] += 1
+
+        # Ordenar por año
+        sorted_years = sorted(yearly.keys())
+
+        # Calcular crecimiento YoY
+        yearly_history = []
+        for i, year in enumerate(sorted_years):
+            entry = {
+                'year': year,
+                'total': round(yearly[year]['total'], 4),
+                'payments': yearly[year]['payments'],
+                'growthPct': None
+            }
+            if i > 0:
+                prev_total = yearly[sorted_years[i - 1]]['total']
+                if prev_total > 0:
+                    growth = ((yearly[year]['total'] - prev_total) / prev_total) * 100
+                    entry['growthPct'] = round(growth, 1)
+            yearly_history.append(entry)
+
+        # --- Frecuencia de pago ---
+        # Siempre usar el último año COMPLETO para determinar frecuencia
+        current_year = datetime.now().year
+        complete_years = [y for y in sorted_years if y < current_year]
+        ref_year = complete_years[-1] if complete_years else (sorted_years[-1] if sorted_years else None)
+
+        payments_per_year = yearly[ref_year]['payments'] if ref_year and ref_year in yearly else 0
+
+        if payments_per_year >= 11:
+            frequency = 'Mensual'
+        elif payments_per_year >= 3:
+            frequency = 'Trimestral'
+        elif payments_per_year >= 2:
+            frequency = 'Semestral'
+        elif payments_per_year >= 1:
+            frequency = 'Anual'
+        else:
+            frequency = 'Irregular'
+
+        # --- Racha de crecimiento consecutivo ---
+        # Excluir año actual (incompleto) del cálculo
+        streak = 0
+        streak_years = [y for y in sorted_years if y < current_year]
+        if len(streak_years) >= 2:
+            for i in range(len(streak_years) - 1, 0, -1):
+                curr_total = yearly[streak_years[i]]['total']
+                prev_total = yearly[streak_years[i - 1]]['total']
+                if curr_total > prev_total:
+                    streak += 1
+                else:
+                    break
+
+        # --- Por cada 100€ invertidos ---
+        per_100 = None
+        if current_price and current_price > 0 and dividend_rate and dividend_rate > 0:
+            shares_per_100 = 100.0 / current_price
+            per_100 = round(shares_per_100 * dividend_rate, 2)
+
+        # --- Últimos pagos individuales (máx 12) ---
+        recent_payments = []
+        for date_idx, amount in reversed(list(dividends.items())):
+            if len(recent_payments) >= 12:
+                break
+            recent_payments.append({
+                'date': date_idx.strftime('%Y-%m-%d'),
+                'amount': round(float(amount), 4)
+            })
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'ticker': ticker,
+                'currency': currency,
+                'currentPrice': round(current_price, 2) if current_price else None,
+                'dividendRate': round(dividend_rate, 2) if dividend_rate else None,
+                'dividendYield': dividend_yield,
+                'exDividendDate': ex_dividend_date,
+                'frequency': frequency,
+                'paymentsPerYear': payments_per_year,
+                'per100euros': per_100,
+                'streakYears': streak,
+                'yearlyHistory': yearly_history,
+                'recentPayments': recent_payments,
+            }
+        })
+
+    except Exception as e:
+        print(f"[DividendHistory] Error {ticker}: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+# =============================================================================
 # DIVIDEND SCREENER
 # =============================================================================
 

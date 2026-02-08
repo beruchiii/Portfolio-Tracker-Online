@@ -252,6 +252,59 @@ DIVIDEND_UNIVERSE = [
     'BCE', 'CM', 'BMO', 'BNS', 'RY', 'TD', 'MFC', 'SU', 'CNQ',
     # Australianas
     'WDS',
+
+    # =========================================================================
+    # GRUPO 4 - Tercera expansión (+195 tickers)
+    # =========================================================================
+    # S&P 500 restantes con dividendo
+    'ORCL', 'CRM', 'NOW', 'ADBE', 'V', 'MA', 'PYPL',
+    'GEV', 'GEHC', 'WAB', 'IR', 'ROK', 'AME', 'NDSN',
+    'GPC', 'LKQ', 'POOL', 'TSCO', 'ORLY', 'AZO',
+    'SNA', 'TTC', 'ALLE', 'MAS', 'OC',
+    'EFX', 'BR', 'CBOE', 'ICE', 'CME', 'NDAQ', 'MSCI',
+    'AON', 'WTW', 'AJG', 'ERIE', 'KMPR',
+    'PKG', 'IP', 'AVY', 'SEE', 'SON', 'EMN', 'ECL',
+    'DD', 'CTVA', 'FMC', 'ALB',
+    'CHRW', 'JBHT', 'XPO', 'ODFL', 'SAIA',
+    'STE', 'BAX', 'EW', 'SYK', 'ISRG', 'HOLX',
+    'VRTX', 'REGN', 'BIIB', 'MRNA',
+    'COR', 'MCK', 'ABC',
+    'WY', 'RYN', 'PLD', 'INVH',
+    # REITs especializados
+    'SBAC', 'EQIX', 'DRE', 'CUBE', 'EXR', 'LSI', 'NSA',
+    'UDR', 'CPT', 'MAA', 'AIV', 'IIPR',
+    'NHI', 'LTC', 'SBRA', 'HR', 'DOC',
+    # Utilities restantes
+    'CNP', 'OGE', 'POR', 'LNT', 'EVRG', 'AES', 'BKH',
+    'AVA', 'NWE', 'MDU', 'IDA', 'SJW', 'MSEX', 'AWR', 'CWT',
+    # Financieras diversas
+    'NTRS', 'STT', 'BK', 'CFG', 'CMA', 'ZION',
+    'FHN', 'EWBC', 'WAL', 'FNB', 'UBSI', 'IBOC',
+    'BOKF', 'OZK', 'CBSH', 'UMBF', 'SFBS',
+    # Seguros adicionales
+    'MKL', 'WRB', 'RE', 'ACGL', 'KNSL',
+    'FAF', 'FNF', 'STC', 'ORI',
+    # Industriales extra
+    'TT', 'CARR', 'JCI', 'GNRC',
+    'PCAR', 'AGCO', 'CNHI', 'ALG',
+    'XYL', 'WDFC', 'RRX', 'GGG',
+    # Consumer extra
+    'MKC', 'INGR', 'DAR',
+    'TAP', 'STZ', 'BF-B',
+    'LEVI', 'PVH', 'RL', 'TPR',
+    'EL', 'SPB', 'ENR',
+    # Tech con dividendo
+    'SWKS', 'MCHP', 'ADI', 'ON',
+    'KEYS', 'CDW', 'EPAM',
+    # Internacionales adicionales
+    'ABB', 'RELX', 'WCN', 'RBA',
+    'NVR', 'PHM', 'LEN', 'DHI', 'TOL', 'MDC', 'MTH',
+    # Más ADRs internacionales
+    'PKX', 'MT', 'WFG',
+    'ERIC', 'NOK',
+    'TEVA', 'FLUT',
+    'CIG', 'SBS', 'BSBR', 'ITUB', 'BBD', 'NU',
+    'SCCO', 'TX', 'SID', 'GGB',
 ]
 
 # Estado global del refresh del screener
@@ -5441,6 +5494,13 @@ def api_screener_dividends():
     import threading
 
     force_refresh = request.args.get('refresh') == '1'
+
+    # Si es force_refresh, borrar también caché de correlaciones para que se recalculen
+    if force_refresh:
+        corr_cache = DATA_DIR / "screener_correlaciones_cache.json"
+        if corr_cache.exists():
+            corr_cache.unlink()
+            print("[Screener] Cache de correlaciones eliminado (force refresh)")
 
     # Comprobar caché
     if not force_refresh:

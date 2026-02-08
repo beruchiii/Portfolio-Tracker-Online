@@ -1117,7 +1117,7 @@
                     }
                 } else if (result.running) {
                     // Background refresh en marcha — poll status
-                    progressEl.textContent = `Analizando ${result.progress || 0} de ${result.total || '~95'} empresas...`;
+                    progressEl.textContent = `Analizando ${result.progress || 0} de ${result.total || '~500'} empresas...`;
                     iniciarPollingScreener();
                 } else {
                     throw new Error(result.error || 'Error desconocido');

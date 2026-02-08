@@ -5354,14 +5354,33 @@ def api_fundamental(ticker):
         if long_business_summary:
             try:
                 from deep_translator import GoogleTranslator
-                # Recortar a las primeras 2 frases antes de traducir (más eficiente)
                 import re
-                sentences = re.findall(r'[^.!?]+[.!?]+', long_business_summary)
-                short_en = sentences[0].strip() if sentences else long_business_summary
-                if len(sentences) > 1 and (len(short_en) + len(sentences[1])) < 300:
-                    short_en += ' ' + sentences[1].strip()
-                if len(short_en) > 350:
-                    short_en = short_en[:300].rsplit(' ', 1)[0] + '...'
+                # Separar frases de forma inteligente (ignorar abreviaturas como Inc., Corp., Ltd., etc.)
+                # Reemplazar abreviaturas comunes temporalmente para no cortar ahí
+                temp = long_business_summary
+                abbrevs = ['Inc.', 'Corp.', 'Ltd.', 'Co.', 'L.P.', 'S.A.', 'N.V.', 'P.L.C.', 'PLC.', 'A.S.',
+                           'S.p.A.', 'A/S.', 'S.E.', 'AG.', 'Mr.', 'Mrs.', 'Dr.', 'Jr.', 'Sr.', 'St.', 'vs.',
+                           'U.S.', 'U.K.', 'E.U.', 'S&P.', 'approx.', 'etc.', 'i.e.', 'e.g.']
+                for ab in abbrevs:
+                    temp = temp.replace(ab, ab.replace('.', '§'))
+                sentences = re.split(r'(?<=[.!?])\s+', temp)
+                sentences = [s.replace('§', '.') for s in sentences]
+
+                # Tomar frases hasta ~400 chars
+                short_en = ''
+                for s in sentences:
+                    if not short_en:
+                        short_en = s.strip()
+                    elif len(short_en) + len(s) + 1 < 400:
+                        short_en += ' ' + s.strip()
+                    else:
+                        break
+
+                if not short_en:
+                    short_en = long_business_summary[:400]
+                if len(short_en) > 450:
+                    short_en = short_en[:400].rsplit(' ', 1)[0] + '...'
+
                 long_business_summary = GoogleTranslator(source='en', target='es').translate(short_en)
             except Exception as e:
                 print(f"[Fundamental] Error traduciendo descripción: {e}")

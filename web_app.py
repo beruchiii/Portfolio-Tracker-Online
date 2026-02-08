@@ -5498,10 +5498,21 @@ def _refresh_screener_cache():
             if payout is not None:
                 payout_pct = round(payout * 100, 1) if payout < 5 else round(payout, 1)
 
+            # Traducir sector al español
+            SECTORES_ES = {
+                'Technology': 'Tecnología', 'Healthcare': 'Salud', 'Financial Services': 'Servicios Financieros',
+                'Consumer Cyclical': 'Consumo Cíclico', 'Consumer Defensive': 'Consumo Defensivo',
+                'Industrials': 'Industriales', 'Energy': 'Energía', 'Utilities': 'Servicios Públicos',
+                'Real Estate': 'Inmobiliario', 'Communication Services': 'Comunicaciones',
+                'Basic Materials': 'Materiales Básicos',
+            }
+            sector_en = info.get('sector') or '-'
+            sector_es = SECTORES_ES.get(sector_en, sector_en)
+
             results.append({
                 'ticker': ticker_symbol,
                 'name': info.get('shortName') or info.get('longName') or ticker_symbol,
-                'sector': info.get('sector') or '-',
+                'sector': sector_es,
                 'price': round(info.get('currentPrice') or info.get('regularMarketPrice') or 0, 2),
                 'currency': info.get('currency', 'USD'),
                 'dividendYield': div_yield,

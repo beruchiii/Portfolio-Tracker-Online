@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-02-08T15:59:07.240710",
+  "timestamp": "2026-02-08T17:30:05.427352",
   "results": [
     {
       "ticker": "RYN",
       "name": "Rayonier Inc. REIT",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 22.46,
       "currency": "USD",
       "dividendYield": 4.85,
@@ -21,7 +21,7 @@
     {
       "ticker": "GAIN",
       "name": "Gladstone Investment Corporatio",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 13.89,
       "currency": "USD",
       "dividendYield": 6.91,
@@ -38,7 +38,7 @@
     {
       "ticker": "EOG",
       "name": "EOG Resources, Inc.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 113.7,
       "currency": "USD",
       "dividendYield": 3.59,
@@ -55,7 +55,7 @@
     {
       "ticker": "BCE",
       "name": "BCE, Inc.",
-      "sector": "Communication Services",
+      "sector": "Comunicaciones",
       "price": 25.08,
       "currency": "USD",
       "dividendYield": 5.12,
@@ -72,7 +72,7 @@
     {
       "ticker": "VICI",
       "name": "VICI Properties Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 28.76,
       "currency": "USD",
       "dividendYield": 6.14,
@@ -89,7 +89,7 @@
     {
       "ticker": "TTE",
       "name": "TotalEnergies SE",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 73.83,
       "currency": "USD",
       "dividendYield": 5.29,
@@ -106,7 +106,7 @@
     {
       "ticker": "GIS",
       "name": "General Mills, Inc.",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 47.87,
       "currency": "USD",
       "dividendYield": 5.1,
@@ -123,7 +123,7 @@
     {
       "ticker": "NEWT",
       "name": "NewtekOne, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 13.94,
       "currency": "USD",
       "dividendYield": 5.45,
@@ -140,7 +140,7 @@
     {
       "ticker": "VZ",
       "name": "Verizon Communications Inc.",
-      "sector": "Communication Services",
+      "sector": "Comunicaciones",
       "price": 46.31,
       "currency": "USD",
       "dividendYield": 6.11,
@@ -157,7 +157,7 @@
     {
       "ticker": "MAIN",
       "name": "Main Street Capital Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 60.31,
       "currency": "USD",
       "dividendYield": 7.16,
@@ -174,7 +174,7 @@
     {
       "ticker": "CF",
       "name": "CF Industries Holdings, Inc.",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 92.64,
       "currency": "USD",
       "dividendYield": 2.16,
@@ -191,7 +191,7 @@
     {
       "ticker": "ENR",
       "name": "Energizer Holdings, Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 23.4,
       "currency": "USD",
       "dividendYield": 5.13,
@@ -208,7 +208,7 @@
     {
       "ticker": "TROW",
       "name": "T. Rowe Price Group, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 94.58,
       "currency": "USD",
       "dividendYield": 5.37,
@@ -225,7 +225,7 @@
     {
       "ticker": "T",
       "name": "AT&T Inc.",
-      "sector": "Communication Services",
+      "sector": "Comunicaciones",
       "price": 27.13,
       "currency": "USD",
       "dividendYield": 4.09,
@@ -242,7 +242,7 @@
     {
       "ticker": "OMC",
       "name": "Omnicom Group Inc.",
-      "sector": "Communication Services",
+      "sector": "Comunicaciones",
       "price": 69.87,
       "currency": "USD",
       "dividendYield": 4.15,
@@ -259,7 +259,7 @@
     {
       "ticker": "MOS",
       "name": "Mosaic Company (The)",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 28.6,
       "currency": "USD",
       "dividendYield": 3.08,
@@ -276,7 +276,7 @@
     {
       "ticker": "INGR",
       "name": "Ingredion Incorporated",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 120.11,
       "currency": "USD",
       "dividendYield": 2.73,
@@ -293,7 +293,7 @@
     {
       "ticker": "BF-B",
       "name": "Brown Forman Inc",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 29.45,
       "currency": "USD",
       "dividendYield": 3.09,
@@ -310,7 +310,7 @@
     {
       "ticker": "NVO",
       "name": "Novo Nordisk A/S",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 47.64,
       "currency": "USD",
       "dividendYield": 3.9,
@@ -327,7 +327,7 @@
     {
       "ticker": "MFC",
       "name": "Manulife Financial Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 38.04,
       "currency": "USD",
       "dividendYield": 3.36,
@@ -344,7 +344,7 @@
     {
       "ticker": "PGR",
       "name": "Progressive Corporation (The)",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 202.29,
       "currency": "USD",
       "dividendYield": 6.87,
@@ -361,7 +361,7 @@
     {
       "ticker": "GEHC",
       "name": "GE HealthCare Technologies Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 80.65,
       "currency": "USD",
       "dividendYield": 17.0,
@@ -378,7 +378,7 @@
     {
       "ticker": "COP",
       "name": "ConocoPhillips",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 107.62,
       "currency": "USD",
       "dividendYield": 3.12,
@@ -395,7 +395,7 @@
     {
       "ticker": "SU",
       "name": "Suncor Energy  Inc.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 53.8,
       "currency": "USD",
       "dividendYield": 3.26,
@@ -412,7 +412,7 @@
     {
       "ticker": "ERIC",
       "name": "Ericsson",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 11.16,
       "currency": "USD",
       "dividendYield": 2.63,
@@ -429,7 +429,7 @@
     {
       "ticker": "PRU",
       "name": "Prudential Financial, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 102.8,
       "currency": "USD",
       "dividendYield": 5.3,
@@ -446,7 +446,7 @@
     {
       "ticker": "HMC",
       "name": "Honda Motor Company, Ltd.",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 32.82,
       "currency": "USD",
       "dividendYield": 4.23,
@@ -463,7 +463,7 @@
     {
       "ticker": "TD",
       "name": "Toronto Dominion Bank (The)",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 96.68,
       "currency": "USD",
       "dividendYield": 3.28,
@@ -480,7 +480,7 @@
     {
       "ticker": "CNQ",
       "name": "Canadian Natural Resources Limi",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 39.1,
       "currency": "USD",
       "dividendYield": 4.36,
@@ -497,7 +497,7 @@
     {
       "ticker": "BBD",
       "name": "Banco Bradesco Sa",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 3.98,
       "currency": "USD",
       "dividendYield": 5.38,
@@ -514,7 +514,7 @@
     {
       "ticker": "SHEL",
       "name": "Shell PLC",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 75.29,
       "currency": "USD",
       "dividendYield": 3.95,
@@ -531,7 +531,7 @@
     {
       "ticker": "RIO",
       "name": "Rio Tinto Plc",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 93.41,
       "currency": "USD",
       "dividendYield": 3.99,
@@ -548,7 +548,7 @@
     {
       "ticker": "CTRA",
       "name": "Coterra Energy Inc.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 30.66,
       "currency": "USD",
       "dividendYield": 2.87,
@@ -565,7 +565,7 @@
     {
       "ticker": "ZTO",
       "name": "ZTO Express (Cayman) Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 24.09,
       "currency": "USD",
       "dividendYield": 2.7,
@@ -582,7 +582,7 @@
     {
       "ticker": "NVS",
       "name": "Novartis AG",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 156.42,
       "currency": "USD",
       "dividendYield": 3.05,
@@ -599,7 +599,7 @@
     {
       "ticker": "DVN",
       "name": "Devon Energy Corporation",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 43.81,
       "currency": "USD",
       "dividendYield": 2.19,
@@ -616,7 +616,7 @@
     {
       "ticker": "CINF",
       "name": "Cincinnati Financial Corporatio",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 172.65,
       "currency": "USD",
       "dividendYield": 2.06,
@@ -633,7 +633,7 @@
     {
       "ticker": "MRK",
       "name": "Merck & Company, Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 121.93,
       "currency": "USD",
       "dividendYield": 2.79,
@@ -650,7 +650,7 @@
     {
       "ticker": "OKE",
       "name": "ONEOK, Inc.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 81.84,
       "currency": "USD",
       "dividendYield": 5.08,
@@ -667,7 +667,7 @@
     {
       "ticker": "INFY",
       "name": "Infosys Limited",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 16.84,
       "currency": "USD",
       "dividendYield": 3.06,
@@ -684,7 +684,7 @@
     {
       "ticker": "ACN",
       "name": "Accenture plc",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 240.62,
       "currency": "USD",
       "dividendYield": 2.71,
@@ -701,7 +701,7 @@
     {
       "ticker": "FANG",
       "name": "Diamondback Energy, Inc.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 166.93,
       "currency": "USD",
       "dividendYield": 2.4,
@@ -718,7 +718,7 @@
     {
       "ticker": "JD",
       "name": "JD.com, Inc.",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 28.07,
       "currency": "USD",
       "dividendYield": 3.56,
@@ -735,7 +735,7 @@
     {
       "ticker": "ORI",
       "name": "Old Republic International Corp",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 41.77,
       "currency": "USD",
       "dividendYield": 2.78,
@@ -752,7 +752,7 @@
     {
       "ticker": "VALE",
       "name": "VALE S.A.",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 16.3,
       "currency": "USD",
       "dividendYield": 7.66,
@@ -769,7 +769,7 @@
     {
       "ticker": "ING",
       "name": "ING Group, N.V.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 30.06,
       "currency": "USD",
       "dividendYield": 4.27,
@@ -786,7 +786,7 @@
     {
       "ticker": "BBVA",
       "name": "Banco Bilbao Vizcaya Argentaria",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 24.09,
       "currency": "USD",
       "dividendYield": 3.44,
@@ -803,7 +803,7 @@
     {
       "ticker": "WDS",
       "name": "Woodside Energy Group Limited",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 18.15,
       "currency": "USD",
       "dividendYield": 5.84,
@@ -820,7 +820,7 @@
     {
       "ticker": "LKQ",
       "name": "LKQ Corporation",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 34.58,
       "currency": "USD",
       "dividendYield": 3.47,
@@ -837,7 +837,7 @@
     {
       "ticker": "LEVI",
       "name": "Levi Strauss & Co",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 20.55,
       "currency": "USD",
       "dividendYield": 2.73,
@@ -854,7 +854,7 @@
     {
       "ticker": "AFL",
       "name": "AFLAC Incorporated",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 117.15,
       "currency": "USD",
       "dividendYield": 2.08,
@@ -871,7 +871,7 @@
     {
       "ticker": "GILD",
       "name": "Gilead Sciences, Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 152.5,
       "currency": "USD",
       "dividendYield": 2.07,
@@ -888,7 +888,7 @@
     {
       "ticker": "SPG",
       "name": "Simon Property Group, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 199.6,
       "currency": "USD",
       "dividendYield": 4.33,
@@ -905,7 +905,7 @@
     {
       "ticker": "USB",
       "name": "U.S. Bancorp",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 60.69,
       "currency": "USD",
       "dividendYield": 3.36,
@@ -922,7 +922,7 @@
     {
       "ticker": "HPQ",
       "name": "HP Inc.",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 19.65,
       "currency": "USD",
       "dividendYield": 6.11,
@@ -939,7 +939,7 @@
     {
       "ticker": "MPLX",
       "name": "MPLX LP",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 56.0,
       "currency": "USD",
       "dividendYield": 7.69,
@@ -956,7 +956,7 @@
     {
       "ticker": "HBAN",
       "name": "Huntington Bancshares Incorpora",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 19.27,
       "currency": "USD",
       "dividendYield": 3.22,
@@ -973,7 +973,7 @@
     {
       "ticker": "WIT",
       "name": "Wipro Limited",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 2.51,
       "currency": "USD",
       "dividendYield": 5.29,
@@ -990,7 +990,7 @@
     {
       "ticker": "CMCSA",
       "name": "Comcast Corporation",
-      "sector": "Communication Services",
+      "sector": "Comunicaciones",
       "price": 31.37,
       "currency": "USD",
       "dividendYield": 4.21,
@@ -1007,7 +1007,7 @@
     {
       "ticker": "AFG",
       "name": "American Financial Group, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 131.04,
       "currency": "USD",
       "dividendYield": 2.69,
@@ -1024,7 +1024,7 @@
     {
       "ticker": "DB",
       "name": "Deutsche Bank AG",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 37.22,
       "currency": "USD",
       "dividendYield": 3.17,
@@ -1041,7 +1041,7 @@
     {
       "ticker": "CM",
       "name": "Canadian Imperial Bank of Comme",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 96.68,
       "currency": "USD",
       "dividendYield": 3.26,
@@ -1058,7 +1058,7 @@
     {
       "ticker": "OZK",
       "name": "Bank OZK",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 51.4,
       "currency": "USD",
       "dividendYield": 3.47,
@@ -1075,7 +1075,7 @@
     {
       "ticker": "FNF",
       "name": "Fidelity National Financial, In",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 57.61,
       "currency": "USD",
       "dividendYield": 3.61,
@@ -1092,7 +1092,7 @@
     {
       "ticker": "JKHY",
       "name": "Jack Henry & Associates, Inc.",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 173.36,
       "currency": "USD",
       "dividendYield": 1.34,
@@ -1109,7 +1109,7 @@
     {
       "ticker": "SHG",
       "name": "Shinhan Financial Group Co Ltd",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 65.16,
       "currency": "USD",
       "dividendYield": 2.44,
@@ -1126,7 +1126,7 @@
     {
       "ticker": "SNA",
       "name": "Snap-On Incorporated",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 369.34,
       "currency": "USD",
       "dividendYield": 2.64,
@@ -1143,7 +1143,7 @@
     {
       "ticker": "ERIE",
       "name": "Erie Indemnity Company",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 287.71,
       "currency": "USD",
       "dividendYield": 1.93,
@@ -1160,7 +1160,7 @@
     {
       "ticker": "JNJ",
       "name": "Johnson & Johnson",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 239.99,
       "currency": "USD",
       "dividendYield": 2.17,
@@ -1177,7 +1177,7 @@
     {
       "ticker": "UNH",
       "name": "UnitedHealth Group Incorporated",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 276.65,
       "currency": "USD",
       "dividendYield": 3.2,
@@ -1194,7 +1194,7 @@
     {
       "ticker": "BHP",
       "name": "BHP Group Limited",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 69.64,
       "currency": "USD",
       "dividendYield": 3.16,
@@ -1211,7 +1211,7 @@
     {
       "ticker": "PSX",
       "name": "Phillips 66",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 157.8,
       "currency": "USD",
       "dividendYield": 3.04,
@@ -1228,7 +1228,7 @@
     {
       "ticker": "TFC",
       "name": "Truist Financial Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 55.81,
       "currency": "USD",
       "dividendYield": 3.73,
@@ -1245,7 +1245,7 @@
     {
       "ticker": "KEY",
       "name": "KeyCorp",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 23.21,
       "currency": "USD",
       "dividendYield": 3.53,
@@ -1262,7 +1262,7 @@
     {
       "ticker": "AIG",
       "name": "American International Group, I",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 76.72,
       "currency": "USD",
       "dividendYield": 2.35,
@@ -1279,7 +1279,7 @@
     {
       "ticker": "HTGC",
       "name": "Hercules Capital, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 16.45,
       "currency": "USD",
       "dividendYield": 11.43,
@@ -1296,7 +1296,7 @@
     {
       "ticker": "GBDC",
       "name": "Golub Capital BDC, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 12.55,
       "currency": "USD",
       "dividendYield": 11.95,
@@ -1313,7 +1313,7 @@
     {
       "ticker": "EG",
       "name": "Everest Group, Ltd.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 328.39,
       "currency": "USD",
       "dividendYield": 2.44,
@@ -1330,7 +1330,7 @@
     {
       "ticker": "RY",
       "name": "Royal Bank Of Canada",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 170.4,
       "currency": "USD",
       "dividendYield": 2.81,
@@ -1347,7 +1347,7 @@
     {
       "ticker": "EWBC",
       "name": "East West Bancorp, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 122.5,
       "currency": "USD",
       "dividendYield": 2.61,
@@ -1364,7 +1364,7 @@
     {
       "ticker": "UBSI",
       "name": "United Bankshares, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 45.52,
       "currency": "USD",
       "dividendYield": 3.34,
@@ -1381,7 +1381,7 @@
     {
       "ticker": "FAF",
       "name": "First American Corporation (New",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 67.34,
       "currency": "USD",
       "dividendYield": 3.25,
@@ -1398,7 +1398,7 @@
     {
       "ticker": "SPB",
       "name": "Spectrum Brands Holdings, Inc.",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 75.72,
       "currency": "USD",
       "dividendYield": 2.48,
@@ -1415,7 +1415,7 @@
     {
       "ticker": "MTH",
       "name": "Meritage Homes Corporation",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 75.91,
       "currency": "USD",
       "dividendYield": 2.27,
@@ -1432,7 +1432,7 @@
     {
       "ticker": "TGT",
       "name": "Target Corporation",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 115.55,
       "currency": "USD",
       "dividendYield": 3.95,
@@ -1449,7 +1449,7 @@
     {
       "ticker": "GSK",
       "name": "GSK plc",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 60.23,
       "currency": "USD",
       "dividendYield": 2.96,
@@ -1466,7 +1466,7 @@
     {
       "ticker": "RF",
       "name": "Regions Financial Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 30.93,
       "currency": "USD",
       "dividendYield": 3.38,
@@ -1483,7 +1483,7 @@
     {
       "ticker": "WTRG",
       "name": "Essential Utilities, Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 37.42,
       "currency": "USD",
       "dividendYield": 3.66,
@@ -1500,7 +1500,7 @@
     {
       "ticker": "ELV",
       "name": "Elevance Health, Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 338.98,
       "currency": "USD",
       "dividendYield": 2.03,
@@ -1517,7 +1517,7 @@
     {
       "ticker": "LYG",
       "name": "Lloyds Banking Group Plc",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 5.91,
       "currency": "USD",
       "dividendYield": 3.38,
@@ -1534,7 +1534,7 @@
     {
       "ticker": "BMO",
       "name": "Bank Of Montreal",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 141.73,
       "currency": "USD",
       "dividendYield": 3.46,
@@ -1551,7 +1551,7 @@
     {
       "ticker": "CMA",
       "name": "Comerica Incorporated",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 88.67,
       "currency": "USD",
       "dividendYield": 3.2,
@@ -1568,7 +1568,7 @@
     {
       "ticker": "XOM",
       "name": "Exxon Mobil Corporation",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 149.05,
       "currency": "USD",
       "dividendYield": 2.76,
@@ -1585,7 +1585,7 @@
     {
       "ticker": "BMY",
       "name": "Bristol-Myers Squibb Company",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 61.99,
       "currency": "USD",
       "dividendYield": 4.07,
@@ -1602,7 +1602,7 @@
     {
       "ticker": "PNC",
       "name": "PNC Financial Services Group, I",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 242.48,
       "currency": "USD",
       "dividendYield": 2.8,
@@ -1619,7 +1619,7 @@
     {
       "ticker": "UNP",
       "name": "Union Pacific Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 252.62,
       "currency": "USD",
       "dividendYield": 2.19,
@@ -1636,7 +1636,7 @@
     {
       "ticker": "SLB",
       "name": "SLB Limited",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 50.7,
       "currency": "USD",
       "dividendYield": 2.33,
@@ -1653,7 +1653,7 @@
     {
       "ticker": "MS",
       "name": "Morgan Stanley",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 179.96,
       "currency": "USD",
       "dividendYield": 2.22,
@@ -1670,7 +1670,7 @@
     {
       "ticker": "FITB",
       "name": "Fifth Third Bancorp",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 55.08,
       "currency": "USD",
       "dividendYield": 2.9,
@@ -1687,7 +1687,7 @@
     {
       "ticker": "ALL",
       "name": "Allstate Corporation (The)",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 207.55,
       "currency": "USD",
       "dividendYield": 2.08,
@@ -1704,7 +1704,7 @@
     {
       "ticker": "ZTS",
       "name": "Zoetis Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 127.42,
       "currency": "USD",
       "dividendYield": 1.66,
@@ -1721,7 +1721,7 @@
     {
       "ticker": "CI",
       "name": "The Cigna Group",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 292.05,
       "currency": "USD",
       "dividendYield": 2.14,
@@ -1738,7 +1738,7 @@
     {
       "ticker": "BXSL",
       "name": "Blackstone Secured Lending Fund",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 24.89,
       "currency": "USD",
       "dividendYield": 12.37,
@@ -1755,7 +1755,7 @@
     {
       "ticker": "FDUS",
       "name": "Fidus Investment Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 18.86,
       "currency": "USD",
       "dividendYield": 10.6,
@@ -1772,7 +1772,7 @@
     {
       "ticker": "NTR",
       "name": "Nutrien Ltd.",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 68.61,
       "currency": "USD",
       "dividendYield": 3.18,
@@ -1789,7 +1789,7 @@
     {
       "ticker": "BR",
       "name": "Broadridge Financial Solutions,",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 181.91,
       "currency": "USD",
       "dividendYield": 2.14,
@@ -1806,7 +1806,7 @@
     {
       "ticker": "AES",
       "name": "The AES Corporation",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 16.05,
       "currency": "USD",
       "dividendYield": 4.39,
@@ -1823,7 +1823,7 @@
     {
       "ticker": "STT",
       "name": "State Street Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 132.35,
       "currency": "USD",
       "dividendYield": 2.54,
@@ -1840,7 +1840,7 @@
     {
       "ticker": "ZION",
       "name": "Zions Bancorporation N.A.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 65.29,
       "currency": "USD",
       "dividendYield": 2.76,
@@ -1857,7 +1857,7 @@
     {
       "ticker": "FHN",
       "name": "First Horizon Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 26.23,
       "currency": "USD",
       "dividendYield": 2.59,
@@ -1874,7 +1874,7 @@
     {
       "ticker": "FNB",
       "name": "F.N.B. Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 18.9,
       "currency": "USD",
       "dividendYield": 2.54,
@@ -1891,7 +1891,7 @@
     {
       "ticker": "RL",
       "name": "Ralph Lauren Corporation",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 342.89,
       "currency": "USD",
       "dividendYield": 1.06,
@@ -1908,7 +1908,7 @@
     {
       "ticker": "EPD",
       "name": "Enterprise Products Partners L.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 34.91,
       "currency": "USD",
       "dividendYield": 6.23,
@@ -1925,7 +1925,7 @@
     {
       "ticker": "CSWC",
       "name": "Capital Southwest Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 23.19,
       "currency": "USD",
       "dividendYield": 13.81,
@@ -1942,7 +1942,7 @@
     {
       "ticker": "GEV",
       "name": "GE Vernova Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 779.35,
       "currency": "USD",
       "dividendYield": 16.0,
@@ -1959,7 +1959,7 @@
     {
       "ticker": "CIG",
       "name": "Comp En De Mn Cemig",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 2.14,
       "currency": "USD",
       "dividendYield": 6.88,
@@ -1976,7 +1976,7 @@
     {
       "ticker": "SBS",
       "name": "Companhia de saneamento Basico ",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 27.59,
       "currency": "USD",
       "dividendYield": 1.74,
@@ -1993,7 +1993,7 @@
     {
       "ticker": "PPG",
       "name": "PPG Industries, Inc.",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 126.51,
       "currency": "USD",
       "dividendYield": 2.24,
@@ -2010,7 +2010,7 @@
     {
       "ticker": "GLAD",
       "name": "Gladstone Capital Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 19.02,
       "currency": "USD",
       "dividendYield": 9.94,
@@ -2027,7 +2027,7 @@
     {
       "ticker": "WTW",
       "name": "Willis Towers Watson Public Lim",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 330.04,
       "currency": "USD",
       "dividendYield": 1.12,
@@ -2044,7 +2044,7 @@
     {
       "ticker": "CFG",
       "name": "Citizens Financial Group, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 68.12,
       "currency": "USD",
       "dividendYield": 2.7,
@@ -2061,7 +2061,7 @@
     {
       "ticker": "GGG",
       "name": "Graco Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 92.76,
       "currency": "USD",
       "dividendYield": 1.27,
@@ -2078,7 +2078,7 @@
     {
       "ticker": "PG",
       "name": "Procter & Gamble Company (The)",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 159.17,
       "currency": "USD",
       "dividendYield": 2.66,
@@ -2095,7 +2095,7 @@
     {
       "ticker": "AEP",
       "name": "American Electric Power Company",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 120.8,
       "currency": "USD",
       "dividendYield": 3.15,
@@ -2112,7 +2112,7 @@
     {
       "ticker": "SAN",
       "name": "Banco Santander, S.A. Sponsored",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 12.71,
       "currency": "USD",
       "dividendYield": 2.02,
@@ -2129,7 +2129,7 @@
     {
       "ticker": "QCOM",
       "name": "QUALCOMM Incorporated",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 137.34,
       "currency": "USD",
       "dividendYield": 2.59,
@@ -2146,7 +2146,7 @@
     {
       "ticker": "NLY",
       "name": "Annaly Capital Management Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 22.85,
       "currency": "USD",
       "dividendYield": 12.25,
@@ -2163,7 +2163,7 @@
     {
       "ticker": "TPVG",
       "name": "TriplePoint Venture Growth BDC ",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 5.73,
       "currency": "USD",
       "dividendYield": 18.85,
@@ -2180,7 +2180,7 @@
     {
       "ticker": "HIG",
       "name": "The Hartford Insurance Group, I",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 142.56,
       "currency": "USD",
       "dividendYield": 1.68,
@@ -2197,7 +2197,7 @@
     {
       "ticker": "IIPR",
       "name": "Innovative Industrial Propertie",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 48.65,
       "currency": "USD",
       "dividendYield": 15.62,
@@ -2214,7 +2214,7 @@
     {
       "ticker": "NTRS",
       "name": "Northern Trust Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 152.15,
       "currency": "USD",
       "dividendYield": 2.07,
@@ -2231,7 +2231,7 @@
     {
       "ticker": "RELX",
       "name": "RELX PLC PLC",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 29.38,
       "currency": "USD",
       "dividendYield": 2.95,
@@ -2248,7 +2248,7 @@
     {
       "ticker": "GGB",
       "name": "Gerdau S.A.",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 4.22,
       "currency": "USD",
       "dividendYield": 2.65,
@@ -2265,7 +2265,7 @@
     {
       "ticker": "ADP",
       "name": "Automatic Data Processing, Inc.",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 231.36,
       "currency": "USD",
       "dividendYield": 2.94,
@@ -2282,7 +2282,7 @@
     {
       "ticker": "GD",
       "name": "General Dynamics Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 360.07,
       "currency": "USD",
       "dividendYield": 1.67,
@@ -2299,7 +2299,7 @@
     {
       "ticker": "SYY",
       "name": "Sysco Corporation",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 86.53,
       "currency": "USD",
       "dividendYield": 2.5,
@@ -2316,7 +2316,7 @@
     {
       "ticker": "JPM",
       "name": "JP Morgan Chase & Co.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 322.4,
       "currency": "USD",
       "dividendYield": 1.86,
@@ -2333,7 +2333,7 @@
     {
       "ticker": "MMC",
       "name": "Marsh & McLennan Companies, Inc",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 182.7,
       "currency": "USD",
       "dividendYield": 1.97,
@@ -2350,7 +2350,7 @@
     {
       "ticker": "TMUS",
       "name": "T-Mobile US, Inc.",
-      "sector": "Communication Services",
+      "sector": "Comunicaciones",
       "price": 197.39,
       "currency": "USD",
       "dividendYield": 2.07,
@@ -2367,7 +2367,7 @@
     {
       "ticker": "ARCC",
       "name": "Ares Capital Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 19.31,
       "currency": "USD",
       "dividendYield": 9.94,
@@ -2384,7 +2384,7 @@
     {
       "ticker": "OBDC",
       "name": "Blue Owl Capital Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 11.46,
       "currency": "USD",
       "dividendYield": 13.61,
@@ -2401,7 +2401,7 @@
     {
       "ticker": "WES",
       "name": "Western Midstream Partners, LP",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 41.12,
       "currency": "USD",
       "dividendYield": 8.85,
@@ -2418,7 +2418,7 @@
     {
       "ticker": "ALLY",
       "name": "Ally Financial Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 42.31,
       "currency": "USD",
       "dividendYield": 2.84,
@@ -2435,7 +2435,7 @@
     {
       "ticker": "EQNR",
       "name": "Equinor ASA",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 27.52,
       "currency": "USD",
       "dividendYield": 5.67,
@@ -2452,7 +2452,7 @@
     {
       "ticker": "POOL",
       "name": "Pool Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 266.16,
       "currency": "USD",
       "dividendYield": 1.88,
@@ -2469,7 +2469,7 @@
     {
       "ticker": "KO",
       "name": "Coca-Cola Company (The)",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 79.03,
       "currency": "USD",
       "dividendYield": 2.58,
@@ -2486,7 +2486,7 @@
     {
       "ticker": "UPS",
       "name": "United Parcel Service, Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 117.34,
       "currency": "USD",
       "dividendYield": 5.59,
@@ -2503,7 +2503,7 @@
     {
       "ticker": "CMS",
       "name": "CMS Energy Corporation",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 72.84,
       "currency": "USD",
       "dividendYield": 3.13,
@@ -2520,7 +2520,7 @@
     {
       "ticker": "AGNC",
       "name": "AGNC Investment Corp.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 11.44,
       "currency": "USD",
       "dividendYield": 12.59,
@@ -2537,7 +2537,7 @@
     {
       "ticker": "LNG",
       "name": "Cheniere Energy, Inc.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 213.11,
       "currency": "USD",
       "dividendYield": 1.04,
@@ -2554,7 +2554,7 @@
     {
       "ticker": "TM",
       "name": "Toyota Motor Corporation",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 244.22,
       "currency": "USD",
       "dividendYield": 2.35,
@@ -2571,7 +2571,7 @@
     {
       "ticker": "KB",
       "name": "KB Financial Group Inc",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 104.63,
       "currency": "USD",
       "dividendYield": 2.4,
@@ -2588,7 +2588,7 @@
     {
       "ticker": "IR",
       "name": "Ingersoll Rand Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 98.5,
       "currency": "USD",
       "dividendYield": 8.0,
@@ -2605,7 +2605,7 @@
     {
       "ticker": "MAS",
       "name": "Masco Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 72.87,
       "currency": "USD",
       "dividendYield": 1.7,
@@ -2622,7 +2622,7 @@
     {
       "ticker": "SBAC",
       "name": "SBA Communications Corporation",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 180.74,
       "currency": "USD",
       "dividendYield": 2.46,
@@ -2639,7 +2639,7 @@
     {
       "ticker": "STC",
       "name": "Stewart Information Services Co",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 71.44,
       "currency": "USD",
       "dividendYield": 2.94,
@@ -2656,7 +2656,7 @@
     {
       "ticker": "LEN",
       "name": "Lennar Corporation",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 114.02,
       "currency": "USD",
       "dividendYield": 1.75,
@@ -2673,7 +2673,7 @@
     {
       "ticker": "SCCO",
       "name": "Southern Copper Corporation",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 200.04,
       "currency": "USD",
       "dividendYield": 2.0,
@@ -2690,7 +2690,7 @@
     {
       "ticker": "EXC",
       "name": "Exelon Corporation",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 44.33,
       "currency": "USD",
       "dividendYield": 3.61,
@@ -2707,7 +2707,7 @@
     {
       "ticker": "BAC",
       "name": "Bank of America Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 56.53,
       "currency": "USD",
       "dividendYield": 1.95,
@@ -2724,7 +2724,7 @@
     {
       "ticker": "WFC",
       "name": "Wells Fargo & Company",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 93.97,
       "currency": "USD",
       "dividendYield": 1.92,
@@ -2741,7 +2741,7 @@
     {
       "ticker": "SCHW",
       "name": "Charles Schwab Corporation (The",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 105.08,
       "currency": "USD",
       "dividendYield": 1.22,
@@ -2758,7 +2758,7 @@
     {
       "ticker": "MET",
       "name": "MetLife, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 76.38,
       "currency": "USD",
       "dividendYield": 2.97,
@@ -2775,7 +2775,7 @@
     {
       "ticker": "HAL",
       "name": "Halliburton Company",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 34.98,
       "currency": "USD",
       "dividendYield": 1.94,
@@ -2792,7 +2792,7 @@
     {
       "ticker": "TRV",
       "name": "The Travelers Companies, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 301.49,
       "currency": "USD",
       "dividendYield": 1.46,
@@ -2809,7 +2809,7 @@
     {
       "ticker": "NOC",
       "name": "Northrop Grumman Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 709.11,
       "currency": "USD",
       "dividendYield": 1.3,
@@ -2826,7 +2826,7 @@
     {
       "ticker": "NXPI",
       "name": "NXP Semiconductors N.V.",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 224.32,
       "currency": "USD",
       "dividendYield": 1.81,
@@ -2843,7 +2843,7 @@
     {
       "ticker": "SAP",
       "name": "SAP  SE",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 203.34,
       "currency": "USD",
       "dividendYield": 1.29,
@@ -2860,7 +2860,7 @@
     {
       "ticker": "PYPL",
       "name": "PayPal Holdings, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 40.42,
       "currency": "USD",
       "dividendYield": 1.39,
@@ -2877,7 +2877,7 @@
     {
       "ticker": "ALLE",
       "name": "Allegion plc",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 179.77,
       "currency": "USD",
       "dividendYield": 1.16,
@@ -2894,7 +2894,7 @@
     {
       "ticker": "MDU",
       "name": "MDU Resources Group, Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 20.34,
       "currency": "USD",
       "dividendYield": 2.75,
@@ -2911,7 +2911,7 @@
     {
       "ticker": "AWR",
       "name": "American States Water Company",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 70.47,
       "currency": "USD",
       "dividendYield": 2.86,
@@ -2928,7 +2928,7 @@
     {
       "ticker": "BK",
       "name": "The Bank of New York Mellon Cor",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 124.32,
       "currency": "USD",
       "dividendYield": 1.71,
@@ -2945,7 +2945,7 @@
     {
       "ticker": "CDW",
       "name": "CDW Corporation",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 142.62,
       "currency": "USD",
       "dividendYield": 1.77,
@@ -2962,7 +2962,7 @@
     {
       "ticker": "AMGN",
       "name": "Amgen Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 384.32,
       "currency": "USD",
       "dividendYield": 2.51,
@@ -2979,7 +2979,7 @@
     {
       "ticker": "CMI",
       "name": "Cummins Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 577.73,
       "currency": "USD",
       "dividendYield": 1.38,
@@ -2996,7 +2996,7 @@
     {
       "ticker": "ET",
       "name": "Energy Transfer LP",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 17.94,
       "currency": "USD",
       "dividendYield": 7.39,
@@ -3013,7 +3013,7 @@
     {
       "ticker": "SYF",
       "name": "Synchrony Financial",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 75.16,
       "currency": "USD",
       "dividendYield": 1.6,
@@ -3030,7 +3030,7 @@
     {
       "ticker": "TTC",
       "name": "Toro Company (The)",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 98.2,
       "currency": "USD",
       "dividendYield": 1.56,
@@ -3047,7 +3047,7 @@
     {
       "ticker": "CBOE",
       "name": "Cboe Global Markets, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 273.36,
       "currency": "USD",
       "dividendYield": 1.05,
@@ -3064,7 +3064,7 @@
     {
       "ticker": "MSEX",
       "name": "Middlesex Water Company",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 51.24,
       "currency": "USD",
       "dividendYield": 2.73,
@@ -3081,7 +3081,7 @@
     {
       "ticker": "CWT",
       "name": "California Water Service Group",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 44.47,
       "currency": "USD",
       "dividendYield": 2.78,
@@ -3098,7 +3098,7 @@
     {
       "ticker": "IBOC",
       "name": "International Bancshares Corpor",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 74.58,
       "currency": "USD",
       "dividendYield": 1.92,
@@ -3115,7 +3115,7 @@
     {
       "ticker": "CBSH",
       "name": "Commerce Bancshares, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 55.17,
       "currency": "USD",
       "dividendYield": 1.99,
@@ -3132,7 +3132,7 @@
     {
       "ticker": "MKC",
       "name": "McCormick & Company, Incorporat",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 67.42,
       "currency": "USD",
       "dividendYield": 2.85,
@@ -3149,7 +3149,7 @@
     {
       "ticker": "ED",
       "name": "Consolidated Edison, Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 107.34,
       "currency": "USD",
       "dividendYield": 3.2,
@@ -3166,7 +3166,7 @@
     {
       "ticker": "ATO",
       "name": "Atmos Energy Corporation",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 171.38,
       "currency": "USD",
       "dividendYield": 2.33,
@@ -3183,7 +3183,7 @@
     {
       "ticker": "K",
       "name": "Kellanova",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 83.44,
       "currency": "USD",
       "dividendYield": 2.78,
@@ -3200,7 +3200,7 @@
     {
       "ticker": "LIN",
       "name": "Linde plc",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 448.24,
       "currency": "USD",
       "dividendYield": 1.34,
@@ -3217,7 +3217,7 @@
     {
       "ticker": "CHD",
       "name": "Church & Dwight Company, Inc.",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 100.53,
       "currency": "USD",
       "dividendYield": 1.22,
@@ -3234,7 +3234,7 @@
     {
       "ticker": "CSX",
       "name": "CSX Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 40.61,
       "currency": "USD",
       "dividendYield": 1.28,
@@ -3251,7 +3251,7 @@
     {
       "ticker": "MPC",
       "name": "Marathon Petroleum Corporation",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 203.0,
       "currency": "USD",
       "dividendYield": 1.88,
@@ -3268,7 +3268,7 @@
     {
       "ticker": "AZN",
       "name": "ASTRAZENECA PLC",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 193.03,
       "currency": "USD",
       "dividendYield": 1.66,
@@ -3285,7 +3285,7 @@
     {
       "ticker": "TJX",
       "name": "TJX Companies, Inc. (The)",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 155.86,
       "currency": "USD",
       "dividendYield": 1.09,
@@ -3302,7 +3302,7 @@
     {
       "ticker": "HESM",
       "name": "Hess Midstream LP",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 35.73,
       "currency": "USD",
       "dividendYield": 8.3,
@@ -3319,7 +3319,7 @@
     {
       "ticker": "ICE",
       "name": "Intercontinental Exchange Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 169.0,
       "currency": "USD",
       "dividendYield": 1.23,
@@ -3336,7 +3336,7 @@
     {
       "ticker": "KMPR",
       "name": "Kemper Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 34.24,
       "currency": "USD",
       "dividendYield": 3.74,
@@ -3353,7 +3353,7 @@
     {
       "ticker": "PKG",
       "name": "Packaging Corporation of Americ",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 238.86,
       "currency": "USD",
       "dividendYield": 2.09,
@@ -3370,7 +3370,7 @@
     {
       "ticker": "AVY",
       "name": "Avery Dennison Corporation",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 191.51,
       "currency": "USD",
       "dividendYield": 1.96,
@@ -3387,7 +3387,7 @@
     {
       "ticker": "SEE",
       "name": "Sealed Air Corporation",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 41.82,
       "currency": "USD",
       "dividendYield": 1.91,
@@ -3404,7 +3404,7 @@
     {
       "ticker": "SFBS",
       "name": "ServisFirst Bancshares, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 85.68,
       "currency": "USD",
       "dividendYield": 1.77,
@@ -3421,7 +3421,7 @@
     {
       "ticker": "MMM",
       "name": "3M Company",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 172.65,
       "currency": "USD",
       "dividendYield": 1.81,
@@ -3438,7 +3438,7 @@
     {
       "ticker": "CLX",
       "name": "Clorox Company (The)",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 119.36,
       "currency": "USD",
       "dividendYield": 4.16,
@@ -3455,7 +3455,7 @@
     {
       "ticker": "KHC",
       "name": "The Kraft Heinz Company",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 24.64,
       "currency": "USD",
       "dividendYield": 6.49,
@@ -3472,7 +3472,7 @@
     {
       "ticker": "NSC",
       "name": "Norfolk Southern Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 306.48,
       "currency": "USD",
       "dividendYield": 1.76,
@@ -3489,7 +3489,7 @@
     {
       "ticker": "PAYX",
       "name": "Paychex, Inc.",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 98.53,
       "currency": "USD",
       "dividendYield": 4.38,
@@ -3506,7 +3506,7 @@
     {
       "ticker": "AM",
       "name": "Antero Midstream Corporation",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 19.18,
       "currency": "USD",
       "dividendYield": 4.69,
@@ -3523,7 +3523,7 @@
     {
       "ticker": "EPR",
       "name": "EPR Properties",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 56.25,
       "currency": "USD",
       "dividendYield": 6.29,
@@ -3540,7 +3540,7 @@
     {
       "ticker": "DRI",
       "name": "Darden Restaurants, Inc.",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 216.27,
       "currency": "USD",
       "dividendYield": 2.77,
@@ -3557,7 +3557,7 @@
     {
       "ticker": "XEL",
       "name": "Xcel Energy Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 75.9,
       "currency": "USD",
       "dividendYield": 3.0,
@@ -3574,7 +3574,7 @@
     {
       "ticker": "DEO",
       "name": "Diageo plc",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 96.88,
       "currency": "USD",
       "dividendYield": 4.27,
@@ -3591,7 +3591,7 @@
     {
       "ticker": "BCS",
       "name": "Barclays PLC",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 26.41,
       "currency": "USD",
       "dividendYield": 1.69,
@@ -3608,7 +3608,7 @@
     {
       "ticker": "NDAQ",
       "name": "Nasdaq, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 84.83,
       "currency": "USD",
       "dividendYield": 1.27,
@@ -3625,7 +3625,7 @@
     {
       "ticker": "CUBE",
       "name": "CubeSmart",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 38.39,
       "currency": "USD",
       "dividendYield": 5.52,
@@ -3642,7 +3642,7 @@
     {
       "ticker": "SBRA",
       "name": "Sabra Health Care REIT, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 19.03,
       "currency": "USD",
       "dividendYield": 6.3,
@@ -3659,7 +3659,7 @@
     {
       "ticker": "OGE",
       "name": "OGE Energy Corp",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 43.96,
       "currency": "USD",
       "dividendYield": 3.87,
@@ -3676,7 +3676,7 @@
     {
       "ticker": "BKH",
       "name": "Black Hills Corporation",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 72.3,
       "currency": "USD",
       "dividendYield": 3.89,
@@ -3693,7 +3693,7 @@
     {
       "ticker": "IDA",
       "name": "IDACORP, Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 135.33,
       "currency": "USD",
       "dividendYield": 2.57,
@@ -3710,7 +3710,7 @@
     {
       "ticker": "BOKF",
       "name": "BOK Financial Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 136.57,
       "currency": "USD",
       "dividendYield": 1.85,
@@ -3727,7 +3727,7 @@
     {
       "ticker": "ITW",
       "name": "Illinois Tool Works Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 293.57,
       "currency": "USD",
       "dividendYield": 2.19,
@@ -3744,7 +3744,7 @@
     {
       "ticker": "BLK",
       "name": "BlackRock, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 1056.38,
       "currency": "USD",
       "dividendYield": 1.97,
@@ -3761,7 +3761,7 @@
     {
       "ticker": "FDX",
       "name": "FedEx Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 369.23,
       "currency": "USD",
       "dividendYield": 1.57,
@@ -3778,7 +3778,7 @@
     {
       "ticker": "PBA",
       "name": "Pembina Pipeline Corp.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 42.69,
       "currency": "USD",
       "dividendYield": 4.86,
@@ -3795,7 +3795,7 @@
     {
       "ticker": "C",
       "name": "Citigroup, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 122.69,
       "currency": "USD",
       "dividendYield": 1.96,
@@ -3812,7 +3812,7 @@
     {
       "ticker": "SNY",
       "name": "Sanofi",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 47.83,
       "currency": "USD",
       "dividendYield": 4.59,
@@ -3829,7 +3829,7 @@
     {
       "ticker": "AWK",
       "name": "American Water Works Company, I",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 124.33,
       "currency": "USD",
       "dividendYield": 2.66,
@@ -3846,7 +3846,7 @@
     {
       "ticker": "DIS",
       "name": "Walt Disney Company (The)",
-      "sector": "Communication Services",
+      "sector": "Comunicaciones",
       "price": 108.7,
       "currency": "USD",
       "dividendYield": 1.38,
@@ -3863,7 +3863,7 @@
     {
       "ticker": "OHI",
       "name": "Omega Healthcare Investors, Inc",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 45.28,
       "currency": "USD",
       "dividendYield": 5.92,
@@ -3880,7 +3880,7 @@
     {
       "ticker": "WDFC",
       "name": "WD-40 Company",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 238.53,
       "currency": "USD",
       "dividendYield": 1.61,
@@ -3897,7 +3897,7 @@
     {
       "ticker": "TX",
       "name": "Ternium S.A. Ternium S.A.",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 43.46,
       "currency": "USD",
       "dividendYield": 6.21,
@@ -3914,7 +3914,7 @@
     {
       "ticker": "ABT",
       "name": "Abbott Laboratories",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 110.83,
       "currency": "USD",
       "dividendYield": 2.27,
@@ -3931,7 +3931,7 @@
     {
       "ticker": "IBM",
       "name": "International Business Machines",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 298.93,
       "currency": "USD",
       "dividendYield": 2.25,
@@ -3948,7 +3948,7 @@
     {
       "ticker": "MO",
       "name": "Altria Group, Inc.",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 65.4,
       "currency": "USD",
       "dividendYield": 6.48,
@@ -3965,7 +3965,7 @@
     {
       "ticker": "ARE",
       "name": "Alexandria Real Estate Equities",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 55.9,
       "currency": "USD",
       "dividendYield": 8.37,
@@ -3982,7 +3982,7 @@
     {
       "ticker": "HSBC",
       "name": "HSBC Holdings, plc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 89.29,
       "currency": "USD",
       "dividendYield": 2.24,
@@ -3999,7 +3999,7 @@
     {
       "ticker": "HD",
       "name": "Home Depot, Inc. (The)",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 385.15,
       "currency": "USD",
       "dividendYield": 2.39,
@@ -4016,7 +4016,7 @@
     {
       "ticker": "AEE",
       "name": "Ameren Corporation",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 105.09,
       "currency": "USD",
       "dividendYield": 2.85,
@@ -4033,7 +4033,7 @@
     {
       "ticker": "NI",
       "name": "NiSource Inc",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 44.1,
       "currency": "USD",
       "dividendYield": 2.72,
@@ -4050,7 +4050,7 @@
     {
       "ticker": "BBY",
       "name": "Best Buy Co., Inc.",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 70.41,
       "currency": "USD",
       "dividendYield": 5.4,
@@ -4067,7 +4067,7 @@
     {
       "ticker": "NDSN",
       "name": "Nordson Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 290.18,
       "currency": "USD",
       "dividendYield": 1.13,
@@ -4084,7 +4084,7 @@
     {
       "ticker": "ECL",
       "name": "Ecolab Inc.",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 290.33,
       "currency": "USD",
       "dividendYield": 1.01,
@@ -4101,7 +4101,7 @@
     {
       "ticker": "POR",
       "name": "Portland General Electric Co",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 50.65,
       "currency": "USD",
       "dividendYield": 4.15,
@@ -4118,7 +4118,7 @@
     {
       "ticker": "WAL",
       "name": "Western Alliance Bancorporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 94.39,
       "currency": "USD",
       "dividendYield": 1.78,
@@ -4135,7 +4135,7 @@
     {
       "ticker": "PCAR",
       "name": "PACCAR Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 127.35,
       "currency": "USD",
       "dividendYield": 1.04,
@@ -4152,7 +4152,7 @@
     {
       "ticker": "STZ",
       "name": "Constellation Brands, Inc.",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 164.33,
       "currency": "USD",
       "dividendYield": 2.48,
@@ -4169,7 +4169,7 @@
     {
       "ticker": "WEC",
       "name": "WEC Energy Group, Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 111.42,
       "currency": "USD",
       "dividendYield": 3.42,
@@ -4186,7 +4186,7 @@
     {
       "ticker": "UL",
       "name": "Unilever PLC",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 72.12,
       "currency": "USD",
       "dividendYield": 3.18,
@@ -4203,7 +4203,7 @@
     {
       "ticker": "ROP",
       "name": "Roper Technologies, Inc.",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 362.42,
       "currency": "USD",
       "dividendYield": 1.0,
@@ -4220,7 +4220,7 @@
     {
       "ticker": "WM",
       "name": "Waste Management, Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 226.79,
       "currency": "USD",
       "dividendYield": 1.46,
@@ -4237,7 +4237,7 @@
     {
       "ticker": "DE",
       "name": "Deere & Company",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 583.11,
       "currency": "USD",
       "dividendYield": 1.11,
@@ -4254,7 +4254,7 @@
     {
       "ticker": "VLO",
       "name": "Valero Energy Corporation",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 202.68,
       "currency": "USD",
       "dividendYield": 2.37,
@@ -4271,7 +4271,7 @@
     {
       "ticker": "GS",
       "name": "Goldman Sachs Group, Inc. (The)",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 928.75,
       "currency": "USD",
       "dividendYield": 1.94,
@@ -4288,7 +4288,7 @@
     {
       "ticker": "DTE",
       "name": "DTE Energy Company",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 134.82,
       "currency": "USD",
       "dividendYield": 3.29,
@@ -4305,7 +4305,7 @@
     {
       "ticker": "UBS",
       "name": "UBS Group AG Registered",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 43.91,
       "currency": "USD",
       "dividendYield": 2.51,
@@ -4322,7 +4322,7 @@
     {
       "ticker": "TSCO",
       "name": "Tractor Supply Company",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 55.61,
       "currency": "USD",
       "dividendYield": 1.65,
@@ -4339,7 +4339,7 @@
     {
       "ticker": "CME",
       "name": "CME Group Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 302.27,
       "currency": "USD",
       "dividendYield": 1.65,
@@ -4356,7 +4356,7 @@
     {
       "ticker": "EMN",
       "name": "Eastman Chemical Company",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 77.43,
       "currency": "USD",
       "dividendYield": 4.34,
@@ -4373,7 +4373,7 @@
     {
       "ticker": "LNT",
       "name": "Alliant Energy Corporation",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 66.69,
       "currency": "USD",
       "dividendYield": 3.08,
@@ -4390,7 +4390,7 @@
     {
       "ticker": "EVRG",
       "name": "Evergy, Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 76.75,
       "currency": "USD",
       "dividendYield": 3.62,
@@ -4407,7 +4407,7 @@
     {
       "ticker": "LOW",
       "name": "Lowe's Companies, Inc.",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 278.38,
       "currency": "USD",
       "dividendYield": 1.72,
@@ -4424,7 +4424,7 @@
     {
       "ticker": "EQR",
       "name": "Equity Residential",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 63.89,
       "currency": "USD",
       "dividendYield": 4.34,
@@ -4441,7 +4441,7 @@
     {
       "ticker": "PFE",
       "name": "Pfizer, Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 27.22,
       "currency": "USD",
       "dividendYield": 6.32,
@@ -4458,7 +4458,7 @@
     {
       "ticker": "CB",
       "name": "Chubb Limited",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 330.97,
       "currency": "USD",
       "dividendYield": 1.17,
@@ -4475,7 +4475,7 @@
     {
       "ticker": "AMCR",
       "name": "Amcor plc",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 48.17,
       "currency": "USD",
       "dividendYield": 5.4,
@@ -4492,7 +4492,7 @@
     {
       "ticker": "ETN",
       "name": "Eaton Corporation, PLC",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 373.82,
       "currency": "USD",
       "dividendYield": 1.11,
@@ -4509,7 +4509,7 @@
     {
       "ticker": "CSCO",
       "name": "Cisco Systems, Inc.",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 84.82,
       "currency": "USD",
       "dividendYield": 1.93,
@@ -4526,7 +4526,7 @@
     {
       "ticker": "KIM",
       "name": "Kimco Realty Corporation (HC)",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 21.83,
       "currency": "USD",
       "dividendYield": 4.76,
@@ -4543,7 +4543,7 @@
     {
       "ticker": "HUM",
       "name": "Humana Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 193.94,
       "currency": "USD",
       "dividendYield": 1.83,
@@ -4560,7 +4560,7 @@
     {
       "ticker": "BNS",
       "name": "Bank Nova Scotia Halifax Pfd 3",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 76.34,
       "currency": "USD",
       "dividendYield": 4.24,
@@ -4577,7 +4577,7 @@
     {
       "ticker": "GPC",
       "name": "Genuine Parts Company",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 148.51,
       "currency": "USD",
       "dividendYield": 2.77,
@@ -4594,7 +4594,7 @@
     {
       "ticker": "CHRW",
       "name": "C.H. Robinson Worldwide, Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 200.59,
       "currency": "USD",
       "dividendYield": 1.26,
@@ -4611,7 +4611,7 @@
     {
       "ticker": "INVH",
       "name": "Invitation Homes Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 26.34,
       "currency": "USD",
       "dividendYield": 4.56,
@@ -4628,7 +4628,7 @@
     {
       "ticker": "DOC",
       "name": "Healthpeak Properties, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 16.85,
       "currency": "USD",
       "dividendYield": 7.24,
@@ -4645,7 +4645,7 @@
     {
       "ticker": "XYL",
       "name": "Xylem Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 142.12,
       "currency": "USD",
       "dividendYield": 1.13,
@@ -4662,7 +4662,7 @@
     {
       "ticker": "TAP",
       "name": "Molson Coors Beverage Company",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 51.76,
       "currency": "USD",
       "dividendYield": 3.63,
@@ -4679,7 +4679,7 @@
     {
       "ticker": "SWKS",
       "name": "Skyworks Solutions, Inc.",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 62.1,
       "currency": "USD",
       "dividendYield": 4.57,
@@ -4696,7 +4696,7 @@
     {
       "ticker": "DHI",
       "name": "D.R. Horton, Inc.",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 156.27,
       "currency": "USD",
       "dividendYield": 1.15,
@@ -4713,7 +4713,7 @@
     {
       "ticker": "MCD",
       "name": "McDonald's Corporation",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 327.16,
       "currency": "USD",
       "dividendYield": 2.27,
@@ -4730,7 +4730,7 @@
     {
       "ticker": "NNN",
       "name": "NNN REIT, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 42.91,
       "currency": "USD",
       "dividendYield": 5.59,
@@ -4747,7 +4747,7 @@
     {
       "ticker": "PSA",
       "name": "Public Storage",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 287.0,
       "currency": "USD",
       "dividendYield": 4.18,
@@ -4764,7 +4764,7 @@
     {
       "ticker": "DUK",
       "name": "Duke Energy Corporation (Holdin",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 121.86,
       "currency": "USD",
       "dividendYield": 3.5,
@@ -4781,7 +4781,7 @@
     {
       "ticker": "MPW",
       "name": "Medical Properties Trust, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 5.02,
       "currency": "USD",
       "dividendYield": 7.17,
@@ -4798,7 +4798,7 @@
     {
       "ticker": "HIW",
       "name": "Highwoods Properties, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 26.01,
       "currency": "USD",
       "dividendYield": 7.69,
@@ -4815,7 +4815,7 @@
     {
       "ticker": "LMT",
       "name": "Lockheed Martin Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 623.58,
       "currency": "USD",
       "dividendYield": 2.21,
@@ -4832,7 +4832,7 @@
     {
       "ticker": "OC",
       "name": "Owens Corning Inc",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 135.74,
       "currency": "USD",
       "dividendYield": 2.18,
@@ -4849,7 +4849,7 @@
     {
       "ticker": "EXR",
       "name": "Extra Space Storage Inc",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 140.01,
       "currency": "USD",
       "dividendYield": 4.63,
@@ -4866,7 +4866,7 @@
     {
       "ticker": "UMBF",
       "name": "UMB Financial Corporation",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 134.32,
       "currency": "USD",
       "dividendYield": 1.28,
@@ -4883,7 +4883,7 @@
     {
       "ticker": "BSBR",
       "name": "Banco Santander Brasil SA",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 6.49,
       "currency": "USD",
       "dividendYield": 5.04,
@@ -4900,7 +4900,7 @@
     {
       "ticker": "NUE",
       "name": "Nucor Corporation",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 192.84,
       "currency": "USD",
       "dividendYield": 1.16,
@@ -4917,7 +4917,7 @@
     {
       "ticker": "KMI",
       "name": "Kinder Morgan, Inc.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 30.5,
       "currency": "USD",
       "dividendYield": 3.84,
@@ -4934,7 +4934,7 @@
     {
       "ticker": "AVB",
       "name": "AvalonBay Communities, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 173.83,
       "currency": "USD",
       "dividendYield": 4.1,
@@ -4951,7 +4951,7 @@
     {
       "ticker": "SO",
       "name": "Southern Company (The)",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 90.08,
       "currency": "USD",
       "dividendYield": 3.29,
@@ -4968,7 +4968,7 @@
     {
       "ticker": "ES",
       "name": "Eversource Energy (D/B/A)",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 67.36,
       "currency": "USD",
       "dividendYield": 4.68,
@@ -4985,7 +4985,7 @@
     {
       "ticker": "HON",
       "name": "Honeywell International Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 238.38,
       "currency": "USD",
       "dividendYield": 1.92,
@@ -5002,7 +5002,7 @@
     {
       "ticker": "YUM",
       "name": "Yum! Brands, Inc.",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 162.93,
       "currency": "USD",
       "dividendYield": 1.84,
@@ -5019,7 +5019,7 @@
     {
       "ticker": "ORCL",
       "name": "Oracle Corporation",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 142.82,
       "currency": "USD",
       "dividendYield": 1.4,
@@ -5036,7 +5036,7 @@
     {
       "ticker": "ROK",
       "name": "Rockwell Automation, Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 415.02,
       "currency": "USD",
       "dividendYield": 1.33,
@@ -5053,7 +5053,7 @@
     {
       "ticker": "NWE",
       "name": "NorthWestern Energy Group, Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 68.18,
       "currency": "USD",
       "dividendYield": 3.87,
@@ -5070,7 +5070,7 @@
     {
       "ticker": "TPR",
       "name": "Tapestry, Inc.",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 152.1,
       "currency": "USD",
       "dividendYield": 1.05,
@@ -5087,7 +5087,7 @@
     {
       "ticker": "HRL",
       "name": "Hormel Foods Corporation",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 24.93,
       "currency": "USD",
       "dividendYield": 4.69,
@@ -5104,7 +5104,7 @@
     {
       "ticker": "MDT",
       "name": "Medtronic plc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 102.9,
       "currency": "USD",
       "dividendYield": 2.76,
@@ -5121,7 +5121,7 @@
     {
       "ticker": "FRT",
       "name": "Federal Realty Investment Trust",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 105.76,
       "currency": "USD",
       "dividendYield": 4.27,
@@ -5138,7 +5138,7 @@
     {
       "ticker": "RSG",
       "name": "Republic Services, Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 219.94,
       "currency": "USD",
       "dividendYield": 1.14,
@@ -5155,7 +5155,7 @@
     {
       "ticker": "VTRS",
       "name": "Viatris Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 14.58,
       "currency": "USD",
       "dividendYield": 3.29,
@@ -5172,7 +5172,7 @@
     {
       "ticker": "E",
       "name": "ENI S.p.A.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 42.32,
       "currency": "USD",
       "dividendYield": 5.49,
@@ -5189,7 +5189,7 @@
     {
       "ticker": "RTX",
       "name": "RTX Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 198.66,
       "currency": "USD",
       "dividendYield": 1.37,
@@ -5206,7 +5206,7 @@
     {
       "ticker": "DG",
       "name": "Dollar General Corporation",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 146.65,
       "currency": "USD",
       "dividendYield": 1.61,
@@ -5223,7 +5223,7 @@
     {
       "ticker": "AVA",
       "name": "Avista Corporation",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 41.5,
       "currency": "USD",
       "dividendYield": 4.72,
@@ -5240,7 +5240,7 @@
     {
       "ticker": "CARR",
       "name": "Carrier Global Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 63.92,
       "currency": "USD",
       "dividendYield": 1.5,
@@ -5257,7 +5257,7 @@
     {
       "ticker": "JCI",
       "name": "Johnson Controls International ",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 137.65,
       "currency": "USD",
       "dividendYield": 1.16,
@@ -5274,7 +5274,7 @@
     {
       "ticker": "BDX",
       "name": "Becton, Dickinson and Company",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 210.02,
       "currency": "USD",
       "dividendYield": 2.0,
@@ -5291,7 +5291,7 @@
     {
       "ticker": "BEN",
       "name": "Franklin Resources, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 27.2,
       "currency": "USD",
       "dividendYield": 4.85,
@@ -5308,7 +5308,7 @@
     {
       "ticker": "PM",
       "name": "Philip Morris International Inc",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 182.81,
       "currency": "USD",
       "dividendYield": 3.22,
@@ -5325,7 +5325,7 @@
     {
       "ticker": "O",
       "name": "Realty Income Corporation",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 63.23,
       "currency": "USD",
       "dividendYield": 5.12,
@@ -5342,7 +5342,7 @@
     {
       "ticker": "KVUE",
       "name": "Kenvue Inc.",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 18.13,
       "currency": "USD",
       "dividendYield": 4.58,
@@ -5359,7 +5359,7 @@
     {
       "ticker": "PNW",
       "name": "Pinnacle West Capital Corporati",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 93.52,
       "currency": "USD",
       "dividendYield": 3.89,
@@ -5376,7 +5376,7 @@
     {
       "ticker": "TRGP",
       "name": "Targa Resources, Inc.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 211.44,
       "currency": "USD",
       "dividendYield": 1.89,
@@ -5393,7 +5393,7 @@
     {
       "ticker": "CNP",
       "name": "CenterPoint Energy, Inc (Holdin",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 40.05,
       "currency": "USD",
       "dividendYield": 2.3,
@@ -5410,7 +5410,7 @@
     {
       "ticker": "EMR",
       "name": "Emerson Electric Company",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 157.38,
       "currency": "USD",
       "dividendYield": 1.38,
@@ -5427,7 +5427,7 @@
     {
       "ticker": "AMT",
       "name": "American Tower Corporation (REI",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 171.27,
       "currency": "USD",
       "dividendYield": 3.97,
@@ -5444,7 +5444,7 @@
     {
       "ticker": "NEE",
       "name": "NextEra Energy, Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 89.47,
       "currency": "USD",
       "dividendYield": 2.53,
@@ -5461,7 +5461,7 @@
     {
       "ticker": "CAG",
       "name": "ConAgra Brands, Inc.",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 19.35,
       "currency": "USD",
       "dividendYield": 7.24,
@@ -5478,7 +5478,7 @@
     {
       "ticker": "CCI",
       "name": "Crown Castle Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 80.88,
       "currency": "USD",
       "dividendYield": 5.25,
@@ -5495,7 +5495,7 @@
     {
       "ticker": "DTM",
       "name": "DT Midstream, Inc.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 128.58,
       "currency": "USD",
       "dividendYield": 2.55,
@@ -5512,7 +5512,7 @@
     {
       "ticker": "EFX",
       "name": "Equifax, Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 195.62,
       "currency": "USD",
       "dividendYield": 1.02,
@@ -5529,7 +5529,7 @@
     {
       "ticker": "NHI",
       "name": "National Health Investors, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 84.07,
       "currency": "USD",
       "dividendYield": 4.38,
@@ -5546,7 +5546,7 @@
     {
       "ticker": "LTC",
       "name": "LTC Properties, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 37.39,
       "currency": "USD",
       "dividendYield": 6.1,
@@ -5563,7 +5563,7 @@
     {
       "ticker": "RBA",
       "name": "RB Global, Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 117.71,
       "currency": "USD",
       "dividendYield": 1.04,
@@ -5580,7 +5580,7 @@
     {
       "ticker": "BTI",
       "name": "British American Tobacco  Indus",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 62.8,
       "currency": "USD",
       "dividendYield": 5.11,
@@ -5597,7 +5597,7 @@
     {
       "ticker": "WPC",
       "name": "W. P. Carey Inc. REIT",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 71.21,
       "currency": "USD",
       "dividendYield": 5.17,
@@ -5614,7 +5614,7 @@
     {
       "ticker": "OTIS",
       "name": "Otis Worldwide Corporation",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 89.85,
       "currency": "USD",
       "dividendYield": 1.87,
@@ -5631,7 +5631,7 @@
     {
       "ticker": "REG",
       "name": "Regency Centers Corporation",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 75.22,
       "currency": "USD",
       "dividendYield": 4.01,
@@ -5648,7 +5648,7 @@
     {
       "ticker": "MSCI",
       "name": "MSCI Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 557.78,
       "currency": "USD",
       "dividendYield": 1.47,
@@ -5665,7 +5665,7 @@
     {
       "ticker": "AJG",
       "name": "Arthur J. Gallagher & Co.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 241.58,
       "currency": "USD",
       "dividendYield": 1.16,
@@ -5682,7 +5682,7 @@
     {
       "ticker": "MAA",
       "name": "Mid-America Apartment Communiti",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 132.13,
       "currency": "USD",
       "dividendYield": 4.63,
@@ -5699,7 +5699,7 @@
     {
       "ticker": "WMB",
       "name": "Williams Companies, Inc. (The)",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 66.92,
       "currency": "USD",
       "dividendYield": 3.14,
@@ -5716,7 +5716,7 @@
     {
       "ticker": "D",
       "name": "Dominion Energy, Inc.",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 62.33,
       "currency": "USD",
       "dividendYield": 4.28,
@@ -5733,7 +5733,7 @@
     {
       "ticker": "ENB",
       "name": "Enbridge Inc",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 50.32,
       "currency": "USD",
       "dividendYield": 5.51,
@@ -5750,7 +5750,7 @@
     {
       "ticker": "STAG",
       "name": "Stag Industrial, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 39.31,
       "currency": "USD",
       "dividendYield": 3.94,
@@ -5767,7 +5767,7 @@
     {
       "ticker": "BP",
       "name": "BP p.l.c.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 39.01,
       "currency": "USD",
       "dividendYield": 5.12,
@@ -5784,7 +5784,7 @@
     {
       "ticker": "FAST",
       "name": "Fastenal Company",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 47.73,
       "currency": "USD",
       "dividendYield": 1.89,
@@ -5801,7 +5801,7 @@
     {
       "ticker": "CL",
       "name": "Colgate-Palmolive Company",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 94.41,
       "currency": "USD",
       "dividendYield": 2.2,
@@ -5818,7 +5818,7 @@
     {
       "ticker": "SRE",
       "name": "DBA Sempra",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 87.36,
       "currency": "USD",
       "dividendYield": 2.95,
@@ -5835,7 +5835,7 @@
     {
       "ticker": "ESS",
       "name": "Essex Property Trust, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 258.06,
       "currency": "USD",
       "dividendYield": 3.98,
@@ -5852,7 +5852,7 @@
     {
       "ticker": "SLG",
       "name": "SL Green Realty Corp",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 43.72,
       "currency": "USD",
       "dividendYield": 7.07,
@@ -5869,7 +5869,7 @@
     {
       "ticker": "NGG",
       "name": "National Grid Transco, PLC Nati",
-      "sector": "Utilities",
+      "sector": "Servicios P\u00fablicos",
       "price": 88.06,
       "currency": "USD",
       "dividendYield": 3.54,
@@ -5886,7 +5886,7 @@
     {
       "ticker": "CVS",
       "name": "CVS Health Corporation",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 78.35,
       "currency": "USD",
       "dividendYield": 3.4,
@@ -5903,7 +5903,7 @@
     {
       "ticker": "PAGP",
       "name": "Plains GP Holdings, L.P.",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 20.71,
       "currency": "USD",
       "dividendYield": 8.07,
@@ -5920,7 +5920,7 @@
     {
       "ticker": "ADI",
       "name": "Analog Devices, Inc.",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 320.45,
       "currency": "USD",
       "dividendYield": 1.24,
@@ -5937,7 +5937,7 @@
     {
       "ticker": "SJM",
       "name": "The J.M. Smucker Company",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 109.51,
       "currency": "USD",
       "dividendYield": 4.02,
@@ -5954,7 +5954,7 @@
     {
       "ticker": "CPT",
       "name": "Camden Property Trust",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 106.63,
       "currency": "USD",
       "dividendYield": 3.98,
@@ -5971,7 +5971,7 @@
     {
       "ticker": "CVX",
       "name": "Chevron Corporation",
-      "sector": "Energy",
+      "sector": "Energ\u00eda",
       "price": 180.86,
       "currency": "USD",
       "dividendYield": 3.94,
@@ -5988,7 +5988,7 @@
     {
       "ticker": "SWK",
       "name": "Stanley Black & Decker, Inc.",
-      "sector": "Industrials",
+      "sector": "Industriales",
       "price": 89.39,
       "currency": "USD",
       "dividendYield": 3.71,
@@ -6005,7 +6005,7 @@
     {
       "ticker": "NKE",
       "name": "Nike, Inc.",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 63.92,
       "currency": "USD",
       "dividendYield": 2.57,
@@ -6022,7 +6022,7 @@
     {
       "ticker": "WFG",
       "name": "West Fraser Timber Co. Ltd",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 73.37,
       "currency": "USD",
       "dividendYield": 1.74,
@@ -6039,7 +6039,7 @@
     {
       "ticker": "PEP",
       "name": "Pepsico, Inc.",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 170.49,
       "currency": "USD",
       "dividendYield": 3.34,
@@ -6056,7 +6056,7 @@
     {
       "ticker": "DD",
       "name": "DuPont de Nemours, Inc.",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 46.73,
       "currency": "USD",
       "dividendYield": 3.06,
@@ -6073,7 +6073,7 @@
     {
       "ticker": "TXN",
       "name": "Texas Instruments Incorporated",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 221.44,
       "currency": "USD",
       "dividendYield": 2.57,
@@ -6090,7 +6090,7 @@
     {
       "ticker": "TAK",
       "name": "Takeda Pharmaceutical Company L",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 17.89,
       "currency": "USD",
       "dividendYield": 3.7,
@@ -6107,7 +6107,7 @@
     {
       "ticker": "UDR",
       "name": "UDR, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 37.55,
       "currency": "USD",
       "dividendYield": 4.58,
@@ -6124,7 +6124,7 @@
     {
       "ticker": "IRM",
       "name": "Iron Mountain Incorporated (Del",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 95.78,
       "currency": "USD",
       "dividendYield": 3.61,
@@ -6141,7 +6141,7 @@
     {
       "ticker": "TEF",
       "name": "Telefonica SA",
-      "sector": "Communication Services",
+      "sector": "Comunicaciones",
       "price": 3.81,
       "currency": "USD",
       "dividendYield": 9.15,
@@ -6158,7 +6158,7 @@
     {
       "ticker": "SON",
       "name": "Sonoco Products Company",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 51.32,
       "currency": "USD",
       "dividendYield": 4.13,
@@ -6175,7 +6175,7 @@
     {
       "ticker": "FMC",
       "name": "FMC Corporation",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 14.76,
       "currency": "USD",
       "dividendYield": 12.33,
@@ -6192,7 +6192,7 @@
     {
       "ticker": "NSA",
       "name": "National Storage Affiliates Tru",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 32.68,
       "currency": "USD",
       "dividendYield": 6.98,
@@ -6209,7 +6209,7 @@
     {
       "ticker": "MCHP",
       "name": "Microchip Technology Incorporat",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 76.01,
       "currency": "USD",
       "dividendYield": 2.39,
@@ -6226,7 +6226,7 @@
     {
       "ticker": "DLR",
       "name": "Digital Realty Trust, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 171.62,
       "currency": "USD",
       "dividendYield": 2.84,
@@ -6243,7 +6243,7 @@
     {
       "ticker": "BXP",
       "name": "BXP, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 64.72,
       "currency": "USD",
       "dividendYield": 4.33,
@@ -6260,7 +6260,7 @@
     {
       "ticker": "BEKE",
       "name": "KE Holdings Inc",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 18.71,
       "currency": "USD",
       "dividendYield": 1.92,
@@ -6277,7 +6277,7 @@
     {
       "ticker": "HR",
       "name": "Healthcare Realty Trust Incorpo",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 16.92,
       "currency": "USD",
       "dividendYield": 5.67,
@@ -6294,7 +6294,7 @@
     {
       "ticker": "NOK",
       "name": "Nokia Corporation Sponsored",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 7.07,
       "currency": "USD",
       "dividendYield": 2.28,
@@ -6311,7 +6311,7 @@
     {
       "ticker": "ABBV",
       "name": "AbbVie Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 223.43,
       "currency": "USD",
       "dividendYield": 2.98,
@@ -6328,7 +6328,7 @@
     {
       "ticker": "FIS",
       "name": "Fidelity National Information S",
-      "sector": "Technology",
+      "sector": "Tecnolog\u00eda",
       "price": 51.93,
       "currency": "USD",
       "dividendYield": 3.16,
@@ -6345,7 +6345,7 @@
     {
       "ticker": "EQIX",
       "name": "Equinix, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 848.12,
       "currency": "USD",
       "dividendYield": 2.21,
@@ -6362,7 +6362,7 @@
     {
       "ticker": "VOD",
       "name": "Vodafone Group Plc",
-      "sector": "Communication Services",
+      "sector": "Comunicaciones",
       "price": 15.11,
       "currency": "USD",
       "dividendYield": 3.52,
@@ -6379,7 +6379,7 @@
     {
       "ticker": "IP",
       "name": "International Paper Company",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 46.58,
       "currency": "USD",
       "dividendYield": 3.97,
@@ -6396,7 +6396,7 @@
     {
       "ticker": "PLD",
       "name": "Prologis, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 136.95,
       "currency": "USD",
       "dividendYield": 2.95,
@@ -6413,7 +6413,7 @@
     {
       "ticker": "MAC",
       "name": "Macerich Company (The)",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 19.62,
       "currency": "USD",
       "dividendYield": 3.47,
@@ -6430,7 +6430,7 @@
     {
       "ticker": "WY",
       "name": "Weyerhaeuser Company",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 26.64,
       "currency": "USD",
       "dividendYield": 3.15,
@@ -6447,7 +6447,7 @@
     {
       "ticker": "SID",
       "name": "Companhia Siderurgica Nacional ",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 1.83,
       "currency": "USD",
       "dividendYield": 14.52,
@@ -6464,7 +6464,7 @@
     {
       "ticker": "HSY",
       "name": "The Hershey Company",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 231.53,
       "currency": "USD",
       "dividendYield": 2.51,
@@ -6481,7 +6481,7 @@
     {
       "ticker": "BAX",
       "name": "Baxter International Inc.",
-      "sector": "Healthcare",
+      "sector": "Salud",
       "price": 21.73,
       "currency": "USD",
       "dividendYield": 2.39,
@@ -6498,7 +6498,7 @@
     {
       "ticker": "PKX",
       "name": "POSCO Holdings Inc.",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 63.27,
       "currency": "USD",
       "dividendYield": 2.79,
@@ -6515,7 +6515,7 @@
     {
       "ticker": "APD",
       "name": "Air Products and Chemicals, Inc",
-      "sector": "Basic Materials",
+      "sector": "Materiales B\u00e1sicos",
       "price": 283.12,
       "currency": "USD",
       "dividendYield": 2.56,
@@ -6532,7 +6532,7 @@
     {
       "ticker": "WELL",
       "name": "Welltower Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 195.92,
       "currency": "USD",
       "dividendYield": 1.51,
@@ -6549,7 +6549,7 @@
     {
       "ticker": "GOLD",
       "name": "Gold.com, Inc.",
-      "sector": "Financial Services",
+      "sector": "Servicios Financieros",
       "price": 55.32,
       "currency": "USD",
       "dividendYield": 1.45,
@@ -6566,7 +6566,7 @@
     {
       "ticker": "KR",
       "name": "Kroger Company (The)",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 67.5,
       "currency": "USD",
       "dividendYield": 2.03,
@@ -6583,7 +6583,7 @@
     {
       "ticker": "VTR",
       "name": "Ventas, Inc.",
-      "sector": "Real Estate",
+      "sector": "Inmobiliario",
       "price": 82.55,
       "currency": "USD",
       "dividendYield": 2.52,
@@ -6600,7 +6600,7 @@
     {
       "ticker": "SBUX",
       "name": "Starbucks Corporation",
-      "sector": "Consumer Cyclical",
+      "sector": "Consumo C\u00edclico",
       "price": 99.45,
       "currency": "USD",
       "dividendYield": 2.49,
@@ -6617,7 +6617,7 @@
     {
       "ticker": "EL",
       "name": "Estee Lauder Companies, Inc. (T",
-      "sector": "Consumer Defensive",
+      "sector": "Consumo Defensivo",
       "price": 99.47,
       "currency": "USD",
       "dividendYield": 1.41,

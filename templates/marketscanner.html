@@ -256,9 +256,16 @@
                                 <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
                                     <h3 class="text-lg font-bold text-slate-200 flex items-center gap-2">
                                         <span class="text-2xl">🏆</span>
-                                        Top 50 Acciones con Mejores Dividendos
+                                        <span id="screener-title-topn">Top 50</span> Acciones con Mejores Dividendos
                                     </h3>
                                     <div class="flex items-center gap-3">
+                                        <select id="screener-topn-select" onchange="cambiarTopNScreener()"
+                                            class="text-xs px-2 py-1.5 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer">
+                                            <option value="50" selected>Top 50</option>
+                                            <option value="100">Top 100</option>
+                                            <option value="200">Top 200</option>
+                                            <option value="all">Todas</option>
+                                        </select>
                                         <span id="screener-last-updated" class="text-xs text-slate-500"></span>
                                         <button onclick="cargarScreenerDividendos(true)" id="screener-refresh-btn"
                                             class="text-xs px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg transition flex items-center gap-1.5"
@@ -734,6 +741,7 @@
         let screenerSortAsc = false;
         let screenerCameFromScreener = false;
         let screenerPollInterval = null;
+        let screenerTopN = '50'; // '50', '100', '200', 'all'
 
         // ============================================
         // HISTORIAL DE BÚSQUEDAS
@@ -1095,9 +1103,10 @@
             errorDiv.classList.add('hidden');
 
             try {
+                const limitParam = `limit=${screenerTopN}`;
                 const url = forceRefresh
-                    ? '/api/screener/dividends?refresh=1'
-                    : '/api/screener/dividends';
+                    ? `/api/screener/dividends?refresh=1&${limitParam}`
+                    : `/api/screener/dividends?${limitParam}`;
                 const response = await fetch(url);
                 if (!response.ok) throw new Error(`Error ${response.status}`);
                 const result = await response.json();
@@ -1108,7 +1117,7 @@
                     renderizarTablaScreener(screenerData);
                     tableContainer.classList.remove('hidden');
                     loading.classList.add('hidden');
-                    actualizarTimestampScreener(result.last_updated, result.cached);
+                    actualizarTimestampScreener(result.last_updated, result.cached, result.total_available);
                     // Cargar correlaciones con cartera automáticamente
                     cargarCorrelacionesScreener();
                     if (screenerPollInterval) {
@@ -1137,7 +1146,7 @@
 
             screenerPollInterval = setInterval(async () => {
                 try {
-                    const res = await fetch('/api/screener/dividends/status');
+                    const res = await fetch(`/api/screener/dividends/status?limit=${screenerTopN}`);
                     const data = await res.json();
 
                     if (data.success && data.data) {
@@ -1148,7 +1157,7 @@
                         renderizarTablaScreener(screenerData);
                         tableContainer.classList.remove('hidden');
                         loading.classList.add('hidden');
-                        actualizarTimestampScreener(data.last_updated, false);
+                        actualizarTimestampScreener(data.last_updated, false, data.total_available);
                         // Cargar correlaciones
                         cargarCorrelacionesScreener();
                     } else if (data.running) {
@@ -1160,14 +1169,16 @@
             }, 3000); // Poll cada 3 segundos
         }
 
-        function actualizarTimestampScreener(timestamp, cached) {
+        function actualizarTimestampScreener(timestamp, cached, totalAvailable) {
             const el = document.getElementById('screener-last-updated');
             if (!el || !timestamp) return;
             const fecha = new Date(timestamp);
+            const showing = screenerData ? screenerData.length : '';
+            const totalInfo = totalAvailable && screenerTopN !== 'all' ? ` (${showing} de ${totalAvailable})` : totalAvailable ? ` (${totalAvailable} total)` : '';
             el.textContent = `${fecha.toLocaleString('es-ES', {
                 day: '2-digit', month: '2-digit',
                 hour: '2-digit', minute: '2-digit'
-            })}${cached ? ' (caché)' : ' ✓'}`;
+            })}${cached ? ' (caché)' : ' ✓'}${totalInfo}`;
         }
 
         function renderizarTablaScreener(data) {
@@ -1275,6 +1286,21 @@
             renderizarTablaScreener(screenerData);
         }
 
+        function cambiarTopNScreener() {
+            const select = document.getElementById('screener-topn-select');
+            screenerTopN = select.value;
+            localStorage.setItem('screener_topn', screenerTopN);
+
+            // Actualizar título
+            const titleEl = document.getElementById('screener-title-topn');
+            if (titleEl) {
+                titleEl.textContent = screenerTopN === 'all' ? 'Todas las' : `Top ${screenerTopN}`;
+            }
+
+            // Re-fetch con nuevo limit (instantáneo desde caché, sin nuevo escaneo)
+            cargarScreenerDividendos(false);
+        }
+
         function seleccionarDesdeScreener(ticker) {
             screenerCameFromScreener = true;
             document.getElementById('btn-back-screener')?.classList.remove('hidden');
@@ -1327,7 +1353,7 @@
             results.classList.add('hidden');
 
             try {
-                const response = await fetch('/api/screener/correlaciones');
+                const response = await fetch(`/api/screener/correlaciones?limit=${screenerTopN}`);
                 if (!response.ok) throw new Error(`Error ${response.status}`);
                 const data = await response.json();
 
@@ -1363,8 +1389,9 @@
             if (!bestContainer || !worstContainer) return;
 
             // Los datos ya vienen ordenados por correlación ascendente (menor primero)
-            const best = data.slice(0, 25);  // 25 con menor correlación (mejor diversificación)
-            const worst = data.slice(-25).reverse(); // 25 con mayor correlación
+            const halfCount = Math.min(25, Math.ceil(data.length / 2));
+            const best = data.slice(0, halfCount);  // Menor correlación (mejor diversificación)
+            const worst = data.slice(-halfCount).reverse(); // Mayor correlación
 
             bestContainer.innerHTML = best.map((item, i) => generarFilaCorrelacion(item, i + 1, 'best')).join('');
             worstContainer.innerHTML = worst.map((item, i) => generarFilaCorrelacion(item, i + 1, 'worst')).join('');
@@ -1423,6 +1450,16 @@
         document.addEventListener('DOMContentLoaded', () => {
             // Mostrar historial en el empty state
             actualizarHistorialEmptyState();
+
+            // Restaurar selección de Top N guardada
+            const savedTopN = localStorage.getItem('screener_topn');
+            if (savedTopN) {
+                screenerTopN = savedTopN;
+                const select = document.getElementById('screener-topn-select');
+                if (select) select.value = savedTopN;
+                const titleEl = document.getElementById('screener-title-topn');
+                if (titleEl) titleEl.textContent = savedTopN === 'all' ? 'Todas las' : `Top ${savedTopN}`;
+            }
 
             // Cargar screener de dividendos automáticamente
             cargarScreenerDividendos();

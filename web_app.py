@@ -5464,43 +5464,48 @@ def _refresh_screener_cache():
             print(f"  [Screener] Error {ticker_symbol}: {e}")
             continue
 
-    # Ordenar por score, top 50
+    # Ordenar por score (guardar TODOS, no solo top 50)
     results.sort(key=lambda x: x['score'], reverse=True)
-    top_50 = results[:50]
-    for i, item in enumerate(top_50):
+    for i, item in enumerate(results):
         item['rank'] = i + 1
 
-    # Guardar caché
+    # Guardar caché con TODOS los resultados
     try:
         DATA_DIR.mkdir(exist_ok=True)
         cache_data = {
             'timestamp': datetime.now().isoformat(),
-            'results': top_50
+            'results': results
         }
         with open(SCREENER_CACHE_FILE, 'w') as f:
             json.dump(cache_data, f, indent=2)
-        print(f"  [Screener] Cache guardada: {len(top_50)} resultados")
+        print(f"  [Screener] Cache guardada: {len(results)} resultados (todos)")
     except Exception as e:
         print(f"  [Screener] Error guardando cache: {e}")
 
     screener_refresh_status = {'running': False, 'progress': 0, 'total': 0}
-    return top_50
+    return results
 
 
 @app.route('/api/screener/dividends')
 def api_screener_dividends():
-    """Top 50 Dividend Stocks Screener. Cached 1 hora."""
+    """Dividend Stocks Screener con limit variable. Cached 1 hora."""
     from datetime import datetime, timedelta
     import threading
 
     force_refresh = request.args.get('refresh') == '1'
 
-    # Si es force_refresh, borrar también caché de correlaciones para que se recalculen
+    # Parsear limit: 50, 100, 200, o 'all'
+    limit_param = request.args.get('limit', '50')
+    try:
+        limit = None if limit_param == 'all' else int(limit_param)
+    except ValueError:
+        limit = 50
+
+    # Si es force_refresh, borrar TODOS los cachés de correlaciones
     if force_refresh:
-        corr_cache = DATA_DIR / "screener_correlaciones_cache.json"
-        if corr_cache.exists():
-            corr_cache.unlink()
-            print("[Screener] Cache de correlaciones eliminado (force refresh)")
+        for corr_file in DATA_DIR.glob("screener_correlaciones_cache*.json"):
+            corr_file.unlink()
+            print(f"[Screener] Cache de correlaciones eliminado: {corr_file.name}")
 
     # Comprobar caché
     if not force_refresh:
@@ -5510,9 +5515,15 @@ def api_screener_dividends():
                     cached = json.load(f)
                 cached_time = datetime.fromisoformat(cached['timestamp'])
                 if (datetime.now() - cached_time) < timedelta(minutes=SCREENER_CACHE_DURATION_MINUTES):
+                    all_results = cached['results']
+                    sliced = all_results[:limit] if limit else all_results
+                    # Re-rankear el slice
+                    for i, item in enumerate(sliced):
+                        item['rank'] = i + 1
                     return jsonify({
                         'success': True,
-                        'data': cached['results'],
+                        'data': sliced,
+                        'total_available': len(all_results),
                         'cached': True,
                         'last_updated': cached['timestamp']
                     })
@@ -5545,8 +5556,15 @@ def api_screener_dividends():
 
 @app.route('/api/screener/dividends/status')
 def api_screener_status():
-    """Estado del refresh del screener."""
+    """Estado del refresh del screener con limit variable."""
     from datetime import datetime, timedelta
+
+    # Parsear limit
+    limit_param = request.args.get('limit', '50')
+    try:
+        limit = None if limit_param == 'all' else int(limit_param)
+    except ValueError:
+        limit = 50
 
     # Si terminó y hay caché, devolver resultados
     if not screener_refresh_status['running']:
@@ -5554,10 +5572,15 @@ def api_screener_status():
             if SCREENER_CACHE_FILE.exists():
                 with open(SCREENER_CACHE_FILE, 'r') as f:
                     cached = json.load(f)
+                all_results = cached['results']
+                sliced = all_results[:limit] if limit else all_results
+                for i, item in enumerate(sliced):
+                    item['rank'] = i + 1
                 return jsonify({
                     'success': True,
                     'running': False,
-                    'data': cached['results'],
+                    'data': sliced,
+                    'total_available': len(all_results),
                     'last_updated': cached['timestamp']
                 })
         except:
@@ -5573,11 +5596,20 @@ def api_screener_status():
 
 @app.route('/api/screener/correlaciones')
 def api_screener_correlaciones():
-    """Calcula correlación de cada ticker del top 50 con la cartera del usuario."""
+    """Calcula correlación de cada ticker del screener con la cartera del usuario."""
     import yfinance as yf
     from datetime import datetime, timedelta
 
-    CORR_CACHE_FILE = DATA_DIR / "screener_correlaciones_cache.json"
+    # Parsear limit
+    limit_param = request.args.get('limit', '50')
+    try:
+        limit = None if limit_param == 'all' else int(limit_param)
+    except ValueError:
+        limit = 50
+
+    # Cache por limit (diferentes limits = diferentes cachés)
+    limit_key = limit_param if limit_param else '50'
+    CORR_CACHE_FILE = DATA_DIR / f"screener_correlaciones_cache_{limit_key}.json"
 
     # Check cache (30 min)
     try:
@@ -5605,13 +5637,17 @@ def api_screener_correlaciones():
         if not posiciones:
             return jsonify({'success': False, 'error': 'No hay posiciones con ticker en cartera'})
 
-        # 2. Obtener tickers del top 50 (del caché del screener)
+        # 2. Obtener tickers del screener (según limit)
         if not SCREENER_CACHE_FILE.exists():
-            return jsonify({'success': False, 'error': 'Screener no disponible'})
+            # Fallback al caché principal del screener
+            if not (DATA_DIR / "screener_dividends_cache.json").exists():
+                return jsonify({'success': False, 'error': 'Screener no disponible'})
 
-        with open(SCREENER_CACHE_FILE, 'r') as f:
+        with open(DATA_DIR / "screener_dividends_cache.json", 'r') as f:
             screener_cache = json.load(f)
-        screener_tickers = [s['ticker'] for s in screener_cache['results']]
+        all_screener = screener_cache['results']
+        screener_results = all_screener[:limit] if limit else all_screener
+        screener_tickers = [s['ticker'] for s in screener_results]
 
         # 3. Descargar históricos de la cartera (1 año) y calcular retornos ponderados
         total_valor = sum(p.valor_actual or 0 for p in posiciones)
@@ -5691,7 +5727,7 @@ def api_screener_correlaciones():
                 corr = num / den
 
                 # Obtener info del screener
-                screener_info = next((s for s in screener_cache['results'] if s['ticker'] == ticker), {})
+                screener_info = next((s for s in screener_results if s['ticker'] == ticker), {})
 
                 resultados.append({
                     'ticker': ticker,

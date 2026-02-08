@@ -578,6 +578,28 @@
           </div>
 
           <!-- ============================================ -->
+          <!-- DESCRIPCIÓN DE LA EMPRESA -->
+          <!-- ============================================ -->
+          <div id="company-description-panel" class="hidden border-t border-slate-700/50 bg-slate-900/30">
+            <div class="px-6 py-4">
+              <div class="max-w-5xl">
+                <div class="flex items-start gap-3">
+                  <div class="text-xl mt-0.5">🏢</div>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span id="company-desc-name" class="font-semibold text-slate-200 text-sm"></span>
+                      <span id="company-desc-sector" class="text-xs px-2 py-0.5 bg-blue-500/15 text-blue-400 rounded-full"></span>
+                      <span id="company-desc-industry" class="text-xs px-2 py-0.5 bg-slate-700/60 text-slate-400 rounded-full"></span>
+                      <span id="company-desc-country" class="text-xs text-slate-500"></span>
+                    </div>
+                    <p id="company-desc-text" class="text-xs text-slate-400 leading-relaxed"></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================================ -->
           <!-- PANEL INFERIOR DE ANÁLISIS (ancho completo) -->
           <!-- ============================================ -->
           <div id="bottom-analysis-panel" class="hidden border-t border-slate-700 bg-slate-900/50">
@@ -1321,6 +1343,7 @@
             document.getElementById('stoch-chart-container')?.classList.add('hidden');
             document.getElementById('adx-chart-container')?.classList.add('hidden');
             document.getElementById('volume-chart-container')?.classList.add('hidden');
+            document.getElementById('company-description-panel')?.classList.add('hidden');
             document.getElementById('bottom-analysis-panel')?.classList.add('hidden');
             document.getElementById('btn-export')?.classList.add('hidden');
 
@@ -2988,6 +3011,70 @@
         // ============================================
         let fundamentalData = null; // Cache para usar en análisis predictivo
 
+        function mostrarDescripcionEmpresa(data) {
+            const panel = document.getElementById('company-description-panel');
+            if (!panel) return;
+
+            const summary = data.longBusinessSummary;
+            // Solo mostrar si tiene descripción útil (>30 chars) o al menos sector
+            if (!data.sector && !data.industry) {
+                panel.classList.add('hidden');
+                return;
+            }
+
+            // Nombre
+            const nameEl = document.getElementById('company-desc-name');
+            if (nameEl) nameEl.textContent = data.name || currentTicker;
+
+            // Sector
+            const sectorEl = document.getElementById('company-desc-sector');
+            if (sectorEl) {
+                if (data.sector) {
+                    sectorEl.textContent = data.sector;
+                    sectorEl.classList.remove('hidden');
+                } else {
+                    sectorEl.classList.add('hidden');
+                }
+            }
+
+            // Industria
+            const industryEl = document.getElementById('company-desc-industry');
+            if (industryEl) {
+                if (data.industry) {
+                    industryEl.textContent = data.industry;
+                    industryEl.classList.remove('hidden');
+                } else {
+                    industryEl.classList.add('hidden');
+                }
+            }
+
+            // País
+            const countryEl = document.getElementById('company-desc-country');
+            if (countryEl) {
+                const flags = {'United States':'🇺🇸','United Kingdom':'🇬🇧','Germany':'🇩🇪','France':'🇫🇷',
+                    'Japan':'🇯🇵','China':'🇨🇳','Canada':'🇨🇦','Australia':'🇦🇺','Switzerland':'🇨🇭',
+                    'Netherlands':'🇳🇱','Spain':'🇪🇸','Italy':'🇮🇹','Brazil':'🇧🇷','India':'🇮🇳',
+                    'South Korea':'🇰🇷','Mexico':'🇲🇽','Norway':'🇳🇴','Sweden':'🇸🇪','Denmark':'🇩🇰',
+                    'Finland':'🇫🇮','Belgium':'🇧🇪','Ireland':'🇮🇪','South Africa':'🇿🇦','Israel':'🇮🇱',
+                    'Singapore':'🇸🇬','Hong Kong':'🇭🇰','Taiwan':'🇹🇼','Indonesia':'🇮🇩','Chile':'🇨🇱',
+                    'Colombia':'🇨🇴','Argentina':'🇦🇷','Portugal':'🇵🇹','Luxembourg':'🇱🇺'};
+                const flag = flags[data.country] || '🌍';
+                countryEl.textContent = data.country ? `${flag} ${data.country}` : '';
+            }
+
+            // Descripción (ya viene recortada y traducida al español desde el backend)
+            const textEl = document.getElementById('company-desc-text');
+            if (textEl) {
+                if (summary) {
+                    textEl.textContent = summary;
+                } else {
+                    textEl.textContent = '';
+                }
+            }
+
+            panel.classList.remove('hidden');
+        }
+
         async function cargarFundamentales(ticker) {
             const section = document.getElementById('fundamental-section');
             const container = document.getElementById('fundamental-content');
@@ -3000,6 +3087,9 @@
 
                 if (result.success && result.data) {
                     fundamentalData = result.data;
+
+                    // Mostrar descripción de la empresa
+                    mostrarDescripcionEmpresa(result.data);
 
                     // No mostrar fundamentales para cripto o si no hay datos clave
                     if (result.data.quoteType === 'CRYPTOCURRENCY') {

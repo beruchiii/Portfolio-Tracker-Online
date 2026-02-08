@@ -5311,6 +5311,24 @@ def api_fundamental(ticker):
         country = info.get('country')
         currency = info.get('currency', 'USD')
         name = info.get('shortName') or info.get('longName') or ticker
+        long_business_summary = info.get('longBusinessSummary')
+
+        # Traducir descripción al español
+        if long_business_summary:
+            try:
+                from deep_translator import GoogleTranslator
+                # Recortar a las primeras 2 frases antes de traducir (más eficiente)
+                import re
+                sentences = re.findall(r'[^.!?]+[.!?]+', long_business_summary)
+                short_en = sentences[0].strip() if sentences else long_business_summary
+                if len(sentences) > 1 and (len(short_en) + len(sentences[1])) < 300:
+                    short_en += ' ' + sentences[1].strip()
+                if len(short_en) > 350:
+                    short_en = short_en[:300].rsplit(' ', 1)[0] + '...'
+                long_business_summary = GoogleTranslator(source='en', target='es').translate(short_en)
+            except Exception as e:
+                print(f"[Fundamental] Error traduciendo descripción: {e}")
+                # Si falla la traducción, dejar en inglés
 
         # --- Target de analistas ---
         target_mean = info.get('targetMeanPrice')
@@ -5389,6 +5407,7 @@ def api_fundamental(ticker):
                 'numAnalysts': num_analysts,
                 # Otros
                 'earningsDate': earnings_date,
+                'longBusinessSummary': long_business_summary,
             }
         })
 

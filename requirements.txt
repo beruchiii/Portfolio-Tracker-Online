@@ -12,6 +12,9 @@ sqlalchemy>=2.0.0
 yfinance>=0.2.36
 pandas>=2.0.0
 
+# Traducción
+deep-translator>=1.11.4
+
 # Web scraping
 requests>=2.31.0
 beautifulsoup4>=4.12.0

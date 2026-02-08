@@ -218,6 +218,40 @@ DIVIDEND_UNIVERSE = [
     # Internacionales adicionales (ADRs)
     'VALE', 'BABA', 'TSM', 'INFY', 'WIT', 'E', 'DEO', 'ING',
     'VOD', 'NGG', 'TEF', 'BBVA',
+
+    # =========================================================================
+    # GRUPO 3 - Segunda expansión (+99 tickers)
+    # =========================================================================
+    # S&P 500 con dividendo
+    'COST', 'CVS', 'CI', 'ELV', 'HUM', 'CNC',
+    'ACN', 'FIS', 'AXP', 'DIS', 'CMCSA', 'TMUS',
+    # BDCs / Alto rendimiento
+    'OHI', 'AGNC', 'NLY', 'ARCC', 'MAIN', 'HTGC', 'GBDC',
+    'GLAD', 'GAIN', 'PSEC', 'NEWT', 'TPVG',
+    'BXSL', 'FSK', 'OBDC', 'ORCC', 'CSWC', 'FDUS', 'TCPC',
+    # MLPs / Energía adicional
+    'WES', 'HESM', 'CTRA', 'FANG', 'EOG',
+    'TRGP', 'LNG', 'DTM', 'PAGP',
+    # Media / Telecoms
+    'LUMN', 'FOX', 'OMC',
+    # Defensa / Industrial
+    'LMT', 'NOC', 'RTX', 'GE', 'BA',
+    # Minería y Materiales
+    'FCX', 'NEM', 'GOLD', 'AEM', 'WPM', 'FNV',
+    'CF', 'MOS', 'NTR', 'CE',
+    # Seguros
+    'PGR', 'HIG', 'GL', 'AFG', 'RNR', 'EG',
+    # Retail / Consumer
+    'BBY', 'DG', 'DLTR', 'KR', 'SYF', 'ALLY',
+    # Europeas adicionales (ADRs)
+    'EQNR', 'NXPI', 'ASML', 'SAP', 'TM', 'HMC',
+    'KB', 'SHG', 'LYG', 'BCS', 'DB', 'UBS',
+    # Asiáticas / Emergentes (ADRs)
+    'JD', 'PDD', 'BEKE', 'ZTO',
+    # Canadienses
+    'BCE', 'CM', 'BMO', 'BNS', 'RY', 'TD', 'MFC', 'SU', 'CNQ',
+    # Australianas
+    'WDS',
 ]
 
 # Estado global del refresh del screener

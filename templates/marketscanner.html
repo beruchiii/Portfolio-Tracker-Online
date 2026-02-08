@@ -445,6 +445,39 @@
                             <!-- Filled dynamically -->
                         </div>
                     </div>
+
+                    <!-- Rentabilidad por Año -->
+                    <div id="yearly-section" class="hidden">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                            <span>📅</span> Rentabilidad por Año
+                        </h3>
+                        <div id="yearly-returns" class="text-sm"></div>
+                    </div>
+
+                    <!-- Heatmap Mensual -->
+                    <div id="heatmap-section" class="hidden">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                            <span>🗓️</span> Heatmap Mensual
+                        </h3>
+                        <div id="monthly-heatmap" class="overflow-x-auto text-sm"></div>
+                    </div>
+
+                    <!-- Correlación con Cartera -->
+                    <div id="correlacion-section" class="hidden">
+                        <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                            <span>🔗</span> Correlación con tu Cartera
+                        </h3>
+                        <div id="correlacion-content-ms">
+                            <div id="correlacion-loading-ms" class="text-center py-3 text-slate-500 text-xs">
+                                <div class="loader w-4 h-4 border-2 mx-auto mb-1"></div>
+                                Calculando correlaciones...
+                            </div>
+                            <div id="correlacion-results-ms" class="hidden">
+                                <div id="correlacion-list-ms" class="space-y-2"></div>
+                                <p class="text-xs text-slate-600 mt-2">Interpretación: +1 = se mueven igual, 0 = sin relación, -1 = se mueven opuesto.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </aside>
         </div>
@@ -725,6 +758,12 @@
             const fundamentalVisible = !document.getElementById('fundamental-section')?.classList.contains('hidden');
             const srContent = document.getElementById('sr-levels')?.innerHTML || '';
             const strategyContent = document.getElementById('strategy-content')?.innerHTML || '';
+            const yearlyContent = document.getElementById('yearly-returns')?.innerHTML || '';
+            const yearlyVisible = !document.getElementById('yearly-section')?.classList.contains('hidden');
+            const heatmapContent = document.getElementById('monthly-heatmap')?.innerHTML || '';
+            const heatmapVisible = !document.getElementById('heatmap-section')?.classList.contains('hidden');
+            const correlacionContent = document.getElementById('correlacion-list-ms')?.innerHTML || '';
+            const correlacionVisible = !document.getElementById('correlacion-section')?.classList.contains('hidden') && !document.getElementById('correlacion-results-ms')?.classList.contains('hidden');
 
             const periodoLabel = { '1d': '1 día', '1mo': '1 mes', '3mo': '3 meses', '6mo': '6 meses', '1y': '1 año', '2y': '2 años', '5y': '5 años', 'max': 'Máximo' }[currentPeriod] || currentPeriod;
             const fecha = new Date().toLocaleDateString('es-ES', {
@@ -807,6 +846,25 @@
 
                 <div style="font-size:16px;font-weight:bold;color:#94a3b8;margin-bottom:8px;">💰 Estrategia 100€</div>
                 <div style="display:grid;gap:8px;margin-bottom:16px;">${strategyContent}</div>
+
+                ${yearlyVisible && yearlyContent ? `
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+                    <div>
+                        <div style="font-size:14px;font-weight:bold;color:#94a3b8;margin-bottom:8px;">📅 Rentabilidad por Año</div>
+                        <div>${yearlyContent}</div>
+                    </div>
+                    ${heatmapVisible && heatmapContent ? `
+                    <div>
+                        <div style="font-size:14px;font-weight:bold;color:#94a3b8;margin-bottom:8px;">🗓️ Heatmap Mensual</div>
+                        <div>${heatmapContent}</div>
+                    </div>` : ''}
+                </div>
+                ` : ''}
+
+                ${correlacionVisible && correlacionContent ? `
+                <div style="font-size:16px;font-weight:bold;color:#94a3b8;margin-bottom:8px;">🔗 Correlación con tu Cartera</div>
+                <div style="display:grid;gap:4px;margin-bottom:16px;">${correlacionContent}</div>
+                ` : ''}
 
                 <div style="border-top:1px solid #334155;padding-top:8px;font-size:11px;color:#475569;text-align:center;">
                     Generado por Portfolio Tracker · Market Scanner · ${fecha}
@@ -923,9 +981,10 @@
                 // Cargar datos OHLCV
                 await cargarDatos(currentPeriod);
 
-                // Cargar estadísticas y fundamentales
+                // Cargar estadísticas, fundamentales y correlaciones
                 cargarEstadisticas(ticker);
                 cargarFundamentales(ticker);
+                calcularCorrelacionesMS();
 
                 // Guardar en historial
                 addToSearchHistory(ticker, document.getElementById('asset-name')?.textContent || ticker);
@@ -980,6 +1039,8 @@
                         generarAnalisisTecnico();
                         calcularSoportesResistencias();
                         generarEstrategia100();
+                        calcularRentabilidadAnual();
+                        calcularHeatmapMensual();
                     }
 
                     // Mostrar secciones
@@ -3706,6 +3767,274 @@
             </div>`;
 
             return predictHTML;
+        }
+
+        // ============================================
+        // RENTABILIDAD POR AÑO + HEATMAP + CORRELACIÓN
+        // ============================================
+        function calcularRentabilidadAnual() {
+            const section = document.getElementById('yearly-section');
+            const container = document.getElementById('yearly-returns');
+            if (!section || !container || ohlcvData.length < 20) return;
+
+            // Convertir ohlcv a fechas string
+            const datosConFecha = ohlcvData.map(d => {
+                let fecha;
+                if (typeof d.time === 'number') {
+                    fecha = new Date(d.time * 1000).toISOString().slice(0, 10);
+                } else {
+                    fecha = d.time;
+                }
+                return { fecha, close: d.close };
+            });
+
+            const porAnio = {};
+            datosConFecha.forEach(d => {
+                const anio = d.fecha.substring(0, 4);
+                if (!porAnio[anio]) porAnio[anio] = { primero: d.close, ultimo: d.close };
+                porAnio[anio].ultimo = d.close;
+            });
+
+            const anios = Object.keys(porAnio).sort();
+            if (anios.length < 1) { section.classList.add('hidden'); return; }
+
+            const rentabilidades = anios.map(a => ((porAnio[a].ultimo - porAnio[a].primero) / porAnio[a].primero) * 100);
+            const maxAbs = Math.max(...rentabilidades.map(Math.abs), 1);
+
+            let html = '';
+            anios.forEach((anio, i) => {
+                const rent = rentabilidades[i];
+                const width = (Math.abs(rent) / maxAbs) * 100;
+                const color = rent >= 0 ? 'bg-green-500' : 'bg-red-500';
+                const textColor = rent >= 0 ? 'text-green-400' : 'text-red-400';
+                html += `<div class="flex items-center gap-2 mb-1.5">
+                    <span class="w-10 text-xs text-slate-500">${anio}</span>
+                    <div class="flex-1 h-5 bg-slate-700 rounded overflow-hidden">
+                        <div class="${color} h-full rounded" style="width:${width}%"></div>
+                    </div>
+                    <span class="w-14 text-right text-xs font-semibold ${textColor}">${rent >= 0 ? '+' : ''}${rent.toFixed(1)}%</span>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+            section.classList.remove('hidden');
+        }
+
+        function calcularHeatmapMensual() {
+            const section = document.getElementById('heatmap-section');
+            const container = document.getElementById('monthly-heatmap');
+            if (!section || !container || ohlcvData.length < 40) return;
+
+            const datosConFecha = ohlcvData.map(d => {
+                let fecha;
+                if (typeof d.time === 'number') {
+                    fecha = new Date(d.time * 1000).toISOString().slice(0, 10);
+                } else {
+                    fecha = d.time;
+                }
+                return { fecha, close: d.close };
+            });
+
+            const porMes = {};
+            datosConFecha.forEach(d => {
+                const key = d.fecha.substring(0, 7);
+                if (!porMes[key]) porMes[key] = { primero: d.close, ultimo: d.close };
+                porMes[key].ultimo = d.close;
+            });
+
+            const porAnio = {};
+            Object.keys(porMes).forEach(key => {
+                const [anio, mes] = key.split('-');
+                if (!porAnio[anio]) porAnio[anio] = {};
+                porAnio[anio][parseInt(mes)] = ((porMes[key].ultimo - porMes[key].primero) / porMes[key].primero) * 100;
+            });
+
+            const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+            const anios = Object.keys(porAnio).sort();
+            if (anios.length < 1) { section.classList.add('hidden'); return; }
+
+            let html = '<table class="w-full text-xs"><thead><tr><th class="p-0.5"></th>';
+            meses.forEach(m => html += `<th class="p-0.5 text-slate-500 font-normal">${m}</th>`);
+            html += '<th class="p-0.5 text-slate-500 font-normal">Tot</th></tr></thead><tbody>';
+
+            anios.forEach(anio => {
+                html += `<tr><td class="p-0.5 text-slate-500">${anio}</td>`;
+                let totalAnio = 0;
+
+                for (let m = 1; m <= 12; m++) {
+                    const rent = porAnio[anio][m];
+                    if (rent !== undefined) {
+                        totalAnio += rent;
+                        const color = getHeatmapColorMS(rent);
+                        html += `<td class="p-0.5"><div class="${color} rounded px-0.5 py-0.5 text-center" style="font-size:10px">${rent >= 0 ? '+' : ''}${rent.toFixed(1)}</div></td>`;
+                    } else {
+                        html += '<td class="p-0.5"><div class="bg-slate-700 rounded px-0.5 py-0.5 text-center text-slate-600" style="font-size:10px">-</div></td>';
+                    }
+                }
+
+                const colorTotal = getHeatmapColorMS(totalAnio);
+                html += `<td class="p-0.5"><div class="${colorTotal} rounded px-0.5 py-0.5 text-center font-semibold" style="font-size:10px">${totalAnio >= 0 ? '+' : ''}${totalAnio.toFixed(0)}</div></td>`;
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+            section.classList.remove('hidden');
+        }
+
+        function getHeatmapColorMS(valor) {
+            if (valor <= -5) return 'bg-red-600 text-white';
+            if (valor < 0) return 'bg-red-400/50 text-red-200';
+            if (valor === 0) return 'bg-slate-600 text-slate-300';
+            if (valor <= 5) return 'bg-green-400/50 text-green-200';
+            return 'bg-green-600 text-white';
+        }
+
+        async function calcularCorrelacionesMS() {
+            const section = document.getElementById('correlacion-section');
+            const loading = document.getElementById('correlacion-loading-ms');
+            const results = document.getElementById('correlacion-results-ms');
+            const list = document.getElementById('correlacion-list-ms');
+            if (!section) return;
+
+            if (ohlcvData.length < 30) { section.classList.add('hidden'); return; }
+
+            section.classList.remove('hidden');
+            loading.classList.remove('hidden');
+            results.classList.add('hidden');
+
+            try {
+                // Obtener cartera del usuario
+                const portfolioResponse = await fetch('/api/portfolio');
+                const portfolioResult = await portfolioResponse.json();
+
+                if (!portfolioResult.success || !portfolioResult.data.posiciones || portfolioResult.data.posiciones.length === 0) {
+                    loading.innerHTML = '<p class="text-slate-500 text-xs">No tienes activos en cartera para comparar</p>';
+                    return;
+                }
+
+                // Retornos diarios del activo actual (agrupar por día para datos horarios)
+                const retornosPorDia = {};
+                const datosConFecha = ohlcvData.map(d => ({
+                    fecha: typeof d.time === 'number' ? new Date(d.time * 1000).toISOString().slice(0, 10) : d.time,
+                    close: d.close
+                }));
+
+                // Agrupar por día: primer y último close de cada día
+                const porDia = {};
+                datosConFecha.forEach(d => {
+                    if (!porDia[d.fecha]) porDia[d.fecha] = { primero: d.close, ultimo: d.close };
+                    porDia[d.fecha].ultimo = d.close;
+                });
+
+                const diasOrdenados = Object.keys(porDia).sort();
+                for (let i = 1; i < diasOrdenados.length; i++) {
+                    const prev = porDia[diasOrdenados[i - 1]].ultimo;
+                    const curr = porDia[diasOrdenados[i]].ultimo;
+                    retornosPorDia[diasOrdenados[i]] = (curr - prev) / prev;
+                }
+
+                const correlaciones = [];
+                const posiciones = portfolioResult.data.posiciones.filter(p => p.ticker || p.isin).slice(0, 5);
+
+                // Calcular correlación con posiciones de cartera
+                for (const pos of posiciones) {
+                    try {
+                        const ticker = pos.ticker || pos.isin;
+                        // Saltar si es el mismo activo
+                        if (ticker === currentTicker) continue;
+                        const response = await fetch(`/api/historical/${encodeURIComponent(ticker)}?periodo=1y&isin=${encodeURIComponent(pos.isin || '')}`);
+                        const result = await response.json();
+
+                        if (result.success && result.data.precios && result.data.fechas) {
+                            const corr = calcularPearsonMS(retornosPorDia, result.data.precios, result.data.fechas);
+                            if (corr !== null) {
+                                correlaciones.push({ nombre: pos.nombre || ticker, correlacion: corr.corr, dias: corr.dias });
+                            }
+                        }
+                    } catch (e) { console.error('Corr error:', e); }
+                }
+
+                // Benchmarks
+                for (const bench of [{ ticker: '%5EIXIC', nombre: 'NASDAQ 📊' }, { ticker: '%5EGSPC', nombre: 'S&P 500 📊' }]) {
+                    try {
+                        const response = await fetch(`/api/historical/${bench.ticker}?periodo=1y`);
+                        const result = await response.json();
+                        if (result.success && result.data.precios && result.data.fechas) {
+                            const corr = calcularPearsonMS(retornosPorDia, result.data.precios, result.data.fechas);
+                            if (corr !== null) {
+                                correlaciones.push({ nombre: bench.nombre, correlacion: corr.corr, dias: corr.dias });
+                            }
+                        }
+                    } catch (e) { console.error('Bench error:', e); }
+                }
+
+                // Ordenar y mostrar
+                correlaciones.sort((a, b) => Math.abs(b.correlacion) - Math.abs(a.correlacion));
+
+                if (correlaciones.length === 0) {
+                    loading.innerHTML = '<p class="text-slate-500 text-xs">No hay datos suficientes para calcular correlaciones</p>';
+                    return;
+                }
+
+                loading.classList.add('hidden');
+                results.classList.remove('hidden');
+
+                list.innerHTML = correlaciones.map(c => {
+                    const corr = c.correlacion;
+                    const corrPct = (corr * 100).toFixed(0);
+                    let colorClass, barColor, interpretacion;
+                    if (corr >= 0.7) { colorClass = 'text-red-400'; barColor = 'bg-red-500'; interpretacion = 'Alta correlación'; }
+                    else if (corr >= 0.4) { colorClass = 'text-yellow-400'; barColor = 'bg-yellow-500'; interpretacion = 'Correlación moderada'; }
+                    else if (corr >= -0.4) { colorClass = 'text-green-400'; barColor = 'bg-green-500'; interpretacion = 'Baja correlación ✓'; }
+                    else if (corr >= -0.7) { colorClass = 'text-blue-400'; barColor = 'bg-blue-500'; interpretacion = 'Correlación inversa'; }
+                    else { colorClass = 'text-purple-400'; barColor = 'bg-purple-500'; interpretacion = 'Alta corr. inversa'; }
+
+                    return `<div class="p-1.5 bg-slate-800/50 rounded">
+                        <div class="flex items-center justify-between mb-0.5">
+                            <span class="text-xs text-slate-300 truncate">${c.nombre}</span>
+                            <span class="${colorClass} text-xs font-semibold">${corr >= 0 ? '+' : ''}${corrPct}%</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="flex-1 h-1.5 bg-slate-700 rounded overflow-hidden">
+                                <div class="${barColor} h-full rounded" style="width:${Math.abs(corr) * 100}%"></div>
+                            </div>
+                            <span class="text-xs text-slate-600" style="font-size:9px">${interpretacion} (${c.dias}d)</span>
+                        </div>
+                    </div>`;
+                }).join('');
+
+            } catch (error) {
+                console.error('Error correlaciones:', error);
+                loading.innerHTML = '<p class="text-slate-500 text-xs">Error al calcular correlaciones</p>';
+            }
+        }
+
+        function calcularPearsonMS(retornosActual, preciosOtro, fechasOtro) {
+            // Calcular retornos diarios del otro activo
+            const retornosOtro = {};
+            for (let i = 1; i < preciosOtro.length; i++) {
+                retornosOtro[fechasOtro[i]] = (preciosOtro[i] - preciosOtro[i - 1]) / preciosOtro[i - 1];
+            }
+
+            const fechasComunes = Object.keys(retornosActual).filter(f => retornosOtro[f] !== undefined);
+            if (fechasComunes.length < 30) return null;
+
+            const x = fechasComunes.map(f => retornosActual[f]);
+            const y = fechasComunes.map(f => retornosOtro[f]);
+
+            const mediaX = x.reduce((a, b) => a + b, 0) / x.length;
+            const mediaY = y.reduce((a, b) => a + b, 0) / y.length;
+
+            let num = 0, denX = 0, denY = 0;
+            for (let i = 0; i < x.length; i++) {
+                num += (x[i] - mediaX) * (y[i] - mediaY);
+                denX += Math.pow(x[i] - mediaX, 2);
+                denY += Math.pow(y[i] - mediaY, 2);
+            }
+
+            const den = Math.sqrt(denX * denY);
+            return den === 0 ? null : { corr: num / den, dias: fechasComunes.length };
         }
 
         // ============================================

@@ -5441,6 +5441,169 @@ def api_screener_status():
     })
 
 
+@app.route('/api/screener/correlaciones')
+def api_screener_correlaciones():
+    """Calcula correlación de cada ticker del top 50 con la cartera del usuario."""
+    import yfinance as yf
+    import numpy as np
+    from datetime import datetime, timedelta
+
+    CORR_CACHE_FILE = DATA_DIR / "screener_correlaciones_cache.json"
+
+    # Check cache (30 min)
+    try:
+        if CORR_CACHE_FILE.exists():
+            with open(CORR_CACHE_FILE, 'r') as f:
+                cached = json.load(f)
+            cached_time = datetime.fromisoformat(cached['timestamp'])
+            if (datetime.now() - cached_time) < timedelta(minutes=30):
+                return jsonify({'success': True, 'data': cached['results'], 'cached': True,
+                                'last_updated': cached['timestamp']})
+    except:
+        pass
+
+    try:
+        # 1. Obtener cartera del usuario
+        portfolio_data = json.loads(PORTFOLIO_FILE.read_text()) if PORTFOLIO_FILE.exists() else []
+        posiciones = [p for p in portfolio_data if hasattr(p, 'get') or isinstance(p, dict)]
+        posiciones = [p for p in posiciones if p.get('ticker') or p.get('isin')]
+
+        if not posiciones:
+            return jsonify({'success': False, 'error': 'No hay posiciones en cartera'})
+
+        # 2. Obtener tickers del top 50 (del caché del screener)
+        if not SCREENER_CACHE_FILE.exists():
+            return jsonify({'success': False, 'error': 'Screener no disponible'})
+
+        with open(SCREENER_CACHE_FILE, 'r') as f:
+            screener_cache = json.load(f)
+        screener_tickers = [s['ticker'] for s in screener_cache['results']]
+
+        # 3. Descargar históricos de la cartera (1 año) y calcular retornos ponderados
+        # Simplificar: calcular retornos individuales de cada posición y ponderar por valor
+        total_valor = sum(p.get('valor_actual', p.get('valor', 0)) or 0 for p in posiciones)
+        if total_valor <= 0:
+            total_valor = len(posiciones)  # Equiponderar si no hay valores
+
+        portfolio_returns = {}  # {fecha: retorno_ponderado}
+        cartera_tickers = []
+
+        for pos in posiciones[:10]:  # Máximo 10 posiciones para eficiencia
+            ticker = pos.get('ticker') or pos.get('isin', '')
+            peso = (pos.get('valor_actual', pos.get('valor', 0)) or 0) / total_valor if total_valor > 0 else 1 / len(posiciones)
+            if peso <= 0:
+                peso = 1 / len(posiciones)
+
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period='1y')
+                if len(hist) < 30:
+                    continue
+                cartera_tickers.append(pos.get('nombre', ticker))
+                closes = hist['Close'].values
+                dates = [d.strftime('%Y-%m-%d') for d in hist.index]
+
+                for i in range(1, len(closes)):
+                    ret = (closes[i] - closes[i - 1]) / closes[i - 1]
+                    fecha = dates[i]
+                    if fecha not in portfolio_returns:
+                        portfolio_returns[fecha] = 0
+                    portfolio_returns[fecha] += ret * peso
+
+            except Exception as e:
+                print(f"  [Corr] Error cartera {ticker}: {e}")
+                continue
+
+        if len(portfolio_returns) < 30:
+            return jsonify({'success': False, 'error': 'Datos insuficientes de cartera'})
+
+        print(f"  [Corr] Cartera: {len(cartera_tickers)} posiciones, {len(portfolio_returns)} días")
+
+        # 4. Para cada ticker del top 50, descargar histórico y calcular Pearson
+        resultados = []
+        for ticker in screener_tickers:
+            try:
+                stock = yf.Ticker(ticker)
+                hist = stock.history(period='1y')
+                if len(hist) < 30:
+                    continue
+
+                closes = hist['Close'].values
+                dates = [d.strftime('%Y-%m-%d') for d in hist.index]
+
+                # Retornos diarios
+                stock_returns = {}
+                for i in range(1, len(closes)):
+                    stock_returns[dates[i]] = (closes[i] - closes[i - 1]) / closes[i - 1]
+
+                # Fechas comunes
+                fechas_comunes = sorted(set(portfolio_returns.keys()) & set(stock_returns.keys()))
+                if len(fechas_comunes) < 30:
+                    continue
+
+                x = [portfolio_returns[f] for f in fechas_comunes]
+                y = [stock_returns[f] for f in fechas_comunes]
+
+                # Pearson
+                mean_x = sum(x) / len(x)
+                mean_y = sum(y) / len(y)
+                num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y))
+                den_x = sum((xi - mean_x) ** 2 for xi in x)
+                den_y = sum((yi - mean_y) ** 2 for yi in y)
+                den = (den_x * den_y) ** 0.5
+
+                if den == 0:
+                    continue
+
+                corr = num / den
+
+                # Obtener info del screener
+                screener_info = next((s for s in screener_cache['results'] if s['ticker'] == ticker), {})
+
+                resultados.append({
+                    'ticker': ticker,
+                    'name': screener_info.get('name', ticker),
+                    'sector': screener_info.get('sector', '-'),
+                    'dividendYield': screener_info.get('dividendYield', 0),
+                    'score': screener_info.get('score', 0),
+                    'correlacion': round(corr, 4),
+                    'dias': len(fechas_comunes)
+                })
+
+                print(f"  [Corr] {ticker}: corr={corr:.3f} ({len(fechas_comunes)}d)")
+
+            except Exception as e:
+                print(f"  [Corr] Error {ticker}: {e}")
+                continue
+
+        # Ordenar por correlación (menor = mejor diversificación)
+        resultados.sort(key=lambda x: x['correlacion'])
+
+        # Cache
+        try:
+            cache_data = {
+                'timestamp': datetime.now().isoformat(),
+                'cartera_posiciones': cartera_tickers,
+                'results': resultados
+            }
+            with open(CORR_CACHE_FILE, 'w') as f:
+                json.dump(cache_data, f, indent=2)
+        except:
+            pass
+
+        return jsonify({
+            'success': True,
+            'data': resultados,
+            'cartera': cartera_tickers,
+            'cached': False,
+            'last_updated': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        print(f"[Corr] Error general: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/ticker/search/<isin>')
 def api_search_ticker(isin):
     """Busca el ticker de Yahoo Finance para un ISIN"""

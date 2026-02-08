@@ -315,6 +315,66 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- ================================== -->
+                            <!-- CORRELACIÓN CON TU CARTERA         -->
+                            <!-- ================================== -->
+                            <div id="screener-corr-section" class="hidden mt-6 bg-slate-800/60 rounded-xl border border-slate-700/50 p-5">
+                                <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                    <h3 class="text-lg font-bold text-slate-200 flex items-center gap-2">
+                                        🔗 Correlación con tu Cartera
+                                    </h3>
+                                    <div class="flex items-center gap-3">
+                                        <span id="screener-corr-cartera" class="text-xs text-slate-500"></span>
+                                        <button onclick="cargarCorrelacionesScreener()" id="screener-corr-refresh-btn"
+                                            class="text-xs px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg transition flex items-center gap-1.5">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                            </svg>
+                                            Recalcular
+                                        </button>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mb-4">Muestra qué acciones del Top 50 se comportan de forma más diferente a tu cartera (ideales para diversificar) y cuáles se mueven igual.</p>
+
+                                <!-- Loading -->
+                                <div id="screener-corr-loading" class="text-center py-8">
+                                    <div class="loader mx-auto mb-3"></div>
+                                    <p class="text-slate-400 text-sm">Calculando correlaciones con tu cartera...</p>
+                                    <p class="text-slate-500 text-xs mt-1">Esto puede tardar 1-2 minutos la primera vez</p>
+                                </div>
+
+                                <!-- Error -->
+                                <div id="screener-corr-error" class="hidden text-center py-6">
+                                    <p id="screener-corr-error-msg" class="text-amber-400 text-sm mb-3"></p>
+                                </div>
+
+                                <!-- Results -->
+                                <div id="screener-corr-results" class="hidden">
+                                    <!-- Best for diversification -->
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div>
+                                            <h4 class="text-sm font-semibold text-green-400 mb-3 flex items-center gap-2">
+                                                ✅ Mejores para diversificar
+                                                <span class="text-xs text-slate-500 font-normal">(menor correlación con tu cartera)</span>
+                                            </h4>
+                                            <div id="screener-corr-best" class="space-y-2">
+                                                <!-- Filled dynamically -->
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h4 class="text-sm font-semibold text-red-400 mb-3 flex items-center gap-2">
+                                                ⚠️ Más similares a tu cartera
+                                                <span class="text-xs text-slate-500 font-normal">(mayor correlación)</span>
+                                            </h4>
+                                            <div id="screener-corr-worst" class="space-y-2">
+                                                <!-- Filled dynamically -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1049,6 +1109,8 @@
                     tableContainer.classList.remove('hidden');
                     loading.classList.add('hidden');
                     actualizarTimestampScreener(result.last_updated, result.cached);
+                    // Cargar correlaciones con cartera automáticamente
+                    cargarCorrelacionesScreener();
                     if (screenerPollInterval) {
                         clearInterval(screenerPollInterval);
                         screenerPollInterval = null;
@@ -1087,6 +1149,8 @@
                         tableContainer.classList.remove('hidden');
                         loading.classList.add('hidden');
                         actualizarTimestampScreener(data.last_updated, false);
+                        // Cargar correlaciones
+                        cargarCorrelacionesScreener();
                     } else if (data.running) {
                         progressEl.textContent = `Analizando ${data.progress} de ${data.total} empresas...`;
                     }
@@ -1244,6 +1308,113 @@
 
             // Scroll arriba
             document.getElementById('main-scroll-container')?.scrollTo(0, 0);
+        }
+
+        // ============================================
+        // SCREENER CORRELACIONES CON CARTERA
+        // ============================================
+        async function cargarCorrelacionesScreener() {
+            const section = document.getElementById('screener-corr-section');
+            const loading = document.getElementById('screener-corr-loading');
+            const errorDiv = document.getElementById('screener-corr-error');
+            const errorMsg = document.getElementById('screener-corr-error-msg');
+            const results = document.getElementById('screener-corr-results');
+            if (!section) return;
+
+            section.classList.remove('hidden');
+            loading.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+            results.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/screener/correlaciones');
+                if (!response.ok) throw new Error(`Error ${response.status}`);
+                const data = await response.json();
+
+                if (data.success && data.data && data.data.length > 0) {
+                    loading.classList.add('hidden');
+                    results.classList.remove('hidden');
+                    renderizarCorrelacionesScreener(data.data, data.cartera || []);
+                    if (data.last_updated) {
+                        const el = document.getElementById('screener-corr-cartera');
+                        const carteraNames = data.cartera ? data.cartera.slice(0, 5).join(', ') : '';
+                        el.textContent = carteraNames ? `Cartera: ${carteraNames}` : '';
+                    }
+                } else {
+                    // Si no hay cartera, ocultar la sección completamente
+                    if (data.error && data.error.includes('cartera')) {
+                        section.classList.add('hidden');
+                    } else {
+                        loading.classList.add('hidden');
+                        errorDiv.classList.remove('hidden');
+                        errorMsg.textContent = data.error || 'No se pudieron calcular las correlaciones.';
+                    }
+                }
+            } catch (error) {
+                console.error('Error correlaciones screener:', error);
+                // Si falla silenciosamente, ocultar sección
+                section.classList.add('hidden');
+            }
+        }
+
+        function renderizarCorrelacionesScreener(data, cartera) {
+            const bestContainer = document.getElementById('screener-corr-best');
+            const worstContainer = document.getElementById('screener-corr-worst');
+            if (!bestContainer || !worstContainer) return;
+
+            // Los datos ya vienen ordenados por correlación ascendente (menor primero)
+            const best = data.slice(0, 10);  // 10 con menor correlación (mejor diversificación)
+            const worst = data.slice(-10).reverse(); // 10 con mayor correlación
+
+            bestContainer.innerHTML = best.map((item, i) => generarFilaCorrelacion(item, i + 1, 'best')).join('');
+            worstContainer.innerHTML = worst.map((item, i) => generarFilaCorrelacion(item, i + 1, 'worst')).join('');
+        }
+
+        function generarFilaCorrelacion(item, rank, tipo) {
+            const corr = item.correlacion;
+            const corrPct = (corr * 100).toFixed(0);
+            let colorClass, barColor, bgBorder;
+
+            if (corr <= -0.3) {
+                colorClass = 'text-purple-400'; barColor = 'bg-purple-500'; bgBorder = 'border-purple-500/20';
+            } else if (corr <= 0.2) {
+                colorClass = 'text-green-400'; barColor = 'bg-green-500'; bgBorder = 'border-green-500/20';
+            } else if (corr <= 0.5) {
+                colorClass = 'text-yellow-400'; barColor = 'bg-yellow-500'; bgBorder = 'border-yellow-500/20';
+            } else if (corr <= 0.7) {
+                colorClass = 'text-orange-400'; barColor = 'bg-orange-500'; bgBorder = 'border-orange-500/20';
+            } else {
+                colorClass = 'text-red-400'; barColor = 'bg-red-500'; bgBorder = 'border-red-500/20';
+            }
+
+            const divYield = item.dividendYield ? `${item.dividendYield.toFixed(1)}%` : '-';
+            const scoreColor = item.score >= 75 ? 'text-green-400' : item.score >= 55 ? 'text-cyan-400' : 'text-yellow-400';
+
+            return `
+            <div onclick="seleccionarDesdeScreener('${item.ticker}')"
+                 class="flex items-center gap-3 p-2.5 bg-slate-800/80 rounded-lg border ${bgBorder} hover:bg-blue-500/10 cursor-pointer transition group">
+                <div class="flex-shrink-0 w-5 text-center">
+                    <span class="text-xs text-slate-600">${rank}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-bold text-blue-400 group-hover:text-blue-300">${item.ticker}</span>
+                        <span class="text-xs text-slate-500 truncate">${item.name || ''}</span>
+                    </div>
+                    <div class="flex items-center gap-3 mt-1">
+                        <span class="text-xs text-slate-500">Div: <span class="text-amber-400">${divYield}</span></span>
+                        <span class="text-xs text-slate-500">Score: <span class="${scoreColor}">${item.score}</span></span>
+                        <span class="text-xs text-slate-500">${item.sector || ''}</span>
+                    </div>
+                </div>
+                <div class="flex-shrink-0 text-right" style="min-width:80px;">
+                    <div class="${colorClass} text-sm font-bold">${corr >= 0 ? '+' : ''}${corrPct}%</div>
+                    <div class="w-full h-1.5 bg-slate-700 rounded mt-1 overflow-hidden">
+                        <div class="${barColor} h-full rounded" style="width:${Math.abs(corr) * 100}%"></div>
+                    </div>
+                    <div class="text-xs text-slate-600 mt-0.5">${item.dias}d</div>
+                </div>
+            </div>`;
         }
 
         // ============================================

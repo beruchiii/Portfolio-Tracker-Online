@@ -15,6 +15,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
@@ -276,9 +278,18 @@
                                             </svg>
                                             Actualizar
                                         </button>
+                                        <button onclick="exportarScreenerPDF()" id="screener-pdf-btn"
+                                            class="text-xs px-3 py-1.5 bg-red-700/80 hover:bg-red-600 rounded-lg transition flex items-center gap-1.5"
+                                            title="Descargar como PDF">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                            </svg>
+                                            PDF
+                                        </button>
                                     </div>
                                 </div>
-                                <p class="text-xs text-slate-500 mb-4">Ranking basado en: rentabilidad por dividendo, sostenibilidad del payout, márgenes, ROE, deuda, valoración y consenso de analistas. Haz clic en cualquier fila para ver su análisis técnico completo.</p>
+                                <p class="text-xs text-slate-500 mb-4">Ranking basado en: rentabilidad por dividendo, sostenibilidad del payout, márgenes, ROE, deuda, valoración y consenso de analistas. Se analizan ~493 empresas, de las cuales ~390 pagan dividendo. Haz clic en cualquier fila para ver su análisis técnico completo.</p>
 
                                 <!-- Loading state -->
                                 <div id="screener-loading" class="hidden text-center py-10">
@@ -1321,6 +1332,121 @@
 
             // Re-fetch con nuevo limit (instantáneo desde caché, sin nuevo escaneo)
             cargarScreenerDividendos(false);
+        }
+
+        function exportarScreenerPDF() {
+            if (!screenerData || screenerData.length === 0) return;
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+
+            // Título
+            const topLabel = screenerTopN === 'all' ? 'Todas las' : `Top ${screenerTopN}`;
+            const titulo = `${topLabel} Acciones con Mejores Dividendos`;
+            const fecha = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+            doc.setFontSize(18);
+            doc.setTextColor(30, 58, 138); // Azul oscuro
+            doc.text(titulo, 14, 15);
+
+            doc.setFontSize(9);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Generado: ${fecha}  |  Universo: ~493 empresas  |  Con dividendo: ${screenerData.length}`, 14, 22);
+            doc.text('Ranking basado en: dividendo, payout, márgenes, ROE, deuda, valoración y consenso de analistas.', 14, 27);
+
+            // Preparar datos de tabla
+            const headers = [['#', 'Ticker', 'Nombre', 'Sector', 'Precio', 'Div.%', 'Payout%', 'PER', 'Margen%', 'ROE%', 'Score']];
+            const rows = screenerData.map(s => [
+                s.rank || '',
+                s.ticker || '',
+                (s.name || '').substring(0, 30),
+                (s.sector || '').substring(0, 22),
+                s.price ? `${s.price.toFixed(2)} ${s.currency || ''}` : '-',
+                s.dividendYield ? `${s.dividendYield.toFixed(2)}%` : '-',
+                s.payoutRatio != null ? `${s.payoutRatio.toFixed(0)}%` : '-',
+                s.trailingPE ? s.trailingPE.toFixed(1) : '-',
+                s.profitMargin != null ? `${s.profitMargin.toFixed(1)}%` : '-',
+                s.roe != null ? `${s.roe.toFixed(1)}%` : '-',
+                s.score || 0
+            ]);
+
+            // Generar tabla con autoTable
+            doc.autoTable({
+                head: headers,
+                body: rows,
+                startY: 31,
+                theme: 'grid',
+                styles: {
+                    fontSize: 7,
+                    cellPadding: 1.5,
+                    lineColor: [200, 200, 200],
+                    lineWidth: 0.1,
+                },
+                headStyles: {
+                    fillColor: [30, 58, 138],
+                    textColor: [255, 255, 255],
+                    fontSize: 7.5,
+                    fontStyle: 'bold',
+                    halign: 'center',
+                },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 8 },     // #
+                    1: { fontStyle: 'bold', cellWidth: 16 },    // Ticker
+                    2: { cellWidth: 45 },                        // Nombre
+                    3: { cellWidth: 35 },                        // Sector
+                    4: { halign: 'right', cellWidth: 25 },      // Precio
+                    5: { halign: 'right', cellWidth: 16 },      // Div%
+                    6: { halign: 'right', cellWidth: 16 },      // Payout%
+                    7: { halign: 'right', cellWidth: 14 },      // PER
+                    8: { halign: 'right', cellWidth: 18 },      // Margen%
+                    9: { halign: 'right', cellWidth: 16 },      // ROE%
+                    10: { halign: 'center', cellWidth: 14, fontStyle: 'bold' }, // Score
+                },
+                bodyStyles: {
+                    textColor: [50, 50, 50],
+                },
+                alternateRowStyles: {
+                    fillColor: [245, 247, 250],
+                },
+                // Colorear celdas de Score según valor
+                didParseCell: function(data) {
+                    if (data.section === 'body' && data.column.index === 10) {
+                        const score = parseInt(data.cell.raw);
+                        if (score >= 80) {
+                            data.cell.styles.textColor = [22, 163, 74]; // Verde
+                            data.cell.styles.fontStyle = 'bold';
+                        } else if (score >= 65) {
+                            data.cell.styles.textColor = [6, 182, 212]; // Cyan
+                        } else if (score >= 50) {
+                            data.cell.styles.textColor = [202, 138, 4]; // Amarillo
+                        } else {
+                            data.cell.styles.textColor = [220, 38, 38]; // Rojo
+                        }
+                    }
+                    // Colorear Div.%
+                    if (data.section === 'body' && data.column.index === 5) {
+                        const val = parseFloat(data.cell.raw);
+                        if (val >= 5) data.cell.styles.textColor = [22, 163, 74];
+                        else if (val >= 3) data.cell.styles.textColor = [6, 182, 212];
+                    }
+                },
+                didDrawPage: function(data) {
+                    // Footer en cada página
+                    const pageNum = doc.internal.getCurrentPageInfo().pageNumber;
+                    const totalPages = doc.internal.getNumberOfPages();
+                    doc.setFontSize(7);
+                    doc.setTextColor(150, 150, 150);
+                    doc.text(`Portfolio Tracker - Market Scanner  |  Página ${pageNum} de ${totalPages}`, 14, pageHeight - 5);
+                    doc.text('Los datos provienen de Yahoo Finance y pueden tener retraso. No constituye consejo financiero.', pageWidth - 14, pageHeight - 5, { align: 'right' });
+                }
+            });
+
+            // Descargar
+            const topName = screenerTopN === 'all' ? 'todas' : `top${screenerTopN}`;
+            const fechaFile = new Date().toISOString().slice(0, 10);
+            doc.save(`screener_dividendos_${topName}_${fechaFile}.pdf`);
         }
 
         function seleccionarDesdeScreener(ticker) {

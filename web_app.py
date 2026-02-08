@@ -163,6 +163,9 @@ SCREENER_CACHE_DURATION_MINUTES = 60  # 1 hora para el screener de dividendos
 # DIVIDEND SCREENER - Universo de tickers
 # =============================================================================
 DIVIDEND_UNIVERSE = [
+    # =========================================================================
+    # GRUPO 1 - Universo Original (97 tickers)
+    # =========================================================================
     # Dividend Aristocrats (S&P 500, 25+ años de dividendos crecientes)
     'JNJ', 'PG', 'KO', 'PEP', 'MMM', 'ABT', 'ABBV', 'MCD', 'CL', 'EMR',
     'XOM', 'CVX', 'IBM', 'TGT', 'WMT', 'LOW', 'SHW', 'ADP', 'AFL',
@@ -184,6 +187,37 @@ DIVIDEND_UNIVERSE = [
     'PFE', 'MRK', 'AMGN', 'MDT', 'UNH',
     # Internacionales (ADRs)
     'UL', 'HSBC', 'NVS', 'GSK', 'BP', 'SHEL', 'RIO', 'BHP', 'TTE', 'SAN',
+
+    # =========================================================================
+    # GRUPO 2 - Expansión (+97 tickers nuevos, sin duplicados)
+    # =========================================================================
+    # Más Dividend Aristocrats / Kings
+    'FRT', 'SWK', 'CTAS', 'ROP', 'EXPD', 'LIN', 'CB', 'APD',
+    'AMCR', 'ESS', 'WST', 'KVUE', 'CHD', 'OTIS', 'FAST',
+    # Industriales con dividendo sólido
+    'HON', 'UNP', 'UPS', 'FDX', 'CSX', 'NSC', 'WM', 'RSG',
+    'DE', 'CAT', 'CMI', 'PH', 'ETN',
+    # Tecnología con dividendo creciente
+    'MSFT', 'AAPL', 'AVGO', 'TXN', 'QCOM', 'INTC', 'CSCO', 'HPQ',
+    'PAYX', 'JKHY', 'KLAC', 'LRCX',
+    # Energía adicional
+    'COP', 'PSX', 'VLO', 'MPC', 'OKE', 'MPLX', 'ET', 'AM',
+    'PBA', 'DVN', 'HAL', 'SLB',
+    # Financieras adicionales
+    'C', 'GS', 'MS', 'TFC', 'FITB', 'HBAN', 'KEY', 'RF',
+    'ALL', 'TRV', 'AIG', 'MMC',
+    # REITs adicionales
+    'IRM', 'CCI', 'WELL', 'VTR', 'MPW', 'KIM', 'REG', 'EPR',
+    'HIW', 'SLG', 'BXP', 'MAC',
+    # Healthcare / Pharma adicional
+    'LLY', 'AZN', 'SNY', 'NVO', 'TAK', 'VTRS', 'OGN', 'ZTS',
+    # Consumer Discretionary con dividendo
+    'HD', 'SBUX', 'NKE', 'DRI', 'YUM', 'CMG', 'ROST', 'TJX',
+    # Utilities adicionales
+    'AEE', 'CMS', 'DTE', 'XEL', 'AWK', 'WTRG', 'NI', 'PNW',
+    # Internacionales adicionales (ADRs)
+    'VALE', 'BABA', 'TSM', 'INFY', 'WIT', 'E', 'DEO', 'ING',
+    'VOD', 'NGG', 'TEF', 'BBVA',
 ]
 
 # Estado global del refresh del screener
@@ -5286,10 +5320,12 @@ def _refresh_screener_cache():
     from datetime import datetime
 
     global screener_refresh_status
-    screener_refresh_status = {'running': True, 'progress': 0, 'total': len(DIVIDEND_UNIVERSE)}
+    # Eliminar duplicados manteniendo orden
+    universe = list(dict.fromkeys(DIVIDEND_UNIVERSE))
+    screener_refresh_status = {'running': True, 'progress': 0, 'total': len(universe)}
 
     results = []
-    for i, ticker_symbol in enumerate(DIVIDEND_UNIVERSE):
+    for i, ticker_symbol in enumerate(universe):
         screener_refresh_status['progress'] = i + 1
         try:
             stock = yf.Ticker(ticker_symbol)

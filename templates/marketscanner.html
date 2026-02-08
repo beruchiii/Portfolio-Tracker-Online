@@ -1363,8 +1363,8 @@
             if (!bestContainer || !worstContainer) return;
 
             // Los datos ya vienen ordenados por correlación ascendente (menor primero)
-            const best = data.slice(0, 10);  // 10 con menor correlación (mejor diversificación)
-            const worst = data.slice(-10).reverse(); // 10 con mayor correlación
+            const best = data.slice(0, 25);  // 25 con menor correlación (mejor diversificación)
+            const worst = data.slice(-25).reverse(); // 25 con mayor correlación
 
             bestContainer.innerHTML = best.map((item, i) => generarFilaCorrelacion(item, i + 1, 'best')).join('');
             worstContainer.innerHTML = worst.map((item, i) => generarFilaCorrelacion(item, i + 1, 'worst')).join('');

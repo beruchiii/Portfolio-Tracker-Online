@@ -257,6 +257,7 @@
                             <option value="1mo">1 Mes</option>
                             <option value="3mo">3 Meses</option>
                             <option value="6mo">6 Meses</option>
+                            <option value="ytd">📆 YTD</option>
                             <option value="1y" selected>1 Año</option>
                             <option value="2y">2 Años</option>
                             <option value="5y">5 Años</option>
@@ -818,6 +819,7 @@
                             <option value="1mo">1 Mes</option>
                             <option value="3mo">3 Meses</option>
                             <option value="6mo" selected>6 Meses</option>
+                            <option value="ytd">📆 YTD</option>
                             <option value="1y">1 Año</option>
                             <option value="2y">2 Años</option>
                             <option value="max">Desde inicio</option>
@@ -1701,8 +1703,9 @@
                     // Etiqueta según período
                     const periodoLabels = {
                         '1mo': '1 mes atrás',
-                        '3mo': '3 meses atrás', 
+                        '3mo': '3 meses atrás',
                         '6mo': '6 meses atrás',
+                        'ytd': '1 ene ' + new Date().getFullYear(),
                         '1y': '1 año atrás',
                         '2y': '2 años atrás',
                         '5y': '5 años atrás',
@@ -1839,7 +1842,7 @@
                     scales: {
                         x: {
                             grid: { display: false },
-                            ticks: { 
+                            ticks: {
                                 color: '#9ca3af',
                                 maxTicksLimit: 6,
                                 callback: function(value, index) {
@@ -1850,7 +1853,9 @@
                         },
                         y: {
                             grid: { color: '#374151' },
-                            ticks: { 
+                            beginAtZero: false,
+                            suggestedMin: minVal * 0.95,
+                            ticks: {
                                 color: '#9ca3af',
                                 callback: (val) => formatCurrency(val)
                             }

@@ -196,6 +196,7 @@
                             <button onclick="cambiarPeriodo('1mo')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="1mo">1M</button>
                             <button onclick="cambiarPeriodo('3mo')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="3mo">3M</button>
                             <button onclick="cambiarPeriodo('6mo')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="6mo">6M</button>
+                            <button onclick="cambiarPeriodo('ytd')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="ytd">YTD</button>
                             <button onclick="cambiarPeriodo('1y')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition active" data-period="1y">1A</button>
                             <button onclick="cambiarPeriodo('2y')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="2y">2A</button>
                             <button onclick="cambiarPeriodo('5y')" class="period-btn px-3 py-1.5 text-xs font-medium rounded-md hover:bg-slate-600 transition" data-period="5y">5A</button>
@@ -992,7 +993,7 @@
 
                 // 4. Descargar
                 const link = document.createElement('a');
-                const periodoLabel = { '1d': '1D', '1mo': '1M', '3mo': '3M', '6mo': '6M', '1y': '1A', '2y': '2A', '5y': '5A', 'max': 'MAX' }[currentPeriod] || currentPeriod;
+                const periodoLabel = { '1d': '1D', '1mo': '1M', '3mo': '3M', '6mo': '6M', 'ytd': 'YTD', '1y': '1A', '2y': '2A', '5y': '5A', 'max': 'MAX' }[currentPeriod] || currentPeriod;
                 link.download = `analisis_${currentTicker}_${periodoLabel}_${new Date().toISOString().slice(0,10)}.png`;
                 link.href = finalCanvas.toDataURL('image/png');
                 link.click();
@@ -1025,7 +1026,7 @@
             const dividendHistoryContent = document.getElementById('dividend-history-content')?.innerHTML || '';
             const dividendHistoryVisible = !document.getElementById('dividend-history-section')?.classList.contains('hidden');
 
-            const periodoLabel = { '1d': '1 día', '1mo': '1 mes', '3mo': '3 meses', '6mo': '6 meses', '1y': '1 año', '2y': '2 años', '5y': '5 años', 'max': 'Máximo' }[currentPeriod] || currentPeriod;
+            const periodoLabel = { '1d': '1 día', '1mo': '1 mes', '3mo': '3 meses', '6mo': '6 meses', 'ytd': 'Año actual (YTD)', '1y': '1 año', '2y': '2 años', '5y': '5 años', 'max': 'Máximo' }[currentPeriod] || currentPeriod;
             const fecha = new Date().toLocaleDateString('es-ES', {
                 day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
             });

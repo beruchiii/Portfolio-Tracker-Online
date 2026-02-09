@@ -2195,12 +2195,19 @@ def api_portfolio_evolution():
                 periodo_api = '2y'
             else:
                 periodo_api = '5y'
+        elif periodo == 'ytd':
+            # Year-to-date: desde 1 de enero del año actual
+            fecha_inicio_filtro = datetime(datetime.now().year, 1, 1)
+            dias = (datetime.now() - fecha_inicio_filtro).days
+            periodo_api = '1y'  # Pedir 1 año a yfinance, luego filtrar
+            if fecha_primera_compra > fecha_inicio_filtro:
+                fecha_inicio_filtro = fecha_primera_compra
         else:
             periodo_api = periodo
             dias_map = {'1mo': 30, '3mo': 90, '6mo': 180, '1y': 365, '2y': 730, '5y': 1825}
             dias = dias_map.get(periodo, 365)
             fecha_inicio_filtro = datetime.now() - timedelta(days=dias)
-            
+
             if fecha_primera_compra > fecha_inicio_filtro:
                 fecha_inicio_filtro = fecha_primera_compra
         
@@ -2818,6 +2825,10 @@ def api_positions_evolution():
         
         justetf = JustETFScraper()
         
+        # Si el período es "ytd", convertir a desde 1 enero
+        if periodo == 'ytd':
+            periodo = '1y'  # Pedir 1 año a yfinance, luego se filtra en frontend
+
         # Si el período es "max", calcular desde la primera fecha de compra
         if periodo == 'max':
             fecha_inicio = None
@@ -2830,7 +2841,7 @@ def api_positions_evolution():
                                 fecha_inicio = fecha_ap
                         except:
                             pass
-            
+
             if fecha_inicio:
                 dias = (datetime.now() - fecha_inicio).days
                 if dias <= 30:
@@ -2847,7 +2858,7 @@ def api_positions_evolution():
                     periodo = '5y'
                 else:
                     periodo = '10y'
-        
+
         posiciones_data = []
         sin_datos = []
         fechas_comunes = None
@@ -5083,11 +5094,17 @@ def api_ohlcv(ticker):
 
     # Mapeo de períodos a yfinance con intervalo adaptativo
     # Para periodos cortos usamos datos horarios para tener más puntos
+    # YTD: convertir a start date
+    ytd_start = None
+    if periodo == 'ytd':
+        ytd_start = datetime(datetime.now().year, 1, 1).strftime('%Y-%m-%d')
+
     periodo_map = {
         '1d': '1d',
         '1mo': '1mo',
         '3mo': '3mo',
         '6mo': '6mo',
+        'ytd': '1y',  # fallback, se usa start en su lugar
         '1y': '1y',
         '2y': '2y',
         '5y': '5y',
@@ -5101,6 +5118,7 @@ def api_ohlcv(ticker):
         '1mo': '1h',    # ~500 velas horarias
         '3mo': '1h',    # ~1,500 velas horarias - permite SMA 200 con margen
         '6mo': '1h',    # ~3,000 velas horarias - análisis detallado
+        'ytd': '1h',    # ~velas horarias del año hasta hoy
         '1y': '1h',     # ~6,000 velas horarias - máximo detalle anual
         '2y': '1d',     # ~500 puntos diarios (límite Yahoo para 1h es ~730 días)
         '5y': '1d',     # ~1250 puntos diarios
@@ -5124,7 +5142,10 @@ def api_ohlcv(ticker):
 
         # Obtener datos de Yahoo Finance
         stock = yf.Ticker(ticker)
-        df = stock.history(period=yf_periodo, interval=yf_interval)
+        if ytd_start:
+            df = stock.history(start=ytd_start, interval=yf_interval)
+        else:
+            df = stock.history(period=yf_periodo, interval=yf_interval)
 
         if df.empty:
             # Intentar con isin si se proporcionó
@@ -5132,7 +5153,10 @@ def api_ohlcv(ticker):
                 ticker_from_isin = price_fetcher.buscar_ticker_por_isin(isin)
                 if ticker_from_isin:
                     stock = yf.Ticker(ticker_from_isin)
-                    df = stock.history(period=yf_periodo, interval=yf_interval)
+                    if ytd_start:
+                        df = stock.history(start=ytd_start, interval=yf_interval)
+                    else:
+                        df = stock.history(period=yf_periodo, interval=yf_interval)
 
         if df.empty:
             return jsonify({

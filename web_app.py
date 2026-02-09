@@ -2308,11 +2308,25 @@ def api_portfolio_evolution():
         
         if not valores_cartera:
             return jsonify({
-                'success': False, 
+                'success': False,
                 'error': 'No hay suficientes datos históricos. Algunas posiciones no tienen histórico disponible.',
                 'posiciones_sin_datos': [pos.nombre for pos in portfolio.posiciones if pos.id not in all_data]
             })
-        
+
+        # Limpiar saltos anómalos al inicio de la serie
+        # Si los primeros puntos son <30% del valor estable, quitarlos
+        # (ocurre cuando no hay precios para todos los activos en días festivos/fines de semana)
+        if len(valores_cartera) > 5:
+            # Encontrar el valor "estable" (mediana del primer 20% de datos)
+            chunk = valores_cartera[:max(5, len(valores_cartera) // 5)]
+            chunk_sorted = sorted(chunk)
+            mediana = chunk_sorted[len(chunk_sorted) // 2]
+
+            # Eliminar puntos iniciales que sean <30% de la mediana
+            while len(valores_cartera) > 2 and valores_cartera[0] < mediana * 0.30:
+                valores_cartera.pop(0)
+                fechas_str.pop(0)
+
         # Obtener el valor ACTUAL REAL del portfolio (no del histórico)
         analyzer = PortfolioAnalyzer(portfolio)
         posiciones_actualizadas = analyzer.actualizar_precios()

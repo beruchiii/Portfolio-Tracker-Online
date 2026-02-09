@@ -1778,6 +1778,8 @@
             const maxVal = Math.max(...data.valores);
             const minIdx = data.valores.indexOf(minVal);
             const maxIdx = data.valores.indexOf(maxVal);
+            // Mínimo del eje Y: empieza justo debajo del valor mínimo real
+            const yMin = Math.floor(minVal * 0.92);
             
             evolutionChart = new Chart(ctx, {
                 type: 'line',
@@ -1854,7 +1856,7 @@
                         y: {
                             grid: { color: '#374151' },
                             beginAtZero: false,
-                            suggestedMin: minVal * 0.95,
+                            min: yMin,
                             ticks: {
                                 color: '#9ca3af',
                                 callback: (val) => formatCurrency(val)
